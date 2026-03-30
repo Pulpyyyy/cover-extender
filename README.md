@@ -42,16 +42,17 @@ cover_extender_modes:
   Night:
     icon: mdi:moon-waning-crescent
     color: indigo
-    save_on_enter: true
   Day:
     icon: mdi:white-balance-sunny
     color: orange
-    apply_memory_on_exit: true
   Shade:
     icon: mdi:sun-clock
     color: amber
     lock: true
     auto_shade: true
+  Heat-wave:
+    icon: mdi:thermometer-alert
+    color: "#FF6600"
 
 cover.living_room_blind:
   facade: south
@@ -63,7 +64,7 @@ cover.living_room_blind:
   angle_left: 80.0
   angle_right: 80.0
   enable_auto_shade: true
-  ombrage:
+  shading:
     distance: 0.4
     max_height: 1.8
     minimum_position: 15
@@ -92,10 +93,9 @@ cover.bedroom_blind:
 | `icon` | `mdi:help-circle` | Material Design Icon for the mode |
 | `color` | `white` | **6-digit hex only** (`#RRGGBB`) — 8-digit hex (`#RRGGBBaa`) is not supported and will be ignored by UI cards |
 | `lock` | `false` | Activate the automation lock when entering this mode |
-| `save_on_enter` | `false` | Save current position to memory before moving |
-| `apply_memory_on_exit` | `false` | Restore saved position when leaving this mode |
 | `auto_shade` | `false` | Activate autonomous solar shading when entering this mode |
 | `helio` | `false` | Mark this mode as heliotropic (used by UI cards to apply dynamic sun-tracking logic) |
+| `hidden` | `false` | Hide this mode from UI cards |
 
 ### Per-cover profile
 
