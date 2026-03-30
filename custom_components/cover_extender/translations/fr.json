@@ -1,0 +1,49 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Cover Extender",
+        "data": {
+          "source": "Chemin du fichier de configuration YAML"
+        },
+        "data_description": {
+          "source": "Chemin vers le fichier YAML contenant les profils de volets (absolu ou relatif au répertoire de configuration)"
+        }
+      }
+    },
+    "error": {
+      "file_not_found": "Fichier de configuration YAML introuvable au chemin indiqué.",
+      "yaml_invalid": "Le fichier contient une syntaxe YAML invalide.",
+      "no_covers_found": "Aucun profil de volet trouvé dans le fichier (au moins une clé commençant par 'cover.' est attendue)."
+    },
+    "abort": {
+      "already_configured": "Déjà configuré. Une seule configuration possible."
+    }
+  },
+  "entity": {
+    "select": {
+      "mode": {
+        "name": "Mode"
+      },
+      "cover_extender_modes": {
+        "name": "Modes"
+      }
+    },
+    "switch": {
+      "lock": {
+        "name": "Verrou"
+      },
+      "auto_shade": {
+        "name": "Ombrage Auto"
+      }
+    },
+    "binary_sensor": {
+      "sun_facing": {
+        "name": "Soleil en face"
+      },
+      "enable_auto_shade": {
+        "name": "Ombrage auto activé"
+      }
+    }
+  }
+}

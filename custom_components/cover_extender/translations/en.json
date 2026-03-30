@@ -1,0 +1,49 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Cover Extender",
+        "data": {
+          "source": "YAML configuration file path"
+        },
+        "data_description": {
+          "source": "Path to the YAML file containing cover profiles (absolute or relative to the config directory)"
+        }
+      }
+    },
+    "error": {
+      "file_not_found": "YAML configuration file not found at the given path.",
+      "yaml_invalid": "The file contains invalid YAML syntax.",
+      "no_covers_found": "No cover profile found in the file (expected at least one key starting with 'cover.')."
+    },
+    "abort": {
+      "already_configured": "Already configured. Only a single configuration possible."
+    }
+  },
+  "entity": {
+    "select": {
+      "mode": {
+        "name": "Mode"
+      },
+      "cover_extender_modes": {
+        "name": "Modes"
+      }
+    },
+    "switch": {
+      "lock": {
+        "name": "Lock"
+      },
+      "auto_shade": {
+        "name": "Auto shade"
+      }
+    },
+    "binary_sensor": {
+      "sun_facing": {
+        "name": "Sun facing"
+      },
+      "enable_auto_shade": {
+        "name": "Auto shade enabled"
+      }
+    }
+  }
+}

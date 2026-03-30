@@ -1,0 +1,136 @@
+set_cover_position:
+  name: Set cover position (lock-aware)
+  description: >
+    Moves one or more covers to the given position, respecting the automation lock.
+    - Lock OFF: moves the cover immediately.
+    - Lock ON: writes the position to memory (number.<cover>_memory) so it is applied on unlock.
+    Use this service instead of cover.set_cover_position in blueprints and automations.
+  fields:
+    entity_id:
+      name: Covers
+      description: One or more cover entities.
+      required: true
+      example: "cover.volet_salon_rue"
+      selector:
+        entity:
+          domain: cover
+          multiple: true
+    position:
+      name: Position
+      description: Target position (0 = closed, 100 = open).
+      required: true
+      example: 50
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+
+open_cover:
+  name: Open cover (lock-aware)
+  description: >
+    Opens one or more covers (position 100), respecting the lock.
+    Lock OFF: opens immediately. Lock ON: writes 100 to memory.
+  fields:
+    entity_id:
+      name: Covers
+      description: One or more cover entities.
+      required: true
+      selector:
+        entity:
+          domain: cover
+          multiple: true
+
+close_cover:
+  name: Close cover (lock-aware)
+  description: >
+    Closes one or more covers (position 0), respecting the lock.
+    Lock OFF: closes immediately. Lock ON: writes 0 to memory.
+  fields:
+    entity_id:
+      name: Covers
+      description: One or more cover entities.
+      required: true
+      selector:
+        entity:
+          domain: cover
+          multiple: true
+
+apply_memory:
+  name: Apply memory position
+  description: >
+    Forces the cover to move to its stored memory position (number.<cover>_memory),
+    regardless of the lock state. Useful for explicit memory restoration.
+  fields:
+    entity_id:
+      name: Covers
+      description: One or more cover entities.
+      required: true
+      example: "cover.volet_salon_rue"
+      selector:
+        entity:
+          domain: cover
+          multiple: true
+
+apply_mode:
+  name: Apply mode to covers
+  description: >
+    Moves the given covers to the position defined for the given mode.
+    Returns {"applied": [...], "skipped": [...]} — usable as a response variable.
+  fields:
+    mode:
+      name: Mode
+      description: Name of the mode to apply (e.g. Nuit, Canicule, Frais…)
+      required: true
+      example: "Nuit"
+      selector:
+        text:
+    entity_id:
+      name: Covers
+      description: One or more cover entities.
+      required: true
+      example: "cover.volet_salon_rue"
+      selector:
+        entity:
+          domain: cover
+          multiple: true
+
+compute_shade_position:
+  name: Compute shade position
+  description: >
+    Computes the solar shade position for a cover based on its ombrage configuration
+    and the current sun position. Returns position (0-100 %) and should_update (bool).
+  fields:
+    entity_id:
+      name: Cover
+      description: Target cover entity.
+      required: true
+      example: "cover.volet_sam"
+      selector:
+        entity:
+          domain: cover
+
+reload:
+  name: Reload configuration
+  description: Reloads the cover YAML configuration file without restarting HA.
+
+get_mode_position:
+  name: Get mode position
+  description: >
+    Returns the configured position (integer or null) for a given mode on a specific cover.
+  fields:
+    entity_id:
+      name: Cover
+      description: Target cover entity.
+      required: true
+      example: "cover.volet_sam"
+      selector:
+        entity:
+          domain: cover
+    mode:
+      name: Mode
+      description: Name of the mode to query.
+      required: true
+      example: "Nuit"
+      selector:
+        text:
