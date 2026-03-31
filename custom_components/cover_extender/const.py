@@ -19,8 +19,12 @@ ATTR_ENABLE_AUTO_SHADE = "enable_auto_shade"
 ATTR_SOLEIL_EN_FACE = "sun_facing"
 
 # Shading sub-config key and its fields (all optional, defaults in service)
-CONF_SHADING    = "shade"
-CONF_EXCLUSION  = "exclusion"
+CONF_SHADING      = "shade"
+CONF_EXCLUSION    = "exclusion"
+
+# Solar gain sub-config keys
+CONF_SOLAR_GAIN  = "solar_gain"
+DATA_SOLAR_GAIN  = "solar_gain_config"
 
 # Service names
 SERVICE_APPLY_MODE = "apply_mode"
@@ -43,6 +47,7 @@ DATA_VALUE_AS_SENSOR     = "value_as_sensor_config"
 DATA_SELECT_COVER_IDS      = "select_cover_ids"
 DATA_SWITCH_COVER_IDS      = "switch_cover_ids"
 DATA_SWITCH_AUTO_SHADE_IDS = "auto_shade_cover_ids"
+DATA_SWITCH_AUTO_SOLAR_GAIN_IDS = "auto_solar_gain_cover_ids"
 DATA_BINARY_SENSOR_SUN_FACING_IDS    = "binary_sensor_sun_facing_ids"
 DATA_BINARY_SENSOR_AUTO_SHADE_IDS    = "binary_sensor_auto_shade_ids"
 DATA_MEMORY                = "memory"

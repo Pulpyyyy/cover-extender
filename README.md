@@ -1,13 +1,14 @@
 # Cover Extender
 
-A Home Assistant custom component that enriches existing cover (blind/shutter) entities with advanced automation features: mode management, position memory, automation lock, and autonomous solar shading — without modifying or replacing your original cover entities.
+A Home Assistant custom component that enriches existing cover (blind/shutter) entities with advanced automation features: mode management, position memory, automation lock, autonomous solar shading, and solar gain — without modifying or replacing your original cover entities.
 
 ## Features
 
 - **Mode system** — define named positions (Night, Day, Heat-wave…) with icons, colors, and behaviors
 - **Automation lock** — block automated moves while preserving the intended position in memory
 - **Position memory** — stores a target position that is applied on lock release
-- **Autonomous solar shading** — automatically tracks the sun and adjusts cover position (no blueprint required)
+- **Autonomous solar shading** — automatically tracks the sun and adjusts cover position to block heat (no blueprint required)
+- **Solar gain** — temperature-based mode: opens covers to capture solar heat when it's cold and the sun is shining; closes them otherwise
 - **Non-destructive** — injects attributes into existing cover entities, never replaces them
 - **Hot reload** — reload the YAML config without restarting Home Assistant
 
@@ -95,7 +96,7 @@ cover.bedroom_blind:
 | `save_on_enter` | `false` | Save current position to memory before moving |
 | `apply_memory_on_exit` | `false` | Restore saved position when leaving this mode |
 | `auto_shade` | `false` | Activate autonomous solar shading when entering this mode |
-| `helio` | `false` | Mark this mode as heliotropic (used by UI cards to apply dynamic sun-tracking logic) |
+| `solar_gain` | `false` | Activate solar gain (temperature-tracking) when entering this mode |
 
 ### Per-cover profile
 
@@ -146,7 +147,7 @@ Attributes exposed by `select.mode_<cover>` (and `select.cover_extender_modes`):
 | `options` | List of mode names available for this cover |
 | `icon` | MDI icon of the **currently selected** mode |
 | `color` | Hex color of the **currently selected** mode |
-| `modes_list` | Dict of **all** modes → `{icon, color, lock, save_on_enter, apply_memory_on_exit, auto_shade, helio}` — used by UI cards to render chips without hardcoding colors |
+| `modes_list` | Dict of **all** modes → `{icon, color, lock, save_on_enter, apply_memory_on_exit, auto_shade, solar_gain}` — used by UI cards to render chips without hardcoding colors |
 
 ## Services
 

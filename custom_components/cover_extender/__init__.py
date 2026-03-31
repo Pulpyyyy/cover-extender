@@ -82,6 +82,7 @@ from .const import (
     CONF_MODES_SECTION,
     CONF_ENTITY_PICTURE,
     CONF_SHADING,
+    CONF_SOLAR_GAIN,
     CONF_VALUE_AS_SENSOR,
     ATTR_FACADE,
     ATTR_MODES,
@@ -104,6 +105,7 @@ from .const import (
     DATA_MODES,
     DATA_FACADES,
     DATA_VALUE_AS_SENSOR,
+    DATA_SOLAR_GAIN,
     DATA_MEMORY,
     STORAGE_KEY,
     STORAGE_VERSION,
@@ -348,8 +350,16 @@ def _load_covers_config(hass: HomeAssistant, source: str) -> dict[str, Any]:
         "enable_auto_shade": bool(raw_vas.get("enable_auto_shade", False)),
     }
 
+    # ── Parse solar_gain global config ───────────────────────────────────────
+    raw_solar_gain: dict = raw.get(CONF_SOLAR_GAIN, {})
+    try:
+        solar_gain_global = _SOLAR_GAIN_GLOBAL_SCHEMA(raw_solar_gain)
+    except vol.Invalid as err:
+        _LOGGER.warning("Cover config: invalid solar_gain config: %s", err)
+        solar_gain_global = _SOLAR_GAIN_GLOBAL_SCHEMA({})
+
     _LOGGER.info("Loaded %d cover profiles from %s", len(profiles), source)
-    return profiles, modes_list, facades, value_as_sensor
+    return profiles, modes_list, facades, value_as_sensor, solar_gain_global
 
 
 # ── Voluptuous schemas ────────────────────────────────────────────────────────
@@ -377,7 +387,7 @@ _MODE_DISPLAY_SCHEMA = vol.Schema(
         vol.Optional("color",                default="white"):           cv.string,
         vol.Optional("lock",                 default=False):             cv.boolean,
         vol.Optional("auto_shade",           default=False):             cv.boolean,
-        vol.Optional("helio",                default=False):             cv.boolean,
+        vol.Optional("solar_gain",           default=False):             cv.boolean,
         vol.Optional("hidden",               default=False):             cv.boolean,
     }
 )
@@ -398,6 +408,23 @@ _SHADING_SCHEMA = vol.Schema(
     }
 )
 
+_SOLAR_GAIN_COVER_SCHEMA = vol.Schema(
+    {
+        vol.Optional("enable",          default=False): cv.boolean,
+        vol.Optional("position_cold",   default=0):     vol.Coerce(int),
+        vol.Optional("position_solar",  default=100):   vol.Coerce(int),
+    }
+)
+
+_SOLAR_GAIN_GLOBAL_SCHEMA = vol.Schema(
+    {
+        vol.Optional("temperature_entity"):                       cv.entity_id,
+        vol.Optional("temperature_threshold", default=19.0):     vol.Coerce(float),
+        vol.Optional("weather_entity"):                          cv.entity_id,
+        vol.Optional("good_conditions",       default=[]):       vol.All(cv.ensure_list, [cv.string]),
+    }
+)
+
 _COVER_PROFILE_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_FACADE):                         cv.string,
@@ -407,6 +434,7 @@ _COVER_PROFILE_SCHEMA = vol.Schema(
         vol.Optional(CONF_MODES,             default={}):
             vol.Schema({cv.string: vol.Any(None, vol.Coerce(int), cv.entity_id)}),
         vol.Optional(CONF_SHADING,           default={}):    _SHADING_SCHEMA,
+        vol.Optional(CONF_SOLAR_GAIN,       default={}):    _SOLAR_GAIN_COVER_SCHEMA,
         vol.Optional(CONF_EXCLUSION,         default=[]):    vol.All(
             cv.ensure_list, [cv.entity_id]
         ),
@@ -508,10 +536,10 @@ class CoverExtenderCoordinator:
             self.hass.states.async_set(entity_id, state.state, new_attrs)
         self.hass.async_create_task(self._store.async_save(dict(mem)))
 
-    # ── Autonomous shade / helio ──────────────────────────────────────────────
+    # ── Autonomous shade / solar gain ────────────────────────────────────────
 
     @callback
-    def _auto_apply_shade(self, entity_id: str, cfg: dict[str, Any]) -> None:
+    def _apply_shade(self, entity_id: str, cfg: dict[str, Any]) -> None:
         """Apply shade position automatically when switch.<cover>_auto_shade is ON.
 
         Only acts when should_update=True (respects change_threshold and time_out).
@@ -528,37 +556,69 @@ class CoverExtenderCoordinator:
         self._enqueue_cover("set_cover_position", {"entity_id": entity_id, "position": position})
 
     @callback
-    def _auto_apply_helio(self, entity_id: str, sun_facing: bool) -> None:
-        """Toggle a cover in heliotropic mode based on sun_facing.
+    def _apply_solar_gain(self, entity_id: str, cfg: dict[str, Any]) -> None:
+        """Apply solar gain position based on temperature, sun facing, and weather.
 
-        - sun_facing=True  → apply stored memory position (open)
-        - sun_facing=False → apply the Isolation mode position (close)
-        Only acts when the current mode has helio: true.
+        - switch.<cover>_auto_solar_gain off → skipped
+        - temp >= threshold             → no action (stay at current position)
+        - temp < threshold AND sun_facing AND weather_ok → position_solar (Y)
+        - temp < threshold AND (not sun_facing OR not weather_ok) → position_cold (X)
         """
         cover_name = entity_id.split(".")[1]
-        select_state = self.hass.states.get(f"select.mode_{cover_name}")
-        if not select_state:
-            return
-        if not self._modes_list.get(select_state.state, {}).get("helio", False):
-            return
-
-        cfg = self._profiles.get(entity_id, {})
-        available_modes = cfg.get(CONF_MODES, {})
-
-        # Fixed position defined for this mode → already applied by _apply_mode_core
-        if available_modes.get(select_state.state) is not None:
+        solar_gain_sw = self.hass.states.get(f"switch.{cover_name}_auto_solar_gain")
+        if not solar_gain_sw or solar_gain_sw.state != "on":
+            _LOGGER.debug("auto_solar_gain %s: switch missing or off → skipped", entity_id)
             return
 
-        if sun_facing:
-            position = self._get_memory(entity_id)
-            if position is None:
-                _LOGGER.debug("helio %s: sun facing but no memory stored → skipped", entity_id)
+        solar_gain_cfg = cfg.get(CONF_SOLAR_GAIN, {})
+        global_solar_gain = self.hass.data[DOMAIN].get(DATA_SOLAR_GAIN, {})
+
+        # ── Temperature check ────────────────────────────────────────────────
+        temp_entity = global_solar_gain.get("temperature_entity")
+        threshold = float(global_solar_gain.get("temperature_threshold", 19.0))
+        if temp_entity:
+            temp_state = self.hass.states.get(temp_entity)
+            if not temp_state:
+                _LOGGER.warning("auto_solar_gain %s: temperature entity '%s' not found", entity_id, temp_entity)
                 return
-        else:
-            raw = available_modes.get("Isolation")
-            position = _resolve_mode_position(self.hass, raw) if raw is not None else 0
+            try:
+                temp = float(temp_state.state)
+            except (ValueError, TypeError):
+                _LOGGER.warning(
+                    "auto_solar_gain %s: temperature '%s' non-numeric state: %s",
+                    entity_id, temp_entity, temp_state.state,
+                )
+                return
+            if temp >= threshold:
+                _LOGGER.debug(
+                    "auto_solar_gain %s: temp %.1f >= threshold %.1f → no action",
+                    entity_id, temp, threshold,
+                )
+                return
 
-        _LOGGER.debug("helio %s sun_facing=%s → %d%%", entity_id, sun_facing, position)
+        # ── Sun + weather check ──────────────────────────────────────────────
+        sun_facing = _compute_sun_facing(self.hass, cfg, self._facades)
+
+        weather_ok = True  # no weather restriction if not configured
+        weather_entity = global_solar_gain.get("weather_entity")
+        good_conditions: list[str] = global_solar_gain.get("good_conditions", [])
+        if weather_entity and good_conditions:
+            weather_st = self.hass.states.get(weather_entity)
+            if weather_st:
+                weather_ok = weather_st.state in good_conditions
+            else:
+                _LOGGER.warning("auto_solar_gain %s: weather entity '%s' not found", entity_id, weather_entity)
+                weather_ok = False
+
+        if sun_facing and weather_ok:
+            position = int(solar_gain_cfg.get("position_solar", 100))
+        else:
+            position = int(solar_gain_cfg.get("position_cold", 0))
+
+        _LOGGER.debug(
+            "auto_solar_gain %s: sun_facing=%s, weather_ok=%s → %d%%",
+            entity_id, sun_facing, weather_ok, position,
+        )
         self._enqueue_cover("set_cover_position", {"entity_id": entity_id, "position": position})
 
     # ── Mode application ──────────────────────────────────────────────────────
@@ -609,51 +669,55 @@ class CoverExtenderCoordinator:
         else:
             await self.hass.services.async_call("switch", "turn_off", {"entity_id": shading_id})
 
-        # 4. Position
-        fixed_position = cfg.get(CONF_MODES, {}).get(mode)
-        if fixed_position is not None:
-            target_position = _resolve_mode_position(self.hass, fixed_position)
-            consume_memory  = False
-        elif not from_mode_cfg.get("lock", False) and old_memory is not None:
-            target_position = old_memory
-            consume_memory  = True
-        else:
-            if from_mode_cfg.get("lock", False):
-                _LOGGER.debug(
-                    "_apply_mode_core '%s' → %s: previous mode was locked, memory not restored",
-                    mode, entity_id,
-                )
-            else:
-                _LOGGER.debug(
-                    "_apply_mode_core '%s' → %s: no fixed position and no stored memory → no move",
-                    mode, entity_id,
-                )
-            target_position = None
-            consume_memory  = False
-
-        if target_position is not None:
-            exclusion: list[str] = cfg.get(CONF_EXCLUSION, [])
-            if any(self.hass.states.is_state(e, "on") for e in exclusion):
-                # Exclusion active: store the target position without moving physically.
-                # It will be applied on the next unlock (via _handle_lock_off).
-                _LOGGER.debug(
-                    "_apply_mode_core '%s' → %s: exclusion active, memory ← %d%%",
-                    mode, entity_id, target_position,
-                )
-                await self._set_memory(entity_id, target_position)
-            else:
-                self._enqueue_cover(
-                    "set_cover_position", {"entity_id": entity_id, "position": target_position}
-                )
-                if consume_memory:
-                    await self._set_memory(entity_id, None)
-
-        # 5. Helio: lock + initial trigger on entry into a helio mode
-        if to_mode_cfg.get("helio", False):
+        # 3b. auto_solar_gain
+        solar_gain_id = f"switch.{cover_name}_auto_solar_gain"
+        if to_mode_cfg.get("solar_gain", False):
+            await self.hass.services.async_call("switch", "turn_on", {"entity_id": solar_gain_id})
             await self.hass.services.async_call("switch", "turn_on", {"entity_id": lock_id})
-            sun_facing = _compute_sun_facing(self.hass, cfg, self._facades)
-            if sun_facing is not None:
-                self._auto_apply_helio(entity_id, sun_facing)
+        else:
+            await self.hass.services.async_call("switch", "turn_off", {"entity_id": solar_gain_id})
+
+        # 4. Position (skipped if solar_gain — _apply_solar_gain determines position)
+        if not to_mode_cfg.get("solar_gain", False):
+            fixed_position = cfg.get(CONF_MODES, {}).get(mode)
+            if fixed_position is not None:
+                target_position = _resolve_mode_position(self.hass, fixed_position)
+                consume_memory  = False
+            elif not from_mode_cfg.get("lock", False) and old_memory is not None:
+                target_position = old_memory
+                consume_memory  = True
+            else:
+                if from_mode_cfg.get("lock", False):
+                    _LOGGER.debug(
+                        "_apply_mode_core '%s' → %s: previous mode was locked, memory not restored",
+                        mode, entity_id,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "_apply_mode_core '%s' → %s: no fixed position and no stored memory → no move",
+                        mode, entity_id,
+                    )
+                target_position = None
+                consume_memory  = False
+
+            if target_position is not None:
+                exclusion: list[str] = cfg.get(CONF_EXCLUSION, [])
+                if any(self.hass.states.is_state(e, "on") for e in exclusion):
+                    _LOGGER.debug(
+                        "_apply_mode_core '%s' → %s: exclusion active, memory ← %d%%",
+                        mode, entity_id, target_position,
+                    )
+                    await self._set_memory(entity_id, target_position)
+                else:
+                    self._enqueue_cover(
+                        "set_cover_position", {"entity_id": entity_id, "position": target_position}
+                    )
+                    if consume_memory:
+                        await self._set_memory(entity_id, None)
+
+        # 5. Solar gain: initial position on mode entry
+        if to_mode_cfg.get("solar_gain", False):
+            self._apply_solar_gain(entity_id, cfg)
 
         _LOGGER.debug(
             "_apply_mode_core '%s' → %s (from=%s, lock=%s, position=%s)",
@@ -714,6 +778,20 @@ class CoverExtenderCoordinator:
                 )
             )
 
+        # Solar gain: listen to temperature and weather entity changes
+        global_solar_gain = self.hass.data[DOMAIN].get(DATA_SOLAR_GAIN, {})
+        solar_gain_watch: list[str] = []
+        if temp_ent := global_solar_gain.get("temperature_entity"):
+            solar_gain_watch.append(temp_ent)
+        if weather_ent := global_solar_gain.get("weather_entity"):
+            solar_gain_watch.append(weather_ent)
+        if solar_gain_watch:
+            self._unsubs.append(
+                async_track_state_change_event(
+                    self.hass, solar_gain_watch, self._handle_solar_gain_trigger
+                )
+            )
+
         # Initial attribute injection on already-loaded covers
         for entity_id, cfg in profiles.items():
             extra_attrs = _build_extra_attrs(cfg, memory=self._get_memory(entity_id))
@@ -763,15 +841,10 @@ class CoverExtenderCoordinator:
                         )
 
             if cfg.get(CONF_SHADING, {}).get("enable", False):
-                self._auto_apply_shade(entity_id, cfg)
+                self._apply_shade(entity_id, cfg)
 
-            # Guard: only if the current mode has helio: true and sun_facing is known
-            select_st = self.hass.states.get(f"select.mode_{entity_id.split('.')[1]}")
-            if (
-                sun_facing is not None
-                and modes_list.get(select_st.state if select_st else "", {}).get("helio", False)
-            ):
-                self._auto_apply_helio(entity_id, sun_facing)
+            if cfg.get(CONF_SOLAR_GAIN, {}).get("enable", False):
+                self._apply_solar_gain(entity_id, cfg)
 
     @callback
     def _handle_select_mode_change(self, event: Event) -> None:
@@ -838,6 +911,13 @@ class CoverExtenderCoordinator:
             self.hass.async_create_task(
                 self._set_cover_position_impl([cover_id], new_position)
             )
+
+    @callback
+    def _handle_solar_gain_trigger(self, _event: Event | None = None) -> None:
+        """Re-apply solar gain logic when temperature or weather changes."""
+        for entity_id, cfg in self._profiles.items():
+            if cfg.get(CONF_SOLAR_GAIN, {}).get("enable", False):
+                self._apply_solar_gain(entity_id, cfg)
 
     # ── Service handlers ──────────────────────────────────────────────────────
 
@@ -937,13 +1017,14 @@ class CoverExtenderCoordinator:
 
     async def service_reload(self, call: ServiceCall) -> None:
         """Reload cover configuration from YAML without restarting HA."""
-        new_profiles, new_modes_list, new_facades, new_vas = await self.hass.async_add_executor_job(
+        new_profiles, new_modes_list, new_facades, new_vas, new_solar_gain = await self.hass.async_add_executor_job(
             _load_covers_config, self.hass, self._source
         )
         self.hass.data[DOMAIN][DATA_COVER_PROFILES] = new_profiles
         self.hass.data[DOMAIN][DATA_MODES] = new_modes_list
         self.hass.data[DOMAIN][DATA_FACADES] = new_facades
         self.hass.data[DOMAIN][DATA_VALUE_AS_SENSOR] = new_vas
+        self.hass.data[DOMAIN][DATA_SOLAR_GAIN] = new_solar_gain
         self._setup_profiles()
         async_dispatcher_send(self.hass, SIGNAL_COVER_RELOAD)
         _LOGGER.info("cover_extender reloaded (%d profiles)", len(new_profiles))
@@ -962,13 +1043,14 @@ class CoverExtenderCoordinator:
 
         self._start_worker()
 
-        profiles, modes_list, facades, value_as_sensor = await self.hass.async_add_executor_job(
+        profiles, modes_list, facades, value_as_sensor, solar_gain_global = await self.hass.async_add_executor_job(
             _load_covers_config, self.hass, self._source
         )
         self.hass.data[DOMAIN][DATA_COVER_PROFILES] = profiles
         self.hass.data[DOMAIN][DATA_MODES] = modes_list
         self.hass.data[DOMAIN][DATA_FACADES] = facades
         self.hass.data[DOMAIN][DATA_VALUE_AS_SENSOR] = value_as_sensor
+        self.hass.data[DOMAIN][DATA_SOLAR_GAIN] = solar_gain_global
 
         # _setup_profiles requires cover entities to already be in the state machine
         self.hass.bus.async_listen_once("homeassistant_started", lambda _: self._setup_profiles())

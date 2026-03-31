@@ -140,7 +140,7 @@ class CoverModeSelect(SelectEntity, RestoreEntity):
                     "color":      modes_list.get(opt, {}).get("color",      "white"),
                     "lock":       modes_list.get(opt, {}).get("lock",       False),
                     "auto_shade": modes_list.get(opt, {}).get("auto_shade", False),
-                    "helio":      modes_list.get(opt, {}).get("helio",      False),
+                    "solar_gain": modes_list.get(opt, {}).get("solar_gain", False),
                 }
                 for opt in self._attr_options
             },
@@ -212,7 +212,7 @@ class CoverModesGlobalSelect(SelectEntity, RestoreEntity):
                     "color":      props.get("color",      "white"),
                     "lock":       props.get("lock",       False),
                     "auto_shade": props.get("auto_shade", False),
-                    "helio":      props.get("helio",      False),
+                    "solar_gain": props.get("solar_gain", False),
                 }
                 for name, props in modes_list.items()
                 if not props.get("hidden", False)
