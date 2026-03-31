@@ -126,6 +126,60 @@ cover.bedroom_blind:
 | `change_threshold` | `5` | Min difference (%) to trigger a move — prevents jitter |
 | `time_out` | `1` | Minimum delay between two automated moves (minutes) |
 
+### `solar_gain` sub-block (per cover)
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `enable` | `false` | Create the `auto_solar_gain` switch for this cover |
+| `position_cold` | `0` | Position (%) applied when it's cold but the sun is not facing or weather is bad |
+| `position_solar` | `100` | Position (%) applied when it's cold **and** the sun is facing **and** weather is good |
+
+### `solar_gain` global block (top-level)
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `temperature_entity` | — | Sensor entity ID used to read the current temperature |
+| `temperature_threshold` | `19.0` | If temperature ≥ threshold, solar gain logic is skipped (no move) |
+| `weather_entity` | — | Weather entity ID used to check current conditions |
+| `good_conditions` | `[]` | List of weather states considered sunny enough (e.g. `sunny`, `partlycloudy`) |
+
+### Solar gain example
+
+```yaml
+# covers_config.yaml
+
+solar_gain:                                   # global — shared by all covers
+  temperature_entity: sensor.outdoor_temp
+  temperature_threshold: 19.0                 # do nothing if temp >= 19 °C
+  weather_entity: weather.home
+  good_conditions:
+    - sunny
+    - partlycloudy
+
+cover_extender_modes:
+  Solar:
+    icon: mdi:sun-thermometer
+    color: "#FF8F00"
+    lock: true
+    solar_gain: true                          # activates auto_solar_gain switch on entry
+
+cover.living_room_blind:
+  facade: south
+  modes:
+    Solar: null                               # position determined by solar gain logic
+  solar_gain:
+    enable: true
+    position_solar: 80                        # open wide when cold + sun facing
+    position_cold: 10                         # almost closed when cold but no sun
+```
+
+**How it works:**
+1. When the `Solar` mode is selected, `switch.living_room_blind_auto_solar_gain` is turned ON.
+2. On every change of `sensor.outdoor_temp` or `weather.home`, the component re-evaluates:
+   - If `temp >= 19 °C` → no action (cover stays where it is).
+   - If `temp < 19 °C` AND sun is facing the facade AND weather is sunny → move to `position_solar` (80 %).
+   - If `temp < 19 °C` AND (sun not facing OR weather not in `good_conditions`) → move to `position_cold` (10 %).
+
 ## Entities created per cover
 
 For each configured cover entity, the component automatically creates:
