@@ -107,10 +107,10 @@ cover.bedroom_blind:
 | `angle_right` | `85.0` | Sun cone tolerance right of facade azimuth (degrees) |
 | `enable_auto_shade` | `false` | Create the `auto_shade` switch for this cover |
 | `entity_picture` | — | URL of a custom image shown on the cover tile |
-| `ombrage` | `{}` | Solar shading parameters (see below) |
+| `shading` | `{}` | Solar shading parameters (see below) |
 | `exclusion` | `[]` | List of entity IDs — moves are blocked while any of these is `on` |
 
-### `ombrage` sub-block (solar shading)
+### `shading` sub-block (solar shading)
 
 | Key | Default | Description |
 |-----|---------|-------------|
