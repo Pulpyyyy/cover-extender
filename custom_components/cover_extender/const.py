@@ -7,7 +7,6 @@ CONF_SOURCE = "source"
 CONF_FACADE = "facade"
 CONF_MODES = "modes"
 CONF_ENTITY_PICTURE = "entity_picture"
-CONF_ENABLE_AUTO_SHADE = "enable_auto_shade"
 CONF_ANGLE_LEFT = "angle_left"
 CONF_ANGLE_RIGHT = "angle_right"
 CONF_FACADES = "facades"
@@ -19,8 +18,8 @@ ATTR_MODES = "modes"
 ATTR_ENABLE_AUTO_SHADE = "enable_auto_shade"
 ATTR_SOLEIL_EN_FACE = "sun_facing"
 
-# Ombrage sub-config key and its fields (all optional, defaults in service)
-CONF_OMBRAGE    = "shading"
+# Shading sub-config key and its fields (all optional, defaults in service)
+CONF_SHADING    = "shade"
 CONF_EXCLUSION  = "exclusion"
 
 # Service names

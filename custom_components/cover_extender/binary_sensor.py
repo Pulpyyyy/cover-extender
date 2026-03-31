@@ -27,7 +27,7 @@ from .const import (
     DATA_VALUE_AS_SENSOR,
     DATA_BINARY_SENSOR_SUN_FACING_IDS,
     DATA_BINARY_SENSOR_AUTO_SHADE_IDS,
-    CONF_ENABLE_AUTO_SHADE,
+    CONF_SHADING,
     CONF_FACADE,
     ATTR_SOLEIL_EN_FACE,
     SIGNAL_COVER_RELOAD,
@@ -126,7 +126,7 @@ def _build_entities(
             sun_facing_entities.append(CoverSunFacingBinarySensor(cover_id))
         if expose_as:
             auto_shade_entities.append(
-                CoverEnableAutoShadeBinarySensor(cover_id, bool(cfg.get(CONF_ENABLE_AUTO_SHADE, False)))
+                CoverEnableAutoShadeBinarySensor(cover_id, bool(cfg.get(CONF_SHADING, {}).get("enable", False)))
             )
 
     return sun_facing_entities, auto_shade_entities
@@ -232,7 +232,7 @@ class CoverEnableAutoShadeBinarySensor(BinarySensorEntity):
         def _on_reload() -> None:
             profiles: dict = self.hass.data.get(DOMAIN, {}).get(DATA_COVER_PROFILES, {})
             cfg = profiles.get(self._cover_entity_id, {})
-            new_val = bool(cfg.get(CONF_ENABLE_AUTO_SHADE, False))
+            new_val = bool(cfg.get(CONF_SHADING, {}).get("enable", False))
             if new_val != self._attr_is_on:
                 self._attr_is_on = new_val
                 self.async_write_ha_state()

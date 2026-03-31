@@ -98,7 +98,7 @@ apply_mode:
 compute_shade_position:
   name: Compute shade position
   description: >
-    Computes the solar shade position for a cover based on its ombrage configuration
+    Computes the solar shade position for a cover based on its shade configuration
     and the current sun position. Returns position (0-100 %) and should_update (bool).
   fields:
     entity_id:

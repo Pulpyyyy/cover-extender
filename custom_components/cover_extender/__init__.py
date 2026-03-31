@@ -5,7 +5,7 @@ Injects custom attributes (entity_picture, facade, modes, enable_auto_shade, sun
 and auto-creates the following helper entities for each configured cover:
   - select.mode_<cover>          mode selector
   - switch.<cover>_lock          automation lock
-  - switch.<cover>_auto_shade  autonomous solar shading (enable_auto_shade: true only)
+  - switch.<cover>_auto_shade  autonomous solar shading (shade.enable: true only)
 
 Configuration in configuration.yaml:
   cover_extender:
@@ -25,14 +25,14 @@ Architecture:
   The coordinator is stored in hass.data[DOMAIN]["coordinator"] and exposes its state
   (profiles, modes, facades) in hass.data[DOMAIN] for the select/switch sub-platforms.
 
-Autonomous shading:
-  When switch.<cover>_auto_shade is ON, cover_extender computes and applies the shading
+Autonomous shade:
+  When switch.<cover>_auto_shade is ON, cover_extender computes and applies the shade
   position on every sun.sun state change — no blueprint required.
   The switch is turned on/off by apply_mode when entering/leaving a mode with auto_shade: true.
   The automation lock (switch.<cover>_lock) is activated together with auto_shade
-  so that the blueprint ignores memory/lock triggers while shading is active.
+  so that the blueprint ignores memory/lock triggers while shade is active.
 
-  Shading parameters (shading: block in the cover YAML config):
+  Shading parameters (shade: block in the cover YAML config):
     distance          (optional, default: 0.3)   obstacle depth in metres
     max_height        (optional, default: 1.5)   shutter max height in metres
     min_height        (optional, default: 0.0)   shutter min height in metres
@@ -81,8 +81,7 @@ from .const import (
     CONF_MODES,
     CONF_MODES_SECTION,
     CONF_ENTITY_PICTURE,
-    CONF_ENABLE_AUTO_SHADE,
-    CONF_OMBRAGE,
+    CONF_SHADING,
     CONF_VALUE_AS_SENSOR,
     ATTR_FACADE,
     ATTR_MODES,
@@ -171,7 +170,7 @@ def _compute_shade_sync(
     and the current position is below the threshold, the current position is
     returned unchanged and should_update is False.
     """
-    auto_shade = cfg.get(CONF_OMBRAGE, {})
+    auto_shade = cfg.get(CONF_SHADING, {})
 
     distance      = float(auto_shade.get("distance",          0.3))
     h_max         = float(auto_shade.get("max_height",        1.5))
@@ -286,8 +285,7 @@ def _build_extra_attrs(cfg: dict[str, Any], memory: int | None = None) -> dict[s
         attrs[ATTR_FACADE] = facade
     if modes := cfg.get(CONF_MODES):
         attrs[ATTR_MODES] = dict(modes)
-    if CONF_ENABLE_AUTO_SHADE in cfg:
-        attrs[ATTR_ENABLE_AUTO_SHADE] = bool(cfg[CONF_ENABLE_AUTO_SHADE])
+    attrs[ATTR_ENABLE_AUTO_SHADE] = bool(cfg.get(CONF_SHADING, {}).get("enable", False))
     if memory is not None:
         attrs["memory"] = memory
     return attrs
@@ -384,8 +382,9 @@ _MODE_DISPLAY_SCHEMA = vol.Schema(
     }
 )
 
-_OMBRAGE_SCHEMA = vol.Schema(
+_SHADING_SCHEMA = vol.Schema(
     {
+        vol.Optional("enable",            default=False): cv.boolean,
         vol.Optional("distance",          default=0.3):   vol.Coerce(float),
         vol.Optional("max_height",        default=1.5):   vol.Coerce(float),
         vol.Optional("min_height",        default=0.0):   vol.Coerce(float),
@@ -403,12 +402,11 @@ _COVER_PROFILE_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_FACADE):                         cv.string,
         vol.Optional(CONF_ENTITY_PICTURE):                 cv.string,
-        vol.Optional(CONF_ENABLE_AUTO_SHADE, default=False): cv.boolean,
         vol.Optional(CONF_ANGLE_LEFT,        default=85.0):  vol.Coerce(float),
         vol.Optional(CONF_ANGLE_RIGHT,       default=85.0):  vol.Coerce(float),
         vol.Optional(CONF_MODES,             default={}):
             vol.Schema({cv.string: vol.Any(None, vol.Coerce(int), cv.entity_id)}),
-        vol.Optional(CONF_OMBRAGE,           default={}):    _OMBRAGE_SCHEMA,
+        vol.Optional(CONF_SHADING,           default={}):    _SHADING_SCHEMA,
         vol.Optional(CONF_EXCLUSION,         default=[]):    vol.All(
             cv.ensure_list, [cv.entity_id]
         ),
@@ -584,7 +582,7 @@ class CoverExtenderCoordinator:
 
         cover_name    = entity_id.split(".")[1]
         lock_id       = f"switch.{cover_name}_lock"
-        ombrage_id    = f"switch.{cover_name}_auto_shade"
+        shading_id    = f"switch.{cover_name}_auto_shade"
 
         from_mode_cfg = self._modes_list.get(from_mode, {}) if from_mode else {}
         to_mode_cfg   = self._modes_list.get(mode, {})
@@ -606,10 +604,10 @@ class CoverExtenderCoordinator:
 
         # 3. auto_shade
         if to_mode_cfg.get("auto_shade", False):
-            await self.hass.services.async_call("switch", "turn_on", {"entity_id": ombrage_id})
+            await self.hass.services.async_call("switch", "turn_on", {"entity_id": shading_id})
             await self.hass.services.async_call("switch", "turn_on", {"entity_id": lock_id})
         else:
-            await self.hass.services.async_call("switch", "turn_off", {"entity_id": ombrage_id})
+            await self.hass.services.async_call("switch", "turn_off", {"entity_id": shading_id})
 
         # 4. Position
         fixed_position = cfg.get(CONF_MODES, {}).get(mode)
@@ -764,7 +762,7 @@ class CoverExtenderCoordinator:
                             {**current_attrs, ATTR_SOLEIL_EN_FACE: sun_facing},
                         )
 
-            if cfg.get(CONF_ENABLE_AUTO_SHADE):
+            if cfg.get(CONF_SHADING, {}).get("enable", False):
                 self._auto_apply_shade(entity_id, cfg)
 
             # Guard: only if the current mode has helio: true and sun_facing is known

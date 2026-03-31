@@ -42,17 +42,16 @@ cover_extender_modes:
   Night:
     icon: mdi:moon-waning-crescent
     color: indigo
+    save_on_enter: true
   Day:
     icon: mdi:white-balance-sunny
     color: orange
+    apply_memory_on_exit: true
   Shade:
     icon: mdi:sun-clock
     color: amber
     lock: true
     auto_shade: true
-  Heat-wave:
-    icon: mdi:thermometer-alert
-    color: "#FF6600"
 
 cover.living_room_blind:
   facade: south
@@ -63,8 +62,8 @@ cover.living_room_blind:
     Heat-wave: input_number.heatwave_pos   # position tracked from an entity
   angle_left: 80.0
   angle_right: 80.0
-  enable_auto_shade: true
-  shading:
+  shade:
+    enable: true
     distance: 0.4
     max_height: 1.8
     minimum_position: 15
@@ -84,7 +83,7 @@ cover.bedroom_blind:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `azimuth` | float | Compass direction the facade faces (0 = North, 90 = East, 180 = South, 270 = West) |
+| `azimuth` | float | Compass direction that the facade faces (0 = North, 90 = East, 180 = South, 270 = West) |
 
 ### `cover_extender_modes` block
 
@@ -93,31 +92,32 @@ cover.bedroom_blind:
 | `icon` | `mdi:help-circle` | Material Design Icon for the mode |
 | `color` | `white` | **6-digit hex only** (`#RRGGBB`) — 8-digit hex (`#RRGGBBaa`) is not supported and will be ignored by UI cards |
 | `lock` | `false` | Activate the automation lock when entering this mode |
+| `save_on_enter` | `false` | Save current position to memory before moving |
+| `apply_memory_on_exit` | `false` | Restore saved position when leaving this mode |
 | `auto_shade` | `false` | Activate autonomous solar shading when entering this mode |
 | `helio` | `false` | Mark this mode as heliotropic (used by UI cards to apply dynamic sun-tracking logic) |
-| `hidden` | `false` | Hide this mode from UI cards |
 
 ### Per-cover profile
 
 | Key | Default | Description |
 |-----|---------|-------------|
 | `facade` | — | Facade name (must match a key in `facades`) |
-| `modes` | `{}` | Dict of `mode_name: position` — value can be an integer 0–100, `null` (no fixed position, e.g. solar shading), or an entity ID whose numeric state is used as the position (tracked live) |
+| `modes` | `{}` | Dict of `mode_name: position` — value can be an integer 0–100, `null` (no fixed position, e.g. solar shade), or an entity ID whose numeric state is used as the position (tracked live) |
 | `angle_left` | `85.0` | Sun cone tolerance left of facade azimuth (degrees) |
 | `angle_right` | `85.0` | Sun cone tolerance right of facade azimuth (degrees) |
-| `enable_auto_shade` | `false` | Create the `auto_shade` switch for this cover |
 | `entity_picture` | — | URL of a custom image shown on the cover tile |
-| `shading` | `{}` | Solar shading parameters (see below) |
+| `shade` | `{}` | Solar shading parameters (see below) |
 | `exclusion` | `[]` | List of entity IDs — moves are blocked while any of these is `on` |
 
-### `shading` sub-block (solar shading)
+### `shade` sub-block (solar shading)
 
 | Key | Default | Description |
 |-----|---------|-------------|
+| `enable` | `false` | Create the `auto_shade` switch for this cover |
 | `distance` | `0.3` | Obstacle depth in metres (balcony overhang, awning…) |
 | `max_height` | `1.5` | Shutter max height in metres |
 | `min_height` | `0.0` | Shutter min height in metres |
-| `degrees` | `90` | Solar cone half-angle — how far left/right of facade the sun must be |
+| `degrees` | `90` | Solar cone half-angle — how far left/right of the facade the sun must be |
 | `max_elevation` | `90` | Upper sun elevation bound (degrees) |
 | `min_elevation` | `5` | Lower sun elevation bound — ignores sunrise/sunset glare |
 | `minimum_position` | `10` | Floor position (%) when sun is in the cone |
@@ -127,14 +127,14 @@ cover.bedroom_blind:
 
 ## Entities created per cover
 
-For each configured cover entity the component automatically creates:
+For each configured cover entity, the component automatically creates:
 
 | Entity | Purpose |
 |--------|---------|
 | `select.mode_<cover>` | Mode selector — change mode via UI or automations |
 | `number.<cover>_memory` | Stored target position (diagnostic, not shown in main dashboard) |
 | `switch.<cover>_lock` | Automation lock — ON blocks physical moves, stores them in memory instead |
-| `switch.<cover>_auto_shade` | Autonomous solar shading toggle *(only if `enable_auto_shade: true`)* |
+| `switch.<cover>_auto_shade` | Autonomous solar shading toggle *(only if `shade.enable: true`)* |
 
 Attributes injected into the cover entity:
 - `facade`, `modes`, `enable_auto_shade`, `sun_facing`, `entity_picture`
@@ -199,7 +199,7 @@ The `exclusion` list provides an additional guard: if any listed entity is `on` 
 
 ## Solar shading algorithm
 
-When `switch.<cover>_auto_shade` is ON, the component listens to every `sun.sun` state change and computes a shutter position using:
+When `switch.<cover>_auto_shade` is ON, the component listens to every `sun.sun` state change and computes a cover position using:
 
 ```
 h = (distance / cos(γ)) × tan(α)

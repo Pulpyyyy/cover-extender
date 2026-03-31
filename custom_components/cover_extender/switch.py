@@ -2,7 +2,7 @@
 
 Automatically creates:
   - switch.<cover>_lock        for every configured cover
-  - switch.<cover>_auto_shade  for covers with enable_auto_shade: true
+  - switch.<cover>_auto_shade  for covers with shade.enable: true
 """
 from __future__ import annotations
 import logging
@@ -18,7 +18,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
     DOMAIN, DATA_COVER_PROFILES, DATA_SWITCH_COVER_IDS, DATA_SWITCH_AUTO_SHADE_IDS,
-    CONF_ENABLE_AUTO_SHADE, SIGNAL_COVER_RELOAD,
+    CONF_SHADING, SIGNAL_COVER_RELOAD,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,9 +36,9 @@ async def async_setup_entry(
     hass.data[DOMAIN][DATA_SWITCH_COVER_IDS] = {e._cover_entity_id for e in lock_entities}
 
     auto_shade_entities = [
-        CoverOmbrageAutoSwitch(eid)
+        CoverShadingAutoSwitch(eid)
         for eid, cfg in profiles.items()
-        if cfg.get(CONF_ENABLE_AUTO_SHADE)
+        if cfg.get(CONF_SHADING, {}).get("enable", False)
     ]
     hass.data[DOMAIN][DATA_SWITCH_AUTO_SHADE_IDS] = {e._cover_entity_id for e in auto_shade_entities}
 
@@ -74,12 +74,12 @@ async def async_setup_entry(
 
         # --- Auto shade ---
         known_auto_shade: set[str] = hass.data[DOMAIN].get(DATA_SWITCH_AUTO_SHADE_IDS, set())
-        should_have = {eid for eid, cfg in new_profiles.items() if cfg.get(CONF_ENABLE_AUTO_SHADE)}
+        should_have = {eid for eid, cfg in new_profiles.items() if cfg.get(CONF_SHADING, {}).get("enable", False)}
         added_auto_shade = should_have - known_auto_shade
         removed_auto_shade = known_auto_shade - should_have
 
         if added_auto_shade:
-            async_add_entities([CoverOmbrageAutoSwitch(eid) for eid in added_auto_shade])
+            async_add_entities([CoverShadingAutoSwitch(eid) for eid in added_auto_shade])
             hass.data[DOMAIN][DATA_SWITCH_AUTO_SHADE_IDS] = known_auto_shade | added_auto_shade
 
         if removed_auto_shade:
@@ -147,8 +147,8 @@ class CoverLockSwitch(SwitchEntity, RestoreEntity):
         return {"icon_color": "disabled"}
 
 
-class CoverOmbrageAutoSwitch(SwitchEntity, RestoreEntity):
-    """Autonomous solar shading switch for a cover.
+class CoverShadingAutoSwitch(SwitchEntity, RestoreEntity):
+    """Autonomous solar shade switch for a cover.
 
     When on, cover_extender computes and applies the shade position
     on every sun.sun state change, without a blueprint.
