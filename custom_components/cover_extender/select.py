@@ -147,9 +147,33 @@ class CoverModeSelect(SelectEntity, RestoreEntity):
         }
 
     async def async_select_option(self, option: str) -> None:
-        """Change the selected option — triggers subscribed automations."""
+        """Change the selected option and sync auto switches with mode properties."""
         self._attr_current_option = option
         self.async_write_ha_state()
+
+        modes_list: dict = self.hass.data.get(DOMAIN, {}).get(DATA_MODES, {})
+        mode_props = modes_list.get(option, {})
+        cover_name = self._cover_entity_id.split(".")[1]
+
+        switch_map = {
+            f"switch.{cover_name}_auto_shade":       mode_props.get("auto_shade", False),
+            f"switch.{cover_name}_auto_solar_gain":  mode_props.get("solar_gain", False),
+            f"switch.{cover_name}_lock":             mode_props.get("lock", False),
+        }
+
+        for switch_entity_id, should_be_on in switch_map.items():
+            state = self.hass.states.get(switch_entity_id)
+            if state is None:
+                continue
+            current_on = state.state == "on"
+            if should_be_on and not current_on:
+                await self.hass.services.async_call(
+                    "switch", "turn_on", {"entity_id": switch_entity_id}, blocking=True
+                )
+            elif not should_be_on and current_on:
+                await self.hass.services.async_call(
+                    "switch", "turn_off", {"entity_id": switch_entity_id}, blocking=True
+                )
 
 
 class CoverModesGlobalSelect(SelectEntity, RestoreEntity):
