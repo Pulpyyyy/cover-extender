@@ -168,9 +168,27 @@ cover.<entity>:
 ```
 
 ### Mode positions:
-- Integer → fixed position  
-- `null` → no fixed position (auto-shade / solar-gain modes)  
+- Integer → fixed position
+- `null` → no fixed position (auto-shade / solar-gain modes)
 - Entity ID → dynamically read numeric position
+
+### `exclusion`
+A list of entity IDs (typically `binary_sensor`, `input_boolean`, or `switch`) that block physical movement of the cover when any of them is `on`.
+
+```yaml
+cover.living_room:
+  exclusion:
+    - binary_sensor.window_living_room_open
+```
+
+When an exclusion entity is `on`:
+
+- **Mode apply** — the target position is saved to memory instead of being sent to the cover.
+- **Lock release** — the stored memory is not applied; the cover stays put.
+
+As soon as all exclusion entities return to `off`, the next mode change or manual lock release will apply the memorized position normally.
+
+**Typical use case:** prevent a cover from moving while a window is open.
 
 ---
 
