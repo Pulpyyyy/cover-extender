@@ -170,10 +170,7 @@ class CoverLockSwitch(SwitchEntity, RestoreEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        """Expose lock color for custom cards."""
-        if self._attr_is_on:
-            return {"icon_color": "red"}
-        return {"icon_color": "disabled"}
+        return {"icon_color": "red" if self._attr_is_on else "green"}
 
 
 class CoverShadingAutoSwitch(SwitchEntity, RestoreEntity):
@@ -214,13 +211,11 @@ class CoverShadingAutoSwitch(SwitchEntity, RestoreEntity):
 
     @property
     def icon(self) -> str:
-        return "mdi:sun-clock-outline" if self._attr_is_on else "mdi:weather-sunny-off"
+        return "mdi:sun-clock" if self._attr_is_on else "mdi:sun-clock-outline"
 
     @property
     def extra_state_attributes(self) -> dict:
-        if self._attr_is_on:
-            return {"icon_color": "amber"}
-        return {"icon_color": "disabled"}
+        return {"icon_color": "green" if self._attr_is_on else "red"}
 
 
 class CoverSolarGainAutoSwitch(SwitchEntity, RestoreEntity):
@@ -266,6 +261,4 @@ class CoverSolarGainAutoSwitch(SwitchEntity, RestoreEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        if self._attr_is_on:
-            return {"icon_color": "orange"}
-        return {"icon_color": "disabled"}
+        return {"icon_color": "green" if self._attr_is_on else "red"}

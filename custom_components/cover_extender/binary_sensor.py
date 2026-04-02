@@ -221,6 +221,10 @@ class CoverSunFacingBinarySensor(BinarySensorEntity):
     def icon(self) -> str:
         return "mdi:sun-angle" if self._attr_is_on else "mdi:sun-angle-outline"
 
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"icon_color": "var(--primary-color)" if self._attr_is_on else "var(--disabled-color)"}
+
 
 class CoverEnableAutoShadeBinarySensor(BinarySensorEntity):
     """Mirrors switch.<cover>_auto_shade state as a binary_sensor.
@@ -279,6 +283,10 @@ class CoverEnableAutoShadeBinarySensor(BinarySensorEntity):
     def icon(self) -> str:
         return "mdi:sun-clock" if self._attr_is_on else "mdi:sun-clock-outline"
 
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"icon_color": "var(--primary-color)" if self._attr_is_on else "var(--disabled-color)"}
+
 
 class CoverEnableSolarGainBinarySensor(BinarySensorEntity):
     """Mirrors switch.<cover>_auto_solar_gain state as a binary_sensor.
@@ -336,3 +344,7 @@ class CoverEnableSolarGainBinarySensor(BinarySensorEntity):
     @property
     def icon(self) -> str:
         return "mdi:thermometer-sun" if self._attr_is_on else "mdi:thermometer-off"
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"icon_color": "var(--primary-color)" if self._attr_is_on else "var(--disabled-color)"}
