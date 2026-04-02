@@ -652,8 +652,11 @@ class CoverExtenderCoordinator:
         current_pos  = cover_state.attributes.get("current_position") if cover_state else None
         old_memory   = self._get_memory(entity_id)
 
-        # 1. save_on_enter (always)
-        if current_pos is not None:
+        from_lock = from_mode_cfg.get("lock", False)
+        to_lock   = to_mode_cfg.get("lock", False)
+
+        # 1. unlock → lock: save current position
+        if not from_lock and to_lock and current_pos is not None:
             await self._set_memory(entity_id, int(current_pos))
 
         # 2. Lock
@@ -684,20 +687,15 @@ class CoverExtenderCoordinator:
             if fixed_position is not None:
                 target_position = _resolve_mode_position(self.hass, fixed_position)
                 consume_memory  = False
-            elif not from_mode_cfg.get("lock", False) and old_memory is not None:
+            elif from_lock and not to_lock and old_memory is not None:
+                # lock → unlock: restore memory
                 target_position = old_memory
                 consume_memory  = True
             else:
-                if from_mode_cfg.get("lock", False):
-                    _LOGGER.debug(
-                        "_apply_mode_core '%s' → %s: previous mode was locked, memory not restored",
-                        mode, entity_id,
-                    )
-                else:
-                    _LOGGER.debug(
-                        "_apply_mode_core '%s' → %s: no fixed position and no stored memory → no move",
-                        mode, entity_id,
-                    )
+                _LOGGER.debug(
+                    "_apply_mode_core '%s' → %s: no fixed position and no stored memory → no move",
+                    mode, entity_id,
+                )
                 target_position = None
                 consume_memory  = False
 
