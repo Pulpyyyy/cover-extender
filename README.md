@@ -113,6 +113,7 @@ cover.living_room:
 show_entities:
   sun_facing: true
   auto_shade: true
+  solar_gain: true
 ```
 
 ---

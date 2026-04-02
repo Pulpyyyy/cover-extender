@@ -223,10 +223,9 @@ class CoverSunFacingBinarySensor(BinarySensorEntity):
 
 
 class CoverEnableAutoShadeBinarySensor(BinarySensorEntity):
-    """Exposes the shade.enable config value as a binary_sensor.
+    """Mirrors switch.<cover>_auto_shade state as a binary_sensor.
 
-    Value comes from the YAML profile. Updated on reload (SIGNAL_COVER_RELOAD)
-    if the cover config has changed.
+    Updates whenever the switch is toggled (via mode change or manually).
     """
 
     _attr_should_poll = False
@@ -235,6 +234,7 @@ class CoverEnableAutoShadeBinarySensor(BinarySensorEntity):
         self._cover_entity_id = cover_entity_id
         cover_name = cover_entity_id.split(".")[1]
         friendly = cover_name.replace("_", " ").title()
+        self._switch_entity_id = f"switch.{cover_name}_auto_shade"
 
         self.entity_id = f"binary_sensor.{cover_name}_auto_shade"
         self._attr_unique_id = f"{DOMAIN}_binary_sensor_{cover_name}_auto_shade"
@@ -253,18 +253,26 @@ class CoverEnableAutoShadeBinarySensor(BinarySensorEntity):
         return self._cover_entity_id
 
     async def async_added_to_hass(self) -> None:
-        """Subscribe to reload signal to refresh config value."""
+        """Read switch initial state then track it."""
+        switch_state = self.hass.states.get(self._switch_entity_id)
+        if switch_state:
+            self._attr_is_on = switch_state.state == "on"
+            self.async_write_ha_state()
+
         @callback
-        def _on_reload() -> None:
-            profiles: dict = self.hass.data.get(DOMAIN, {}).get(DATA_COVER_PROFILES, {})
-            cfg = profiles.get(self._cover_entity_id, {})
-            new_val = bool(cfg.get(CONF_SHADING, {}).get("enable", False))
+        def _on_switch_change(event: Event) -> None:
+            new_state = event.data.get("new_state")
+            if new_state is None:
+                return
+            new_val = new_state.state == "on"
             if new_val != self._attr_is_on:
                 self._attr_is_on = new_val
                 self.async_write_ha_state()
 
         self.async_on_remove(
-            async_dispatcher_connect(self.hass, SIGNAL_COVER_RELOAD, _on_reload)
+            async_track_state_change_event(
+                self.hass, [self._switch_entity_id], _on_switch_change
+            )
         )
 
     @property
@@ -273,24 +281,24 @@ class CoverEnableAutoShadeBinarySensor(BinarySensorEntity):
 
 
 class CoverEnableSolarGainBinarySensor(BinarySensorEntity):
-    """Exposes the solar_gain.enable config value as a binary_sensor.
+    """Mirrors switch.<cover>_auto_solar_gain state as a binary_sensor.
 
-    Value comes from the YAML profile. Updated on reload (SIGNAL_COVER_RELOAD)
-    if the cover config has changed.
+    Updates whenever the switch is toggled (via mode change or manually).
     """
 
     _attr_should_poll = False
 
-    def __init__(self, cover_entity_id: str, enable_solar_gain: bool) -> None:
+    def __init__(self, cover_entity_id: str, solar_gain: bool) -> None:
         self._cover_entity_id = cover_entity_id
         cover_name = cover_entity_id.split(".")[1]
         friendly = cover_name.replace("_", " ").title()
+        self._switch_entity_id = f"switch.{cover_name}_auto_solar_gain"
 
-        self.entity_id = f"binary_sensor.{cover_name}_enable_solar_gain"
-        self._attr_unique_id = f"{DOMAIN}_binary_sensor_{cover_name}_enable_solar_gain"
+        self.entity_id = f"binary_sensor.{cover_name}_solar_gain"
+        self._attr_unique_id = f"{DOMAIN}_binary_sensor_{cover_name}_solar_gain"
         self._attr_has_entity_name = True
         self._attr_translation_key = "enable_solar_gain"
-        self._attr_is_on = enable_solar_gain
+        self._attr_is_on = solar_gain
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, cover_entity_id)},
             name=friendly,
@@ -303,18 +311,26 @@ class CoverEnableSolarGainBinarySensor(BinarySensorEntity):
         return self._cover_entity_id
 
     async def async_added_to_hass(self) -> None:
-        """Subscribe to reload signal to refresh config value."""
+        """Read switch initial state then track it."""
+        switch_state = self.hass.states.get(self._switch_entity_id)
+        if switch_state:
+            self._attr_is_on = switch_state.state == "on"
+            self.async_write_ha_state()
+
         @callback
-        def _on_reload() -> None:
-            profiles: dict = self.hass.data.get(DOMAIN, {}).get(DATA_COVER_PROFILES, {})
-            cfg = profiles.get(self._cover_entity_id, {})
-            new_val = bool(cfg.get(CONF_SOLAR_GAIN, {}).get("enable", False))
+        def _on_switch_change(event: Event) -> None:
+            new_state = event.data.get("new_state")
+            if new_state is None:
+                return
+            new_val = new_state.state == "on"
             if new_val != self._attr_is_on:
                 self._attr_is_on = new_val
                 self.async_write_ha_state()
 
         self.async_on_remove(
-            async_dispatcher_connect(self.hass, SIGNAL_COVER_RELOAD, _on_reload)
+            async_track_state_change_event(
+                self.hass, [self._switch_entity_id], _on_switch_change
+            )
         )
 
     @property
