@@ -41,8 +41,11 @@
       "sun_facing": {
         "name": "Sun facing"
       },
-      "enable_auto_shade": {
+      "auto_shade": {
         "name": "Auto shade enabled"
+      },
+      "enable_solar_gain": {
+        "name": "Solar gain enabled"
       }
     }
   }

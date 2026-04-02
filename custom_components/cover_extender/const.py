@@ -15,7 +15,7 @@ CONF_AZIMUTH = "azimuth"
 # State attributes injected into cover entities
 ATTR_FACADE = "facade"
 ATTR_MODES = "modes"
-ATTR_ENABLE_AUTO_SHADE = "enable_auto_shade"
+ATTR_ENABLE_AUTO_SHADE = "auto_shade"
 ATTR_SOLEIL_EN_FACE = "sun_facing"
 
 # Shading sub-config key and its fields (all optional, defaults in service)
@@ -36,20 +36,21 @@ SERVICE_OPEN_COVER         = "open_cover"
 SERVICE_CLOSE_COVER        = "close_cover"
 SERVICE_APPLY_MEMORY       = "apply_memory"
 
-# Configuration key for value_as_sensor section
-CONF_VALUE_AS_SENSOR = "value_as_sensor"
+# Configuration key for show_entities section
+CONF_SHOW_ENTITIES = "show_entities"
 
 # hass.data keys
 DATA_COVER_PROFILES      = "cover_profiles"
 DATA_MODES               = "cover_extender_modes"
 DATA_FACADES             = "facades"
-DATA_VALUE_AS_SENSOR     = "value_as_sensor_config"
+DATA_SHOW_ENTITIES       = "show_entities_config"
 DATA_SELECT_COVER_IDS      = "select_cover_ids"
 DATA_SWITCH_COVER_IDS      = "switch_cover_ids"
 DATA_SWITCH_AUTO_SHADE_IDS = "auto_shade_cover_ids"
 DATA_SWITCH_AUTO_SOLAR_GAIN_IDS = "auto_solar_gain_cover_ids"
-DATA_BINARY_SENSOR_SUN_FACING_IDS    = "binary_sensor_sun_facing_ids"
-DATA_BINARY_SENSOR_AUTO_SHADE_IDS    = "binary_sensor_auto_shade_ids"
+DATA_BINARY_SENSOR_SUN_FACING_IDS        = "binary_sensor_sun_facing_ids"
+DATA_BINARY_SENSOR_AUTO_SHADE_IDS        = "binary_sensor_auto_shade_ids"
+DATA_BINARY_SENSOR_AUTO_SOLAR_GAIN_IDS   = "binary_sensor_solar_gain_ids"
 DATA_MEMORY                = "memory"
 
 STORAGE_KEY     = f"{DOMAIN}.memory"

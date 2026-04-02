@@ -1,7 +1,7 @@
 """
 Cover Extender — enriches existing cover entities without creating new ones.
 
-Injects custom attributes (entity_picture, facade, modes, enable_auto_shade, sun_facing)
+Injects custom attributes (entity_picture, facade, modes, auto_shade, sun_facing)
 and auto-creates the following helper entities for each configured cover:
   - select.mode_<cover>          mode selector
   - switch.<cover>_lock          automation lock
@@ -83,7 +83,7 @@ from .const import (
     CONF_ENTITY_PICTURE,
     CONF_SHADING,
     CONF_SOLAR_GAIN,
-    CONF_VALUE_AS_SENSOR,
+    CONF_SHOW_ENTITIES,
     ATTR_FACADE,
     ATTR_MODES,
     ATTR_ENABLE_AUTO_SHADE,
@@ -104,7 +104,7 @@ from .const import (
     DATA_COVER_PROFILES,
     DATA_MODES,
     DATA_FACADES,
-    DATA_VALUE_AS_SENSOR,
+    DATA_SHOW_ENTITIES,
     DATA_SOLAR_GAIN,
     DATA_MEMORY,
     STORAGE_KEY,
@@ -343,11 +343,12 @@ def _load_covers_config(hass: HomeAssistant, source: str) -> dict[str, Any]:
                     entity_id, mode_name,
                 )
 
-    # ── Parse value_as_sensor ────────────────────────────────────────────────
-    raw_vas: dict = raw.get(CONF_VALUE_AS_SENSOR, {})
-    value_as_sensor = {
-        "sun_facing":        bool(raw_vas.get("sun_facing",        False)),
-        "enable_auto_shade": bool(raw_vas.get("enable_auto_shade", False)),
+    # ── Parse show_entities ──────────────────────────────────────────────────
+    raw_vas: dict = raw.get(CONF_SHOW_ENTITIES, {})
+    show_entities = {
+        "sun_facing":  bool(raw_vas.get("sun_facing",  False)),
+        "auto_shade":  bool(raw_vas.get("auto_shade",  False)),
+        "solar_gain":  bool(raw_vas.get("solar_gain",  False)),
     }
 
     # ── Parse solar_gain global config ───────────────────────────────────────
@@ -359,7 +360,7 @@ def _load_covers_config(hass: HomeAssistant, source: str) -> dict[str, Any]:
         solar_gain_global = _SOLAR_GAIN_GLOBAL_SCHEMA({})
 
     _LOGGER.info("Loaded %d cover profiles from %s", len(profiles), source)
-    return profiles, modes_list, facades, value_as_sensor, solar_gain_global
+    return profiles, modes_list, facades, show_entities, solar_gain_global
 
 
 # ── Voluptuous schemas ────────────────────────────────────────────────────────
@@ -1023,7 +1024,7 @@ class CoverExtenderCoordinator:
         self.hass.data[DOMAIN][DATA_COVER_PROFILES] = new_profiles
         self.hass.data[DOMAIN][DATA_MODES] = new_modes_list
         self.hass.data[DOMAIN][DATA_FACADES] = new_facades
-        self.hass.data[DOMAIN][DATA_VALUE_AS_SENSOR] = new_vas
+        self.hass.data[DOMAIN][DATA_SHOW_ENTITIES] = new_vas
         self.hass.data[DOMAIN][DATA_SOLAR_GAIN] = new_solar_gain
         self._setup_profiles()
         async_dispatcher_send(self.hass, SIGNAL_COVER_RELOAD)
@@ -1043,13 +1044,13 @@ class CoverExtenderCoordinator:
 
         self._start_worker()
 
-        profiles, modes_list, facades, value_as_sensor, solar_gain_global = await self.hass.async_add_executor_job(
+        profiles, modes_list, facades, show_entities, solar_gain_global = await self.hass.async_add_executor_job(
             _load_covers_config, self.hass, self._source
         )
         self.hass.data[DOMAIN][DATA_COVER_PROFILES] = profiles
         self.hass.data[DOMAIN][DATA_MODES] = modes_list
         self.hass.data[DOMAIN][DATA_FACADES] = facades
-        self.hass.data[DOMAIN][DATA_VALUE_AS_SENSOR] = value_as_sensor
+        self.hass.data[DOMAIN][DATA_SHOW_ENTITIES] = show_entities
         self.hass.data[DOMAIN][DATA_SOLAR_GAIN] = solar_gain_global
 
         # _setup_profiles requires cover entities to already be in the state machine

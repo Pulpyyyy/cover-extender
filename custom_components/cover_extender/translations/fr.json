@@ -41,8 +41,11 @@
       "sun_facing": {
         "name": "Soleil en face"
       },
-      "enable_auto_shade": {
+      "auto_shade": {
         "name": "Ombrage auto activé"
+      },
+      "enable_solar_gain": {
+        "name": "Gain solaire activé"
       }
     }
   }

@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lock switch (`switch.<cover>_lock`) to block automations
 - Auto-shade switch (`switch.<cover>_auto_shade`) for solar shading
 - Sun-facing binary sensor (`binary_sensor.<cover>_sun_facing`)
-- Auto-shade enabled binary sensor (`binary_sensor.<cover>_enable_auto_shade`)
+- Auto-shade enabled binary sensor (`binary_sensor.<cover>_auto_shade`)
 - Solar shading calculation based on facade azimuth and sun position
 - Automation memory system to restore positions after manual control
 - Command queue with 150ms throttling to avoid cover overload

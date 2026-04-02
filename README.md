@@ -24,10 +24,10 @@ The integration injects attributes, creates helper entities, computes shading an
   Temperature‑ and weather‑aware auto‑positioning to capture or block heat.
 
 - **Attribute injection**  
-  `facade`, `modes`, `enable_auto_shade`, `sun_facing`, and `memory` are added to each cover entity.
+  `facade`, `modes`, `auto_shade`, `sun_facing`, and `memory` are added to each cover entity.
 
 - **Optional binary sensors**  
-  `sun_facing` and `enable_auto_shade` can be exposed as binary sensors.
+  `sun_facing`, `auto_shade`, and `solar_gain` can be exposed as binary sensors via `show_entities`.
 
 - **Dynamic entity creation**  
   Selects, switches, and binary sensors appear/disappear automatically after reload.
@@ -110,9 +110,9 @@ cover.living_room:
     position_solar: 80
     position_cold: 10
 
-value_as_sensor:
+show_entities:
   sun_facing: true
-  enable_auto_shade: true
+  auto_shade: true
 ```
 
 ---
@@ -286,7 +286,7 @@ Injected into each cover entity:
 
 - `facade`
 - `modes`
-- `enable_auto_shade`
+- `auto_shade`
 - `sun_facing`
 - `memory` (if present)
 
@@ -298,15 +298,17 @@ Attributes update on each state change.
 
 Enabled with:
 ```yaml
-value_as_sensor:
+show_entities:
   sun_facing: true
-  enable_auto_shade: true
+  auto_shade: true
+  solar_gain: true
 ```
 
 Creates:
 
 - `binary_sensor.<cover>_sun_facing`
-- `binary_sensor.<cover>_enable_auto_shade`
+- `binary_sensor.<cover>_auto_shade`
+- `binary_sensor.<cover>_solar_gain`
 
 ---
 
@@ -318,8 +320,9 @@ Creates:
 | `switch.<cover>_lock` | Automation lock |
 | `switch.<cover>_auto_shade` | Autonomous shading (if enabled) |
 | `switch.<cover>_auto_solar_gain` | Solar gain toggle (if enabled) |
-| `binary_sensor.<cover>_sun_facing` | Optional |
-| `binary_sensor.<cover>_enable_auto_shade` | Optional |
+| `binary_sensor.<cover>_sun_facing` | Optional (`show_entities`) |
+| `binary_sensor.<cover>_auto_shade` | Optional (`show_entities`) |
+| `binary_sensor.<cover>_solar_gain` | Optional (`show_entities`) |
 
 Global selector:
 
