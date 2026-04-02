@@ -35,6 +35,9 @@
       },
       "auto_shade": {
         "name": "Ombrage Auto"
+      },
+      "auto_solar_gain": {
+        "name": "Gain Solaire Auto"
       }
     },
     "binary_sensor": {
@@ -44,7 +47,7 @@
       "auto_shade": {
         "name": "Ombrage auto activé"
       },
-      "enable_solar_gain": {
+      "solar_gain": {
         "name": "Gain solaire activé"
       }
     }

@@ -305,7 +305,7 @@ class CoverEnableSolarGainBinarySensor(BinarySensorEntity):
         self.entity_id = f"binary_sensor.{cover_name}_solar_gain"
         self._attr_unique_id = f"{DOMAIN}_binary_sensor_{cover_name}_solar_gain"
         self._attr_has_entity_name = True
-        self._attr_translation_key = "enable_solar_gain"
+        self._attr_translation_key = "solar_gain"
         self._attr_is_on = solar_gain
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, cover_entity_id)},
@@ -343,7 +343,7 @@ class CoverEnableSolarGainBinarySensor(BinarySensorEntity):
 
     @property
     def icon(self) -> str:
-        return "mdi:thermometer-sun" if self._attr_is_on else "mdi:thermometer-off"
+        return "mdi:thermometer-check" if self._attr_is_on else "mdi:thermometer-off"
 
     @property
     def extra_state_attributes(self) -> dict:

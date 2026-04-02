@@ -257,7 +257,7 @@ class CoverSolarGainAutoSwitch(SwitchEntity, RestoreEntity):
 
     @property
     def icon(self) -> str:
-        return "mdi:thermometer-sun" if self._attr_is_on else "mdi:thermometer-off"
+        return "mdi:thermometer-check" if self._attr_is_on else "mdi:thermometer-off"
 
     @property
     def extra_state_attributes(self) -> dict:
