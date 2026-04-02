@@ -170,7 +170,7 @@ class CoverLockSwitch(SwitchEntity, RestoreEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        return {"icon_color": "red" if self._attr_is_on else "green"}
+        return {"icon_color": "var(--primary-color)" if self._attr_is_on else "var(--disabled-color)"}
 
 
 class CoverShadingAutoSwitch(SwitchEntity, RestoreEntity):
@@ -215,7 +215,7 @@ class CoverShadingAutoSwitch(SwitchEntity, RestoreEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        return {"icon_color": "green" if self._attr_is_on else "red"}
+        return {"icon_color": "var(--primary-color)" if self._attr_is_on else "var(--disabled-color)"}
 
 
 class CoverSolarGainAutoSwitch(SwitchEntity, RestoreEntity):
@@ -261,4 +261,4 @@ class CoverSolarGainAutoSwitch(SwitchEntity, RestoreEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        return {"icon_color": "green" if self._attr_is_on else "red"}
+        return {"icon_color": "var(--primary-color)" if self._attr_is_on else "var(--disabled-color)"}
