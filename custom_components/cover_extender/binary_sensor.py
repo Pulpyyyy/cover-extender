@@ -106,14 +106,14 @@ async def async_setup_entry(
             if eid:
                 registry.async_remove(eid)
 
-        # --- enable_solar_gain ---
+        # --- solar_gain ---
         added_sg = [e for e in new_sg if e.cover_entity_id not in known_sg]
         removed_sg = known_sg - new_sg_ids
         if added_sg:
             async_add_entities(added_sg)
         for cover_id in removed_sg:
             cover_name = cover_id.split(".")[1]
-            eid = registry.async_get_entity_id("binary_sensor", DOMAIN, f"{DOMAIN}_binary_sensor_{cover_name}_enable_solar_gain")
+            eid = registry.async_get_entity_id("binary_sensor", DOMAIN, f"{DOMAIN}_binary_sensor_{cover_name}_solar_gain")
             if eid:
                 registry.async_remove(eid)
 
