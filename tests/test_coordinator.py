@@ -164,15 +164,36 @@ class TestApplyModeCore:
         await coord._apply_mode_core("cover.test", "Night", "Day")
         assert hass.data[DOMAIN][DATA_MEMORY]["cover.test"] == 65
 
-    async def test_lock_to_unlock_restores_memory(self, coord, hass, service_calls):
+    async def test_fixed_position_wins_over_memory(self, coord, hass, service_calls):
+        """Night → Day: Day has a fixed position (40) → memory (55) is ignored."""
         hass.data[DOMAIN][DATA_MEMORY]["cover.test"] = 55
         _set_cover(hass, 0)
         await coord._apply_mode_core("cover.test", "Day", "Night")
 
         service, data = coord._cover_queue.get_nowait()
         assert service == "set_cover_position"
+        assert data["position"] == 40  # fixed position wins, not memory
+
+    async def test_lock_to_unlock_restores_memory_when_no_fixed_position(self, coord, hass, service_calls):
+        """Night → mode with position=None + no lock: stored memory is restored.
+
+        Memory restore only applies when the target mode has no fixed position.
+        """
+        # Add a "Free" mode: unlock, no fixed position → triggers memory restore path
+        hass.data[DOMAIN][DATA_MODES]["Free"] = {
+            "lock": False, "auto_shade": False, "solar_gain": False,
+            "icon": "mdi:home", "color": "white", "hidden": False,
+        }
+        hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]["modes"]["Free"] = None
+
+        hass.data[DOMAIN][DATA_MEMORY]["cover.test"] = 55
+        _set_cover(hass, 0)
+        await coord._apply_mode_core("cover.test", "Free", "Night")
+
+        service, data = coord._cover_queue.get_nowait()
+        assert service == "set_cover_position"
         assert data["position"] == 55
-        assert "cover.test" not in hass.data[DOMAIN][DATA_MEMORY]
+        assert "cover.test" not in hass.data[DOMAIN][DATA_MEMORY]  # cleared after restore
 
     async def test_exclusion_active_saves_to_memory_not_queue(self, coord, hass, service_calls):
         hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]["exclusion"] = [
