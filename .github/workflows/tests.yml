@@ -103,9 +103,12 @@ jobs:
               icon = _icon(pct)
               lines.append(f"| `{name}` | {icon} {pct}% | {missing} |")
 
-          summary = os.environ.get("GITHUB_STEP_SUMMARY", "/dev/stdout")
-          with open(summary, "w") as f:
-              f.write("\n".join(lines) + "\n")
+          output = "\n".join(lines) + "\n"
+          print(output)
+          summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary:
+              with open(summary, "w") as f:
+                  f.write(output)
           EOF
 
       - name: Upload coverage artifact
