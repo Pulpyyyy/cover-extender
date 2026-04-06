@@ -40,11 +40,77 @@ jobs:
             --tb=short \
             --cov=custom_components/cover_extender \
             --cov-report=term-missing \
-            --cov-report=xml
+            --cov-report=xml \
+            --cov-report=json \
+            --junit-xml=test-results.xml
 
-      - name: Upload coverage
+      - name: Generate job summary
+        if: always()
+        run: |
+          python - <<'EOF'
+          import json, os, xml.etree.ElementTree as ET
+
+          # ── Parse JUnit XML ────────────────────────────────────────────────
+          tree  = ET.parse("test-results.xml")
+          root  = tree.getroot()
+          total  = int(root.get("tests",    0))
+          failed = int(root.get("failures", 0)) + int(root.get("errors", 0))
+          passed = total - failed
+          status = "✅ passed" if failed == 0 else f"❌ {failed} failed"
+
+          # ── Parse coverage JSON ────────────────────────────────────────────
+          with open("coverage.json") as f:
+              cov = json.load(f)
+          pct_total = round(cov["totals"]["percent_covered"], 1)
+
+          MODULE_ORDER = [
+              "const.py", "helpers.py", "shade.py", "schemas.py",
+              "coordinator.py", "__init__.py",
+              "select.py", "switch.py", "binary_sensor.py", "config_flow.py",
+          ]
+
+          def _icon(pct):
+              if pct >= 90: return "🟢"
+              if pct >= 50: return "🟡"
+              return "🔴"
+
+          rows = {}
+          for path, data in cov["files"].items():
+              name = path.split("/")[-1]
+              pct  = round(data["summary"]["percent_covered"], 1)
+              rows[name] = (pct, data["summary"]["missing_lines"])
+
+          # ── Write summary ──────────────────────────────────────────────────
+          lines = [
+              f"## {status} — {passed}/{total} tests · Python ${{ matrix.python-version }}",
+              "",
+              "| Résultat | Tests |",
+              "|---|---:|",
+              f"| ✅ Passés  | **{passed}** |",
+              f"| ❌ Échoués | **{failed}** |",
+              f"| 📊 Total   | **{total}** |",
+              "",
+              f"### Couverture globale : {pct_total}%",
+              "",
+              "| Module | Couverture | Lignes non couvertes |",
+              "|---|---:|---:|",
+          ]
+
+          for name in MODULE_ORDER:
+              if name not in rows:
+                  continue
+              pct, missing = rows[name]
+              icon = _icon(pct)
+              lines.append(f"| `{name}` | {icon} {pct}% | {missing} |")
+
+          summary = os.environ.get("GITHUB_STEP_SUMMARY", "/dev/stdout")
+          with open(summary, "w") as f:
+              f.write("\n".join(lines) + "\n")
+          EOF
+
+      - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
-        if: matrix.python-version == '3.13'
+        if: always()
         with:
-          name: coverage-report
+          name: coverage-xml
           path: coverage.xml
