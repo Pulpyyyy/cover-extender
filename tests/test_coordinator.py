@@ -1,13 +1,14 @@
 """Tests for CoverExtenderCoordinator business logic.
 
 Uses the real `hass` fixture from pytest-homeassistant-custom-component.
-hass.services.async_call is patched with AsyncMock so no HA services need
-to be registered — we only verify that the coordinator calls the right
-domain/service/data combinations.
+
+Service call verification uses hass.services.async_register with a recording
+handler — ServiceRegistry.async_call is read-only and cannot be patched.
 """
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, call, patch
+import copy
+from unittest.mock import patch
 
 import pytest
 
@@ -27,16 +28,16 @@ _PROFILES = {
     "cover.test": {
         "facade": "sud",
         "modes": {
-            "Day":   40,     # fixed position, no lock
-            "Night": 0,      # fixed position, lock
-            "Auto":  None,   # no fixed position, auto_shade
+            "Day":   40,    # fixed position, no lock
+            "Night": 0,     # fixed position, lock
+            "Auto":  None,  # no fixed position, auto_shade
         },
-        "shade":       {"enable": True,  "distance": 0.5, "max_height": 2.0,
-                        "min_height": 0.0, "degrees": 90, "max_elevation": 80,
-                        "min_elevation": 5, "minimum_position": 10,
-                        "default_position": 100, "change_threshold": 5, "time_out": 2},
-        "solar_gain":  {"enable": False, "position_cold": 10, "position_solar": 80},
-        "exclusion":   [],
+        "shade":      {"enable": True, "distance": 0.5, "max_height": 2.0,
+                       "min_height": 0.0, "degrees": 90, "max_elevation": 80,
+                       "min_elevation": 5, "minimum_position": 10,
+                       "default_position": 100, "change_threshold": 5, "time_out": 2},
+        "solar_gain": {"enable": False, "position_cold": 10, "position_solar": 80},
+        "exclusion":  [],
         "angle_left":  85.0,
         "angle_right": 85.0,
     }
@@ -44,11 +45,11 @@ _PROFILES = {
 
 _MODES = {
     "Day":   {"lock": False, "auto_shade": False, "solar_gain": False,
-              "icon": "mdi:sun",  "color": "orange", "hidden": False},
+              "icon": "mdi:sun",      "color": "orange", "hidden": False},
     "Night": {"lock": True,  "auto_shade": False, "solar_gain": False,
-              "icon": "mdi:moon", "color": "blue",   "hidden": False},
+              "icon": "mdi:moon",     "color": "blue",   "hidden": False},
     "Auto":  {"lock": True,  "auto_shade": True,  "solar_gain": False,
-              "icon": "mdi:sun-clock", "color": "amber", "hidden": False},
+              "icon": "mdi:sun-clock","color": "amber",  "hidden": False},
 }
 
 
@@ -56,11 +57,11 @@ _MODES = {
 
 @pytest.fixture
 def coord(hass):
-    """Coordinator with minimal hass.data, no worker, no listeners."""
+    """Coordinator with a deep-copied hass.data — mutations don't leak between tests."""
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN].update({
-        DATA_COVER_PROFILES: _PROFILES,
-        DATA_MODES:          _MODES,
+        DATA_COVER_PROFILES: copy.deepcopy(_PROFILES),   # deep copy prevents test pollution
+        DATA_MODES:          copy.deepcopy(_MODES),
         DATA_FACADES:        {"sud": {"azimuth": 180.0}},
         DATA_MEMORY:         {},
         DATA_SOLAR_GAIN:     {},
@@ -68,8 +69,26 @@ def coord(hass):
     return CoverExtenderCoordinator(hass, "fake.yaml")
 
 
+@pytest.fixture
+def service_calls(hass):
+    """Register recording handlers for switch.turn_on / switch.turn_off.
+
+    Returns a list of (domain, service, data) tuples accumulated during the test.
+    ServiceRegistry.async_call is read-only; registering real mock handlers is the
+    correct HA testing pattern.
+    """
+    calls: list[tuple[str, str, dict]] = []
+
+    async def record(call):
+        calls.append((call.domain, call.service, dict(call.data)))
+
+    for svc in ("turn_on", "turn_off"):
+        hass.services.async_register("switch", svc, record)
+
+    return calls
+
+
 def _set_cover(hass, position: int) -> None:
-    """Helper: set cover.test state with a current_position attribute."""
     hass.states.async_set("cover.test", "open", {"current_position": position})
 
 
@@ -82,7 +101,6 @@ def _set_switch(hass, switch_id: str, state: str) -> None:
 # ════════════════════════════════════════════════════════════════════════════
 
 class TestSetCoverPositionImpl:
-    """Lock OFF → enqueue command. Lock ON → store in memory."""
 
     async def test_lock_off_enqueues_command(self, coord, hass):
         _set_switch(hass, "switch.test_lock", "off")
@@ -100,17 +118,16 @@ class TestSetCoverPositionImpl:
         assert coord._cover_queue.empty()
         assert hass.data[DOMAIN][DATA_MEMORY]["cover.test"] == 75
 
-    async def test_multiple_covers_each_checked_independently(self, coord, hass):
-        """Two covers: one locked, one not — each treated independently."""
-        hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.other"] = _PROFILES["cover.test"].copy()
+    async def test_multiple_covers_checked_independently(self, coord, hass):
+        hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.other"] = (
+            copy.deepcopy(_PROFILES["cover.test"])
+        )
         _set_switch(hass, "switch.test_lock",  "on")
         _set_switch(hass, "switch.other_lock", "off")
 
         await coord._set_cover_position_impl(["cover.test", "cover.other"], 30)
 
-        # cover.test locked → memory
         assert hass.data[DOMAIN][DATA_MEMORY].get("cover.test") == 30
-        # cover.other unlocked → queue
         assert not coord._cover_queue.empty()
 
 
@@ -119,90 +136,68 @@ class TestSetCoverPositionImpl:
 # ════════════════════════════════════════════════════════════════════════════
 
 class TestApplyModeCore:
-    """Tests for the main mode-application logic."""
 
-    async def test_unknown_mode_is_noop(self, coord, hass):
-        with patch.object(hass.services, "async_call", new_callable=AsyncMock) as svc:
-            await coord._apply_mode_core("cover.test", "Unknown", None)
-            svc.assert_not_called()
+    async def test_unknown_mode_is_noop(self, coord, hass, service_calls):
+        await coord._apply_mode_core("cover.test", "Unknown", None)
+        assert service_calls == []
 
-    async def test_day_mode_turns_lock_off(self, coord, hass):
-        """Day mode has lock=False → switch.turn_off called on lock."""
+    async def test_day_mode_turns_lock_off(self, coord, hass, service_calls):
         _set_cover(hass, 50)
-        with patch.object(hass.services, "async_call", new_callable=AsyncMock) as svc:
-            await coord._apply_mode_core("cover.test", "Day", None)
-            svc.assert_any_call("switch", "turn_off", {"entity_id": "switch.test_lock"})
+        await coord._apply_mode_core("cover.test", "Day", None)
+        assert ("switch", "turn_off", {"entity_id": "switch.test_lock"}) in service_calls
 
-    async def test_day_mode_enqueues_fixed_position(self, coord, hass):
-        """Day mode has position=40 → cover command enqueued."""
+    async def test_day_mode_enqueues_fixed_position(self, coord, hass, service_calls):
         _set_cover(hass, 80)
-        with patch.object(hass.services, "async_call", new_callable=AsyncMock):
-            await coord._apply_mode_core("cover.test", "Day", None)
+        await coord._apply_mode_core("cover.test", "Day", None)
 
         service, data = coord._cover_queue.get_nowait()
         assert service == "set_cover_position"
         assert data["position"] == 40
 
-    async def test_night_mode_turns_lock_on(self, coord, hass):
-        """Night mode has lock=True → switch.turn_on called on lock."""
+    async def test_night_mode_turns_lock_on(self, coord, hass, service_calls):
         _set_cover(hass, 50)
-        with patch.object(hass.services, "async_call", new_callable=AsyncMock) as svc:
-            await coord._apply_mode_core("cover.test", "Night", "Day")
-            svc.assert_any_call("switch", "turn_on", {"entity_id": "switch.test_lock"})
+        await coord._apply_mode_core("cover.test", "Night", "Day")
+        assert ("switch", "turn_on", {"entity_id": "switch.test_lock"}) in service_calls
 
-    async def test_unlock_to_lock_saves_current_position(self, coord, hass):
-        """Transition Day (unlock) → Night (lock): current position saved to memory."""
+    async def test_unlock_to_lock_saves_current_position(self, coord, hass, service_calls):
         _set_cover(hass, 65)
-        with patch.object(hass.services, "async_call", new_callable=AsyncMock):
-            await coord._apply_mode_core("cover.test", "Night", "Day")
-
+        await coord._apply_mode_core("cover.test", "Night", "Day")
         assert hass.data[DOMAIN][DATA_MEMORY]["cover.test"] == 65
 
-    async def test_lock_to_unlock_restores_memory(self, coord, hass):
-        """Transition Night (lock) → Day (unlock): stored memory enqueued."""
+    async def test_lock_to_unlock_restores_memory(self, coord, hass, service_calls):
         hass.data[DOMAIN][DATA_MEMORY]["cover.test"] = 55
         _set_cover(hass, 0)
-        with patch.object(hass.services, "async_call", new_callable=AsyncMock):
-            await coord._apply_mode_core("cover.test", "Day", "Night")
+        await coord._apply_mode_core("cover.test", "Day", "Night")
 
         service, data = coord._cover_queue.get_nowait()
         assert service == "set_cover_position"
         assert data["position"] == 55
-        # Memory cleared after restore
         assert "cover.test" not in hass.data[DOMAIN][DATA_MEMORY]
 
-    async def test_exclusion_active_saves_to_memory_not_queue(self, coord, hass):
-        """When an exclusion entity is ON, target position goes to memory, not queue."""
+    async def test_exclusion_active_saves_to_memory_not_queue(self, coord, hass, service_calls):
         hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]["exclusion"] = [
             "binary_sensor.window_open"
         ]
         hass.states.async_set("binary_sensor.window_open", "on")
         _set_cover(hass, 80)
 
-        with patch.object(hass.services, "async_call", new_callable=AsyncMock):
-            await coord._apply_mode_core("cover.test", "Day", None)
+        await coord._apply_mode_core("cover.test", "Day", None)
 
         assert coord._cover_queue.empty()
-        assert hass.data[DOMAIN][DATA_MEMORY]["cover.test"] == 40  # Day position
+        assert hass.data[DOMAIN][DATA_MEMORY]["cover.test"] == 40
 
-    async def test_auto_mode_enables_shade_and_lock(self, coord, hass):
-        """Auto mode (auto_shade=True) must turn on shade switch AND lock."""
+    async def test_auto_mode_enables_shade_and_lock(self, coord, hass, service_calls):
         _set_cover(hass, 50)
-        with patch.object(hass.services, "async_call", new_callable=AsyncMock) as svc:
-            await coord._apply_mode_core("cover.test", "Auto", "Day")
+        await coord._apply_mode_core("cover.test", "Auto", "Day")
 
-        calls = svc.call_args_list
-        assert call("switch", "turn_on", {"entity_id": "switch.test_auto_shade"}) in calls
-        assert call("switch", "turn_on", {"entity_id": "switch.test_lock"}) in calls
+        assert ("switch", "turn_on", {"entity_id": "switch.test_auto_shade"}) in service_calls
+        assert ("switch", "turn_on", {"entity_id": "switch.test_lock"}) in service_calls
 
-    async def test_leaving_auto_mode_disables_shade(self, coord, hass):
-        """Going from Auto → Day must turn off the shade switch."""
+    async def test_leaving_auto_mode_disables_shade(self, coord, hass, service_calls):
         _set_cover(hass, 50)
-        with patch.object(hass.services, "async_call", new_callable=AsyncMock) as svc:
-            await coord._apply_mode_core("cover.test", "Day", "Auto")
+        await coord._apply_mode_core("cover.test", "Day", "Auto")
 
-        calls = svc.call_args_list
-        assert call("switch", "turn_off", {"entity_id": "switch.test_auto_shade"}) in calls
+        assert ("switch", "turn_off", {"entity_id": "switch.test_auto_shade"}) in service_calls
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -210,7 +205,6 @@ class TestApplyModeCore:
 # ════════════════════════════════════════════════════════════════════════════
 
 class TestHandleLockOff:
-    """Memory is applied when lock transitions on → off."""
 
     def _make_event(self, hass, old_state: str, new_state: str):
         from unittest.mock import MagicMock
@@ -234,25 +228,19 @@ class TestHandleLockOff:
 
     def test_on_to_off_without_memory_no_command(self, coord, hass):
         coord._lock_to_cover["switch.test_lock"] = "cover.test"
-
         coord._handle_lock_off(self._make_event(hass, "on", "off"))
-
         assert coord._cover_queue.empty()
 
     def test_off_to_off_is_ignored(self, coord, hass):
         hass.data[DOMAIN][DATA_MEMORY]["cover.test"] = 45
         coord._lock_to_cover["switch.test_lock"] = "cover.test"
-
         coord._handle_lock_off(self._make_event(hass, "off", "off"))
-
         assert coord._cover_queue.empty()
 
     def test_on_to_on_is_ignored(self, coord, hass):
         hass.data[DOMAIN][DATA_MEMORY]["cover.test"] = 45
         coord._lock_to_cover["switch.test_lock"] = "cover.test"
-
         coord._handle_lock_off(self._make_event(hass, "on", "on"))
-
         assert coord._cover_queue.empty()
 
     def test_exclusion_active_blocks_restore(self, coord, hass):
@@ -264,7 +252,6 @@ class TestHandleLockOff:
         hass.states.async_set("binary_sensor.window_open", "on")
 
         coord._handle_lock_off(self._make_event(hass, "on", "off"))
-
         assert coord._cover_queue.empty()
 
 
@@ -273,7 +260,6 @@ class TestHandleLockOff:
 # ════════════════════════════════════════════════════════════════════════════
 
 class TestHandleSolarGainSwitchOn:
-    """Solar gain applied immediately on switch off → on (Fix #7)."""
 
     def _make_event(self, old_state: str, new_state: str):
         from unittest.mock import MagicMock
@@ -286,7 +272,6 @@ class TestHandleSolarGainSwitchOn:
         return event
 
     def test_off_to_on_calls_apply_solar_gain(self, coord, hass):
-        """off → on: _apply_solar_gain should be called for the cover."""
         hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]["solar_gain"]["enable"] = True
         with patch.object(coord, "_apply_solar_gain") as mock_apply:
             coord._handle_solar_gain_switch_on(self._make_event("off", "on"))
@@ -296,7 +281,6 @@ class TestHandleSolarGainSwitchOn:
             )
 
     def test_on_to_on_is_ignored(self, coord, hass):
-        """on → on: should not trigger a re-apply."""
         hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]["solar_gain"]["enable"] = True
         with patch.object(coord, "_apply_solar_gain") as mock_apply:
             coord._handle_solar_gain_switch_on(self._make_event("on", "on"))
@@ -310,7 +294,8 @@ class TestHandleSolarGainSwitchOn:
 
     def test_solar_gain_disabled_cover_is_skipped(self, coord, hass):
         """Cover with solar_gain.enable=False must not trigger even on switch ON."""
-        # solar_gain.enable is False by default in _PROFILES
+        # solar_gain.enable is False in the deep-copied _PROFILES (not mutated by other tests)
+        assert hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]["solar_gain"]["enable"] is False
         with patch.object(coord, "_apply_solar_gain") as mock_apply:
             coord._handle_solar_gain_switch_on(self._make_event("off", "on"))
             mock_apply.assert_not_called()

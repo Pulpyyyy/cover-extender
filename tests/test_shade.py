@@ -120,15 +120,37 @@ class TestComputeShadeSync:
         assert pos == 100
         assert update is False
 
-    def test_below_min_elevation_returns_default(self, base_cfg):
-        """Sun below min_elevation → default position, no update."""
+    def test_below_min_elevation_returns_default_position(self, base_cfg):
+        """Sun below min_elevation → default position (100%).
+
+        No cover state → should_update=True (first run: move to default).
+        """
         pos, update = compute_shade_sync(make_hass(sun_ele=3.0), "cover.test", base_cfg)
+        assert pos == 100
+        assert update is True  # no existing state → always update on first run
+
+    def test_below_min_elevation_no_update_when_already_at_default(self, base_cfg):
+        """Cover already at default position → diff=0 < threshold → no update."""
+        pos, update = compute_shade_sync(
+            make_hass(sun_ele=3.0, cover_pos=100, minutes_since_move=10), "cover.test", base_cfg
+        )
         assert pos == 100
         assert update is False
 
-    def test_above_max_elevation_returns_default(self, base_cfg):
-        """Sun above max_elevation → default position, no update."""
+    def test_above_max_elevation_returns_default_position(self, base_cfg):
+        """Sun above max_elevation → default position (100%).
+
+        No cover state → should_update=True (first run).
+        """
         pos, update = compute_shade_sync(make_hass(sun_ele=85.0), "cover.test", base_cfg)
+        assert pos == 100
+        assert update is True
+
+    def test_above_max_elevation_no_update_when_already_at_default(self, base_cfg):
+        """Cover already at default position → no update."""
+        pos, update = compute_shade_sync(
+            make_hass(sun_ele=85.0, cover_pos=100, minutes_since_move=10), "cover.test", base_cfg
+        )
         assert pos == 100
         assert update is False
 
@@ -195,13 +217,28 @@ class TestComputeShadeSync:
         assert update is False
         assert pos == 27
 
-    def test_diff_at_threshold_boundary(self, base_cfg):
-        """Diff exactly equal to threshold → no update (strict less-than)."""
-        # computed=25, current=30 → diff=5 = threshold=5 → no update
+    def test_diff_just_below_threshold_no_update(self, base_cfg):
+        """Diff strictly below threshold → no update (operator is <, not <=).
+
+        computed=25, current=29 → diff=4 < threshold=5 → no move.
+        """
         pos, update = compute_shade_sync(
-            make_hass(sun_azi=180.0, sun_ele=45.0, cover_pos=30), "cover.test", base_cfg
+            make_hass(sun_azi=180.0, sun_ele=45.0, cover_pos=29), "cover.test", base_cfg
         )
         assert update is False
+        assert pos == 29  # snapped to current
+
+    def test_diff_at_threshold_boundary_triggers_update(self, base_cfg):
+        """Diff exactly equal to threshold → update (< is strict, not <=).
+
+        computed=25, current=30 → diff=5 = threshold=5 → proceeds to timeout check.
+        With minutes_since_move=10 > time_out=2 → update=True.
+        """
+        pos, update = compute_shade_sync(
+            make_hass(sun_azi=180.0, sun_ele=45.0, cover_pos=30, minutes_since_move=10),
+            "cover.test", base_cfg,
+        )
+        assert update is True
 
     # ── Time-out ──────────────────────────────────────────────────────────
 
