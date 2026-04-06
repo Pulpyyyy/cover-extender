@@ -36,7 +36,10 @@ The integration injects attributes, creates helper entities, computes shading an
   Reload YAML config without restarting Home Assistant.
 
 - **Command throttling**  
-  All physical cover commands are queued with a 150 ms delay to prevent hardware saturation.
+  All physical cover commands are queued with a configurable delay (default 150 ms) to prevent hardware saturation.
+
+- **HA bus events**  
+  `cover_extender_mode_changed`, `cover_extender_memory_saved`, and `cover_extender_shade_applied` are fired automatically, enabling external automations to react to Cover Extender state changes.
 
 ---
 
@@ -114,6 +117,8 @@ show_entities:
   sun_facing: true
   auto_shade: true
   solar_gain: true
+
+command_interval: 0.3   # optional — seconds between cover commands, default 0.15
 ```
 
 ---
@@ -295,6 +300,18 @@ Attributes update on each state change.
 
 ---
 
+## 5. `command_interval` *(optional)*
+
+Minimum delay in seconds between two consecutive physical cover commands.
+
+```yaml
+command_interval: 0.3   # default: 0.15
+```
+
+Useful when your hardware bridge rejects commands that arrive too close together. Applies globally to all covers. Takes effect immediately after a `cover_extender.reload`.
+
+---
+
 # 🆕 Optional Binary Sensors
 
 Enabled with:
@@ -364,15 +381,33 @@ Reloads YAML configuration without restarting Home Assistant.
 
 ---
 
-# 🚨 Command Throttling (Important)
+# 🚨 Command Throttling
 
-All physical `cover.*` commands are routed through a global queue and executed with a minimum delay of:
-
-```
-150 ms between commands
-```
+All physical `cover.*` commands are routed through a global queue and executed with a minimum delay between commands (default 150 ms, configurable via `command_interval`).
 
 Switch toggles are **not** throttled.
+
+---
+
+# 📡 HA Bus Events
+
+Cover Extender fires the following events on the HA event bus, allowing external automations to react without polling entities:
+
+| Event | Fired when | Payload |
+|---|---|---|
+| `cover_extender_mode_changed` | A mode is applied to a cover | `entity_id`, `mode`, `from_mode`, `position` |
+| `cover_extender_memory_saved` | A position is stored in or cleared from memory | `entity_id`, `position` (`null` = cleared) |
+| `cover_extender_shade_applied` | Auto-shade computes and enqueues a new position | `entity_id`, `position` |
+
+Example automation trigger:
+
+```yaml
+trigger:
+  - platform: event
+    event_type: cover_extender_mode_changed
+    event_data:
+      mode: Night
+```
 
 ---
 

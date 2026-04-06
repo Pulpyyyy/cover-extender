@@ -45,15 +45,17 @@ from .const import (
     STORAGE_KEY,
     STORAGE_VERSION,
     SIGNAL_COVER_RELOAD,
+    EVENT_MODE_CHANGED,
+    EVENT_MEMORY_SAVED,
+    EVENT_SHADE_APPLIED,
+    CONF_COMMAND_INTERVAL,
+    DEFAULT_COMMAND_INTERVAL,
 )
 from .helpers import build_extra_attrs, resolve_mode_position
 from .shade import compute_sun_facing, compute_shade_sync
 from .schemas import load_covers_config
 
 _LOGGER = logging.getLogger(__name__)
-
-# Minimum delay between two consecutive physical cover commands (seconds).
-_COMMAND_INTERVAL = 0.15
 
 # Delay before restarting the worker after an unexpected crash (seconds).
 _WORKER_RESTART_DELAY = 1.0
@@ -68,6 +70,8 @@ class CoverExtenderCoordinator:
         self._store: Store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._cover_queue: asyncio.Queue[tuple[str, dict]] = asyncio.Queue()
         self._worker_task: asyncio.Task | None = None
+        # Configurable interval between cover commands (loaded from YAML)
+        self._command_interval: float = DEFAULT_COMMAND_INTERVAL
         # Reverse maps rebuilt on every _setup_profiles call
         self._select_to_cover: dict[str, str] = {}
         self._lock_to_cover: dict[str, str] = {}
@@ -132,7 +136,7 @@ class CoverExtenderCoordinator:
                     )
                 finally:
                     self._cover_queue.task_done()
-                await asyncio.sleep(_COMMAND_INTERVAL)
+                await asyncio.sleep(self._command_interval)
         except asyncio.CancelledError:
             pass
 
@@ -163,6 +167,10 @@ class CoverExtenderCoordinator:
                 new_attrs["memory"] = value
             self.hass.states.async_set(entity_id, state.state, new_attrs)
         self.hass.async_create_task(self._store.async_save(dict(mem)))
+        self.hass.bus.async_fire(
+            EVENT_MEMORY_SAVED,
+            {"entity_id": entity_id, "position": value},
+        )
 
     # ── Autonomous shade / solar gain ──────────────────────────────────────────
 
@@ -183,6 +191,10 @@ class CoverExtenderCoordinator:
             return
         _LOGGER.debug("auto_shade %s → %d%%", entity_id, position)
         self._enqueue_cover("set_cover_position", {"entity_id": entity_id, "position": position})
+        self.hass.bus.async_fire(
+            EVENT_SHADE_APPLIED,
+            {"entity_id": entity_id, "position": position},
+        )
 
     @callback
     def _apply_solar_gain(self, entity_id: str, cfg: dict[str, Any]) -> None:
@@ -354,6 +366,15 @@ class CoverExtenderCoordinator:
         if to_mode_cfg.get("solar_gain", False):
             self._apply_solar_gain(entity_id, cfg)
 
+        self.hass.bus.async_fire(
+            EVENT_MODE_CHANGED,
+            {
+                "entity_id": entity_id,
+                "mode": mode,
+                "from_mode": from_mode,
+                "position": target_position,
+            },
+        )
         _LOGGER.debug(
             "_apply_mode_core '%s' → %s (from=%s, lock=%s, position=%s)",
             mode, entity_id, from_mode, to_lock, target_position,
@@ -690,14 +711,16 @@ class CoverExtenderCoordinator:
 
     async def service_reload(self, call: ServiceCall) -> None:
         """Reload cover configuration from YAML without restarting HA."""
-        new_profiles, new_modes_list, new_facades, new_vas, new_solar_gain = (
+        new_profiles, new_modes_list, new_facades, new_vas, new_solar_gain, new_interval = (
             await self.hass.async_add_executor_job(load_covers_config, self.hass, self._source)
         )
-        self.hass.data[DOMAIN][DATA_COVER_PROFILES] = new_profiles
-        self.hass.data[DOMAIN][DATA_MODES]          = new_modes_list
-        self.hass.data[DOMAIN][DATA_FACADES]        = new_facades
-        self.hass.data[DOMAIN][DATA_SHOW_ENTITIES]  = new_vas
-        self.hass.data[DOMAIN][DATA_SOLAR_GAIN]     = new_solar_gain
+        self.hass.data[DOMAIN][DATA_COVER_PROFILES]   = new_profiles
+        self.hass.data[DOMAIN][DATA_MODES]            = new_modes_list
+        self.hass.data[DOMAIN][DATA_FACADES]          = new_facades
+        self.hass.data[DOMAIN][DATA_SHOW_ENTITIES]    = new_vas
+        self.hass.data[DOMAIN][DATA_SOLAR_GAIN]       = new_solar_gain
+        self.hass.data[DOMAIN][CONF_COMMAND_INTERVAL] = new_interval
+        self._command_interval                        = new_interval
         self._setup_profiles()
         async_dispatcher_send(self.hass, SIGNAL_COVER_RELOAD)
         _LOGGER.info("cover_extender reloaded (%d profiles)", len(new_profiles))
@@ -711,14 +734,16 @@ class CoverExtenderCoordinator:
 
         self._start_worker()
 
-        profiles, modes_list, facades, show_entities, solar_gain_global = (
+        profiles, modes_list, facades, show_entities, solar_gain_global, command_interval = (
             await self.hass.async_add_executor_job(load_covers_config, self.hass, self._source)
         )
-        self.hass.data[DOMAIN][DATA_COVER_PROFILES] = profiles
-        self.hass.data[DOMAIN][DATA_MODES]          = modes_list
-        self.hass.data[DOMAIN][DATA_FACADES]        = facades
-        self.hass.data[DOMAIN][DATA_SHOW_ENTITIES]  = show_entities
-        self.hass.data[DOMAIN][DATA_SOLAR_GAIN]     = solar_gain_global
+        self.hass.data[DOMAIN][DATA_COVER_PROFILES]      = profiles
+        self.hass.data[DOMAIN][DATA_MODES]               = modes_list
+        self.hass.data[DOMAIN][DATA_FACADES]             = facades
+        self.hass.data[DOMAIN][DATA_SHOW_ENTITIES]       = show_entities
+        self.hass.data[DOMAIN][DATA_SOLAR_GAIN]          = solar_gain_global
+        self.hass.data[DOMAIN][CONF_COMMAND_INTERVAL]    = command_interval
+        self._command_interval                           = command_interval
 
         # _setup_profiles requires cover entities to already be in the state machine
         self.hass.bus.async_listen_once(

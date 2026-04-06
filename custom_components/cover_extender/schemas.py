@@ -26,6 +26,8 @@ from .const import (
     CONF_EXCLUSION,
     CONF_FACADES,
     CONF_AZIMUTH,
+    CONF_COMMAND_INTERVAL,
+    DEFAULT_COMMAND_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -108,11 +110,11 @@ _COVER_PROFILE_SCHEMA = vol.Schema(
 
 def load_covers_config(
     hass: HomeAssistant, source: str
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], float]:
     """Load and validate cover configuration from a YAML file.
 
-    Returns (profiles, modes_list, facades, show_entities, solar_gain_global).
-    All five dicts are empty on parse error.
+    Returns (profiles, modes_list, facades, show_entities, solar_gain_global, command_interval).
+    All dicts are empty and command_interval defaults to DEFAULT_COMMAND_INTERVAL on parse error.
     """
     if not os.path.isabs(source):
         source = hass.config.path(source)
@@ -122,10 +124,10 @@ def load_covers_config(
             raw: dict[str, Any] = yaml.safe_load(f) or {}
     except FileNotFoundError:
         _LOGGER.error("Cover config file not found: %s", source)
-        return {}, {}, {}, {}, {}
+        return {}, {}, {}, {}, {}, DEFAULT_COMMAND_INTERVAL
     except yaml.YAMLError as err:
         _LOGGER.error("YAML error in %s: %s", source, err)
-        return {}, {}, {}, {}, {}
+        return {}, {}, {}, {}, {}, DEFAULT_COMMAND_INTERVAL
 
     # ── Facades ───────────────────────────────────────────────────────────────
     facades: dict[str, Any] = {}
@@ -175,5 +177,14 @@ def load_covers_config(
         _LOGGER.warning("Cover config: invalid solar_gain config: %s", err)
         solar_gain_global = _SOLAR_GAIN_GLOBAL_SCHEMA({})
 
+    # ── command_interval ──────────────────────────────────────────────────────
+    try:
+        command_interval = float(raw.get(CONF_COMMAND_INTERVAL, DEFAULT_COMMAND_INTERVAL))
+        if command_interval < 0:
+            raise ValueError("command_interval must be >= 0")
+    except (ValueError, TypeError) as err:
+        _LOGGER.warning("Cover config: invalid command_interval: %s — using default", err)
+        command_interval = DEFAULT_COMMAND_INTERVAL
+
     _LOGGER.info("Loaded %d cover profiles from %s", len(profiles), source)
-    return profiles, modes_list, facades, show_entities, solar_gain_global
+    return profiles, modes_list, facades, show_entities, solar_gain_global, command_interval

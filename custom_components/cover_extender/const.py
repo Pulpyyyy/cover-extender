@@ -62,6 +62,15 @@ CONF_MODES_SECTION = "cover_extender_modes"
 # Dispatcher signal fired after a reload so select entities can refresh their options
 SIGNAL_COVER_RELOAD = f"{DOMAIN}_reload"
 
+# HA bus events
+EVENT_MODE_CHANGED  = f"{DOMAIN}_mode_changed"
+EVENT_MEMORY_SAVED  = f"{DOMAIN}_memory_saved"
+EVENT_SHADE_APPLIED = f"{DOMAIN}_shade_applied"
+
+# Configurable command interval (seconds between consecutive cover commands)
+CONF_COMMAND_INTERVAL    = "command_interval"
+DEFAULT_COMMAND_INTERVAL = 0.15
+
 # Platform entity id suffixes  (domain.<suffix>)
 ENTITY_ID_SELECT = "mode_{cover}"   # select.mode_volet_sam
 ENTITY_ID_SWITCH = "{cover}_lock"   # switch.volet_sam_lock
