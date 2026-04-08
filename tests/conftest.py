@@ -7,11 +7,25 @@ from custom_components.cover_extender.const import DOMAIN
 
 
 # ─────────────────────────────────────────────────────────────
-# Helpers utilisés par test_shade.py (DOIT être une FONCTION)
+# Constante utilisée par test_shade.py (IMPORT DIRECT)
+# ─────────────────────────────────────────────────────────────
+
+BASE_SHADE_CFG = {
+    "facade": 180,
+    "min_elevation": 5,
+    "max_elevation": 60,
+    "h_min": 0.2,
+    "h_max": 0.8,
+    "gamma": 1.0,
+    "timeout": 300,
+}
+
+
+# ─────────────────────────────────────────────────────────────
+# Helper (PAS une fixture) — utilisé comme fonction
 # ─────────────────────────────────────────────────────────────
 
 def make_hass(hass: HomeAssistant) -> HomeAssistant:
-    """Return the Home Assistant instance (helper, not a fixture)."""
     return hass
 
 
@@ -21,15 +35,8 @@ def make_hass(hass: HomeAssistant) -> HomeAssistant:
 
 @pytest.fixture
 def base_cfg():
-    return {
-        "facade": 180,
-        "min_elevation": 5,
-        "max_elevation": 60,
-        "h_min": 0.2,
-        "h_max": 0.8,
-        "gamma": 1.0,
-        "timeout": 300,
-    }
+    """Return a copy to avoid mutation between tests."""
+    return dict(BASE_SHADE_CFG)
 
 
 # ─────────────────────────────────────────────────────────────
