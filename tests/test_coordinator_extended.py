@@ -146,7 +146,7 @@ class TestApplyShade:
 
         assert coord._cover_queue.empty()
 
-    def test_shade_applied_event_fired(self, coord, hass):
+    async def test_shade_applied_event_fired(self, coord, hass):
         _set_switch(hass, "switch.test_auto_shade", "on")
         cfg = hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]
         fired = []
@@ -158,6 +158,7 @@ class TestApplyShade:
         ):
             coord._apply_shade("cover.test", cfg)
 
+        await hass.async_block_till_done()
         assert len(fired) == 1
         assert fired[0].data["position"] == 25
 
@@ -595,6 +596,7 @@ class TestAsyncStop:
         assert coord._worker_task is not None
         assert not coord._worker_task.done()
         await coord.async_stop()
+        await hass.async_block_till_done()
         assert coord._worker_task.done()
 
     async def test_stop_clears_unsubs(self, coord, hass):
