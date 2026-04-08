@@ -55,15 +55,23 @@ jobs:
           import os
           import xml.etree.ElementTree as ET
 
-          # ── Parse JUnit XML ────────────────────────────────────────────────
+          # ── Parse JUnit XML (robuste : testsuites + testsuite) ─────────────
           tree = ET.parse("test-results.xml")
           root = tree.getroot()
 
-          total = int(root.get("tests", 0))
-          failed = int(root.get("failures", 0)) + int(root.get("errors", 0))
+          total = 0
+          failed = 0
+
+          for suite in root.findall(".//testsuite"):
+              total += int(suite.get("tests", 0))
+              failed += int(suite.get("failures", 0)) + int(suite.get("errors", 0))
+
           passed = total - failed
 
-          status = "✅ passed" if failed == 0 else f"❌ {failed} failed"
+          if total == 0:
+              status = "⚠️ no tests collected"
+          else:
+              status = "✅ passed" if failed == 0 else f"❌ {failed} failed"
 
           # ── Parse coverage JSON ────────────────────────────────────────────
           with open("coverage.json") as f:
@@ -97,7 +105,7 @@ jobs:
               pct = round(data["summary"]["percent_covered"], 1)
               rows[name] = (pct, data["summary"]["missing_lines"])
 
-          # ── Build summary ──────────────────────────────────────────────────
+          # ── Build GitHub job summary ───────────────────────────────────────
           lines = [
               f"## {status} — {passed}/{total} tests · Python {os.environ['PYTHON_VERSION']}",
               "",
