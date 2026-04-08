@@ -1,9 +1,10 @@
-name: Tests
+name: Pytest & Coverage
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
@@ -46,43 +47,59 @@ jobs:
 
       - name: Generate job summary
         if: always()
+        env:
+          PYTHON_VERSION: ${{ matrix.python-version }}
         run: |
           python - <<'EOF'
-          import json, os, xml.etree.ElementTree as ET
+          import json
+          import os
+          import xml.etree.ElementTree as ET
 
           # ── Parse JUnit XML ────────────────────────────────────────────────
-          tree  = ET.parse("test-results.xml")
-          root  = tree.getroot()
-          total  = int(root.get("tests",    0))
+          tree = ET.parse("test-results.xml")
+          root = tree.getroot()
+
+          total = int(root.get("tests", 0))
           failed = int(root.get("failures", 0)) + int(root.get("errors", 0))
           passed = total - failed
+
           status = "✅ passed" if failed == 0 else f"❌ {failed} failed"
 
           # ── Parse coverage JSON ────────────────────────────────────────────
           with open("coverage.json") as f:
               cov = json.load(f)
+
           pct_total = round(cov["totals"]["percent_covered"], 1)
 
           MODULE_ORDER = [
-              "const.py", "helpers.py", "shade.py", "schemas.py",
-              "coordinator.py", "__init__.py",
-              "select.py", "switch.py", "binary_sensor.py", "config_flow.py",
+              "const.py",
+              "helpers.py",
+              "shade.py",
+              "schemas.py",
+              "coordinator.py",
+              "__init__.py",
+              "select.py",
+              "switch.py",
+              "binary_sensor.py",
+              "config_flow.py",
           ]
 
-          def _icon(pct):
-              if pct >= 90: return "🟢"
-              if pct >= 50: return "🟡"
+          def icon(pct):
+              if pct >= 90:
+                  return "🟢"
+              if pct >= 50:
+                  return "🟡"
               return "🔴"
 
           rows = {}
           for path, data in cov["files"].items():
               name = path.split("/")[-1]
-              pct  = round(data["summary"]["percent_covered"], 1)
+              pct = round(data["summary"]["percent_covered"], 1)
               rows[name] = (pct, data["summary"]["missing_lines"])
 
-          # ── Write summary ──────────────────────────────────────────────────
+          # ── Build summary ──────────────────────────────────────────────────
           lines = [
-              f"## {status} — {passed}/{total} tests · Python ${{ matrix.python-version }}",
+              f"## {status} — {passed}/{total} tests · Python {os.environ['PYTHON_VERSION']}",
               "",
               "| Résultat | Tests |",
               "|---|---:|",
@@ -100,11 +117,11 @@ jobs:
               if name not in rows:
                   continue
               pct, missing = rows[name]
-              icon = _icon(pct)
-              lines.append(f"| `{name}` | {icon} {pct}% | {missing} |")
+              lines.append(f"| `{name}` | {icon(pct)} {pct}% | {missing} |")
 
           output = "\n".join(lines) + "\n"
           print(output)
+
           summary = os.environ.get("GITHUB_STEP_SUMMARY")
           if summary:
               with open(summary, "w") as f:
@@ -112,8 +129,8 @@ jobs:
           EOF
 
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
         if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-xml
           path: coverage.xml
