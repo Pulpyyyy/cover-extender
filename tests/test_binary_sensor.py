@@ -6,7 +6,7 @@ async def test_binary_sensor_async_setup_entry(hass, mock_config_entry):
 
     entities = []
 
-    async def async_add_entities(new_entities):
+    def async_add_entities(new_entities):
         entities.extend(new_entities)
 
     result = await async_setup_entry(hass, mock_config_entry, async_add_entities)

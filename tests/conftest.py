@@ -1,8 +1,15 @@
 import pytest
+from datetime import timedelta
+
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.cover_extender.const import DOMAIN
+from custom_components.cover_extender.const import (
+    DOMAIN,
+    DATA_COVER_PROFILES,
+    DATA_SHOW_ENTITIES,
+)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -11,39 +18,62 @@ from custom_components.cover_extender.const import DOMAIN
 
 BASE_SHADE_CFG = {
     "facade": 180,
-    "min_elevation": 5,
-    "max_elevation": 60,
-    "h_min": 0.2,
-    "h_max": 0.8,
-    "gamma": 1.0,
-    "timeout": 300,
-    # clés utilisées dynamiquement dans certains tests
-    "shade": {
-        "distance": 100.0,
-        "max_height": 1.0,
-    },
     "modes": {},
+    "shade": {
+        "distance": 0.5,
+        "max_height": 2.0,
+        "max_elevation": 60,
+        "time_out": 2,
+    },
 }
 
 
 # ─────────────────────────────────────────────────────────────
+# Minimal mock hass used by make_hass (no HA event loop needed)
+# ─────────────────────────────────────────────────────────────
+
+class _MockState:
+    def __init__(self, state, attributes, last_updated=None):
+        self.state = state
+        self.attributes = attributes or {}
+        self.last_updated = last_updated or dt_util.utcnow()
+
+
+class _MockStatesMachine:
+    def __init__(self):
+        self._store: dict = {}
+
+    def async_set(self, entity_id, state, attributes=None, last_updated=None):
+        self._store[entity_id] = _MockState(state, attributes, last_updated)
+
+    def get(self, entity_id):
+        return self._store.get(entity_id)
+
+
+class _MockHass:
+    def __init__(self):
+        self.states = _MockStatesMachine()
+        self.data: dict = {DOMAIN: {}}
+
+
+# ─────────────────────────────────────────────────────────────
 # Helper (FACTORY) utilisé par test_shade.py
-# ⚠️ Ce n’est PAS une fixture
+# ⚠️ Ce n'est PAS une fixture
 # ─────────────────────────────────────────────────────────────
 
 def make_hass(
-    hass: HomeAssistant,
     *,
     sun_azi: float | None = None,
     sun_ele: float | None = None,
     sun_ok: bool = True,
     cover_pos: int | None = None,
     minutes_since_move: int | None = None,
-) -> HomeAssistant:
+) -> _MockHass:
     """
-    Factory utilisée par test_shade.py pour préparer un hass
+    Factory utilisée par test_shade.py pour préparer un hass mock
     avec un état du soleil et du cover.
     """
+    hass = _MockHass()
 
     # ── Soleil ───────────────────────────────────────────────
     if sun_ok:
@@ -51,21 +81,19 @@ def make_hass(
             "sun.sun",
             "above_horizon",
             {
-                "azimuth": sun_azi,
-                "elevation": sun_ele,
+                "azimuth": sun_azi if sun_azi is not None else 0.0,
+                "elevation": sun_ele if sun_ele is not None else 45.0,
             },
         )
-    else:
-        hass.states.async_set("sun.sun", "unavailable")
+    # if not sun_ok, leave sun.sun absent → states.get returns None
 
     # ── Cover ────────────────────────────────────────────────
     if cover_pos is not None:
         attrs = {"current_position": cover_pos}
-
+        last_updated = None
         if minutes_since_move is not None:
-            attrs["last_changed"] = hass.loop.time() - (minutes_since_move * 60)
-
-        hass.states.async_set("cover.test", "open", attrs)
+            last_updated = dt_util.utcnow() - timedelta(minutes=minutes_since_move)
+        hass.states.async_set("cover.test", "open", attrs, last_updated=last_updated)
 
     return hass
 
@@ -90,8 +118,11 @@ def base_cfg():
 
 @pytest.fixture
 def mock_config_entry(hass: HomeAssistant):
-    # ⚠️ CRUCIAL : initialisation du namespace de l’intégration
     hass.data.setdefault(DOMAIN, {})
+
+    # Provide a minimal profile so platform setup creates at least one entity
+    hass.data[DOMAIN][DATA_COVER_PROFILES] = {"cover.test": {}}
+    hass.data[DOMAIN][DATA_SHOW_ENTITIES] = {"auto_shade": True}
 
     entry = MockConfigEntry(
         domain=DOMAIN,

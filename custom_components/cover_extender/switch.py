@@ -29,7 +29,7 @@ async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
-) -> None:
+) -> bool:
     """Set up switch entities from a config entry."""
     profiles: dict = hass.data.get(DOMAIN, {}).get(DATA_COVER_PROFILES, {})
 
@@ -127,6 +127,7 @@ async def async_setup_entry(
             )
 
     async_dispatcher_connect(hass, SIGNAL_COVER_RELOAD, _handle_platform_reload)
+    return True
 
 
 class CoverLockSwitch(SwitchEntity, RestoreEntity):
