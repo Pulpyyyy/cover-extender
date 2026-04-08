@@ -27,7 +27,7 @@ async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
-) -> None:
+) -> bool:
     """Set up select entities from a config entry."""
     modes_list: dict = hass.data.get(DOMAIN, {}).get(DATA_MODES, {})
     profiles: dict = hass.data.get(DOMAIN, {}).get(DATA_COVER_PROFILES, {})
@@ -70,6 +70,7 @@ async def async_setup_entry(
             _LOGGER.info("cover_extender select: %d entity/entities removed", len(removed))
 
     async_dispatcher_connect(hass, SIGNAL_COVER_RELOAD, _handle_platform_reload)
+    return True
 
 
 class CoverModeSelect(SelectEntity, RestoreEntity):
