@@ -1,56 +1,36 @@
-import pytest
+from types import SimpleNamespace
 from homeassistant.core import HomeAssistant
 
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+def make_hass(
+    hass: HomeAssistant,
+    *,
+    sun_azi: float | None = None,
+    sun_ele: float | None = None,
+    sun_ok: bool = True,
+    cover_pos: int | None = None,
+    minutes_since_move: int | None = None,
+):
+    """Factory used by test_shade.py to prepare a hass with sun + cover state."""
 
-from custom_components.cover_extender.const import DOMAIN
+    # ── Fake sun entity ──────────────────────────────────────
+    if sun_ok:
+        hass.states.async_set(
+            "sun.sun",
+            "above_horizon",
+            {
+                "azimuth": sun_azi,
+                "elevation": sun_ele,
+            },
+        )
+    else:
+        hass.states.async_set("sun.sun", "unavailable")
 
+    # ── Fake cover entity ────────────────────────────────────
+    if cover_pos is not None:
+        attrs = {"current_position": cover_pos}
+        if minutes_since_move is not None:
+            attrs["last_changed"] = hass.loop.time() - (minutes_since_move * 60)
 
-# ─────────────────────────────────────────────────────────────
-# Constante utilisée par test_shade.py (IMPORT DIRECT)
-# ─────────────────────────────────────────────────────────────
+        hass.states.async_set("cover.test", "open", attrs)
 
-BASE_SHADE_CFG = {
-    "facade": 180,
-    "min_elevation": 5,
-    "max_elevation": 60,
-    "h_min": 0.2,
-    "h_max": 0.8,
-    "gamma": 1.0,
-    "timeout": 300,
-}
-
-
-# ─────────────────────────────────────────────────────────────
-# Helper (PAS une fixture) — utilisé comme fonction
-# ─────────────────────────────────────────────────────────────
-
-def make_hass(hass: HomeAssistant) -> HomeAssistant:
     return hass
-
-
-# ─────────────────────────────────────────────────────────────
-# Fixtures utilisées par test_shade.py
-# ─────────────────────────────────────────────────────────────
-
-@pytest.fixture
-def base_cfg():
-    """Return a copy to avoid mutation between tests."""
-    return dict(BASE_SHADE_CFG)
-
-
-# ─────────────────────────────────────────────────────────────
-# Fixture pour binary_sensor / switch / select
-# ─────────────────────────────────────────────────────────────
-
-@pytest.fixture
-def mock_config_entry(hass: HomeAssistant):
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        title="Cover Extender",
-        data={},
-        options={},
-        unique_id="test",
-    )
-    entry.add_to_hass(hass)
-    return entry
