@@ -13,4 +13,3 @@ async def test_binary_sensor_async_setup_entry(hass, mock_config_entry):
 
     assert result is True
     assert entities  # au moins une entité créée
-``
