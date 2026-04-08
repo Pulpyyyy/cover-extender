@@ -98,14 +98,14 @@ def compute_shade_sync(
     time_out  = float(auto_shade.get("time_out",         1))
 
     modes_dict  = cfg.get(CONF_MODES, {})
-    ombre_fixed = modes_dict.get("Ombre")
+    shade_fixed = modes_dict.get("Ombre")
     default_pos = (
-        float(ombre_fixed)
-        if ombre_fixed is not None
+        float(shade_fixed)
+        if shade_fixed is not None
         else float(auto_shade.get("default_position", 100))
     )
 
-    facade      = cfg.get(CONF_FACADE, "sud")
+    facade      = cfg.get(CONF_FACADE, "south")
     facades_cfg = hass.data[DOMAIN].get(DATA_FACADES, {})
     win_azi     = float(facades_cfg.get(facade, {}).get(CONF_AZIMUTH, 180.0))
 

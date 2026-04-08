@@ -35,7 +35,7 @@ from .const import (
     CONF_SHADING,
     CONF_SOLAR_GAIN,
     CONF_EXCLUSION,
-    ATTR_SOLEIL_EN_FACE,
+    ATTR_SUN_FACING,
     DATA_COVER_PROFILES,
     DATA_MODES,
     DATA_FACADES,
@@ -106,6 +106,12 @@ class CoverExtenderCoordinator:
         self._worker_task.add_done_callback(self._on_worker_done)
 
     @callback
+    def _on_save_done(self, task: asyncio.Task) -> None:
+        """Log any error from a fire-and-forget storage save."""
+        if not task.cancelled() and (exc := task.exception()):
+            _LOGGER.error("cover_extender: failed to persist memory to storage: %s", exc)
+
+    @callback
     def _on_worker_done(self, task: asyncio.Task) -> None:
         """Restart the worker after an unexpected crash (Fix #3)."""
         if task.cancelled():
@@ -166,7 +172,7 @@ class CoverExtenderCoordinator:
             else:
                 new_attrs["memory"] = value
             self.hass.states.async_set(entity_id, state.state, new_attrs)
-        self.hass.async_create_task(self._store.async_save(dict(mem)))
+        self.hass.async_create_task(self._store.async_save(dict(mem))).add_done_callback(self._on_save_done)
         self.hass.bus.async_fire(
             EVENT_MEMORY_SAVED,
             {"entity_id": entity_id, "position": value},
@@ -513,10 +519,10 @@ class CoverExtenderCoordinator:
             sun_facing = compute_sun_facing(self.hass, cfg, facades)
             if sun_facing is not None and state:
                 current_attrs = dict(state.attributes)
-                if current_attrs.get(ATTR_SOLEIL_EN_FACE) != sun_facing:
+                if current_attrs.get(ATTR_SUN_FACING) != sun_facing:
                     self.hass.states.async_set(
                         entity_id, state.state,
-                        {**current_attrs, ATTR_SOLEIL_EN_FACE: sun_facing},
+                        {**current_attrs, ATTR_SUN_FACING: sun_facing},
                     )
 
             if cfg.get(CONF_SHADING, {}).get("enable", False):

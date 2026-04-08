@@ -39,7 +39,7 @@ from custom_components.cover_extender.const import (
     DATA_BINARY_SENSOR_SUN_FACING_IDS,
     DATA_BINARY_SENSOR_AUTO_SHADE_IDS,
     DATA_BINARY_SENSOR_AUTO_SOLAR_GAIN_IDS,
-    ATTR_SOLEIL_EN_FACE,
+    ATTR_SUN_FACING,
     SIGNAL_COVER_RELOAD,
 )
 
@@ -209,7 +209,7 @@ class TestSelectAddedToHass:
 class TestBinarySensorAddedToHass:
 
     async def test_sun_facing_reads_existing_cover_state(self, hass):
-        hass.states.async_set("cover.test", "open", {ATTR_SOLEIL_EN_FACE: True})
+        hass.states.async_set("cover.test", "open", {ATTR_SUN_FACING: True})
         bs = CoverSunFacingBinarySensor("cover.test")
         bs.hass = hass
         bs.async_write_ha_state = MagicMock()

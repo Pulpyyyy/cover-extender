@@ -16,7 +16,7 @@ CONF_AZIMUTH = "azimuth"
 ATTR_FACADE = "facade"
 ATTR_MODES = "modes"
 ATTR_ENABLE_AUTO_SHADE = "auto_shade"
-ATTR_SOLEIL_EN_FACE = "sun_facing"
+ATTR_SUN_FACING = "sun_facing"
 
 # Shading sub-config key and its fields (all optional, defaults in service)
 CONF_SHADING      = "shade"

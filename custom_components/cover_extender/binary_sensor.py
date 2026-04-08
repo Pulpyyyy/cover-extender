@@ -32,7 +32,7 @@ from .const import (
     CONF_SHADING,
     CONF_SOLAR_GAIN,
     CONF_FACADE,
-    ATTR_SOLEIL_EN_FACE,
+    ATTR_SUN_FACING,
     SIGNAL_COVER_RELOAD,
 )
 
@@ -193,7 +193,7 @@ class CoverSunFacingBinarySensor(BinarySensorEntity):
         """Read initial state and subscribe to cover state changes."""
         state = self.hass.states.get(self._cover_entity_id)
         if state:
-            val = state.attributes.get(ATTR_SOLEIL_EN_FACE)
+            val = state.attributes.get(ATTR_SUN_FACING)
             if val is not None:
                 self._attr_is_on = bool(val)
                 self.async_write_ha_state()
@@ -210,7 +210,7 @@ class CoverSunFacingBinarySensor(BinarySensorEntity):
         new_state = event.data.get("new_state")
         if not new_state:
             return
-        val = new_state.attributes.get(ATTR_SOLEIL_EN_FACE)
+        val = new_state.attributes.get(ATTR_SUN_FACING)
         if val is None:
             return
         new_is_on = bool(val)
@@ -227,125 +227,89 @@ class CoverSunFacingBinarySensor(BinarySensorEntity):
         return {"icon_color": "var(--primary-color)" if self._attr_is_on else "var(--disabled-color)"}
 
 
-class CoverEnableAutoShadeBinarySensor(BinarySensorEntity):
+class _BaseSwitchMirrorBinarySensor(BinarySensorEntity):
+    """Mirrors a switch entity state as a binary_sensor."""
+
+    _attr_should_poll = False
+    _switch_suffix: str
+    _sensor_suffix: str
+    _icon_on: str
+    _icon_off: str
+
+    def __init__(self, cover_entity_id: str, initial_state: bool) -> None:
+        self._cover_entity_id = cover_entity_id
+        cover_name = cover_entity_id.split(".")[1]
+        friendly = cover_name.replace("_", " ").title()
+        self._switch_entity_id = f"switch.{cover_name}_{self._switch_suffix}"
+
+        self.entity_id = f"binary_sensor.{cover_name}_{self._sensor_suffix}"
+        self._attr_unique_id = f"{DOMAIN}_binary_sensor_{cover_name}_{self._sensor_suffix}"
+        self._attr_has_entity_name = True
+        self._attr_is_on = initial_state
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, cover_entity_id)},
+            name=friendly,
+            entry_type=DeviceEntryType.SERVICE,
+        )
+
+    @property
+    def cover_entity_id(self) -> str:
+        """Entity ID of the associated cover."""
+        return self._cover_entity_id
+
+    async def async_added_to_hass(self) -> None:
+        """Read switch initial state then track it."""
+        switch_state = self.hass.states.get(self._switch_entity_id)
+        if switch_state:
+            self._attr_is_on = switch_state.state == "on"
+            self.async_write_ha_state()
+
+        @callback
+        def _on_switch_change(event: Event) -> None:
+            new_state = event.data.get("new_state")
+            if new_state is None:
+                return
+            new_val = new_state.state == "on"
+            if new_val != self._attr_is_on:
+                self._attr_is_on = new_val
+                self.async_write_ha_state()
+
+        self.async_on_remove(
+            async_track_state_change_event(
+                self.hass, [self._switch_entity_id], _on_switch_change
+            )
+        )
+
+    @property
+    def icon(self) -> str:
+        return self._icon_on if self._attr_is_on else self._icon_off
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"icon_color": "var(--primary-color)" if self._attr_is_on else "var(--disabled-color)"}
+
+
+class CoverEnableAutoShadeBinarySensor(_BaseSwitchMirrorBinarySensor):
     """Mirrors switch.<cover>_auto_shade state as a binary_sensor.
 
     Updates whenever the switch is toggled (via mode change or manually).
     """
 
-    _attr_should_poll = False
-
-    def __init__(self, cover_entity_id: str, auto_shade: bool) -> None:
-        self._cover_entity_id = cover_entity_id
-        cover_name = cover_entity_id.split(".")[1]
-        friendly = cover_name.replace("_", " ").title()
-        self._switch_entity_id = f"switch.{cover_name}_auto_shade"
-
-        self.entity_id = f"binary_sensor.{cover_name}_auto_shade"
-        self._attr_unique_id = f"{DOMAIN}_binary_sensor_{cover_name}_auto_shade"
-        self._attr_has_entity_name = True
-        self._attr_translation_key = "auto_shade"
-        self._attr_is_on = auto_shade
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, cover_entity_id)},
-            name=friendly,
-            entry_type=DeviceEntryType.SERVICE,
-        )
-
-    @property
-    def cover_entity_id(self) -> str:
-        """Entity ID of the associated cover."""
-        return self._cover_entity_id
-
-    async def async_added_to_hass(self) -> None:
-        """Read switch initial state then track it."""
-        switch_state = self.hass.states.get(self._switch_entity_id)
-        if switch_state:
-            self._attr_is_on = switch_state.state == "on"
-            self.async_write_ha_state()
-
-        @callback
-        def _on_switch_change(event: Event) -> None:
-            new_state = event.data.get("new_state")
-            if new_state is None:
-                return
-            new_val = new_state.state == "on"
-            if new_val != self._attr_is_on:
-                self._attr_is_on = new_val
-                self.async_write_ha_state()
-
-        self.async_on_remove(
-            async_track_state_change_event(
-                self.hass, [self._switch_entity_id], _on_switch_change
-            )
-        )
-
-    @property
-    def icon(self) -> str:
-        return "mdi:sun-clock" if self._attr_is_on else "mdi:sun-clock-outline"
-
-    @property
-    def extra_state_attributes(self) -> dict:
-        return {"icon_color": "var(--primary-color)" if self._attr_is_on else "var(--disabled-color)"}
+    _switch_suffix = "auto_shade"
+    _sensor_suffix = "auto_shade"
+    _attr_translation_key = "auto_shade"
+    _icon_on = "mdi:sun-clock"
+    _icon_off = "mdi:sun-clock-outline"
 
 
-class CoverEnableSolarGainBinarySensor(BinarySensorEntity):
+class CoverEnableSolarGainBinarySensor(_BaseSwitchMirrorBinarySensor):
     """Mirrors switch.<cover>_auto_solar_gain state as a binary_sensor.
 
     Updates whenever the switch is toggled (via mode change or manually).
     """
 
-    _attr_should_poll = False
-
-    def __init__(self, cover_entity_id: str, solar_gain: bool) -> None:
-        self._cover_entity_id = cover_entity_id
-        cover_name = cover_entity_id.split(".")[1]
-        friendly = cover_name.replace("_", " ").title()
-        self._switch_entity_id = f"switch.{cover_name}_auto_solar_gain"
-
-        self.entity_id = f"binary_sensor.{cover_name}_solar_gain"
-        self._attr_unique_id = f"{DOMAIN}_binary_sensor_{cover_name}_solar_gain"
-        self._attr_has_entity_name = True
-        self._attr_translation_key = "solar_gain"
-        self._attr_is_on = solar_gain
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, cover_entity_id)},
-            name=friendly,
-            entry_type=DeviceEntryType.SERVICE,
-        )
-
-    @property
-    def cover_entity_id(self) -> str:
-        """Entity ID of the associated cover."""
-        return self._cover_entity_id
-
-    async def async_added_to_hass(self) -> None:
-        """Read switch initial state then track it."""
-        switch_state = self.hass.states.get(self._switch_entity_id)
-        if switch_state:
-            self._attr_is_on = switch_state.state == "on"
-            self.async_write_ha_state()
-
-        @callback
-        def _on_switch_change(event: Event) -> None:
-            new_state = event.data.get("new_state")
-            if new_state is None:
-                return
-            new_val = new_state.state == "on"
-            if new_val != self._attr_is_on:
-                self._attr_is_on = new_val
-                self.async_write_ha_state()
-
-        self.async_on_remove(
-            async_track_state_change_event(
-                self.hass, [self._switch_entity_id], _on_switch_change
-            )
-        )
-
-    @property
-    def icon(self) -> str:
-        return "mdi:thermometer-check" if self._attr_is_on else "mdi:thermometer-off"
-
-    @property
-    def extra_state_attributes(self) -> dict:
-        return {"icon_color": "var(--primary-color)" if self._attr_is_on else "var(--disabled-color)"}
+    _switch_suffix = "auto_solar_gain"
+    _sensor_suffix = "solar_gain"
+    _attr_translation_key = "solar_gain"
+    _icon_on = "mdi:thermometer-check"
+    _icon_off = "mdi:thermometer-off"

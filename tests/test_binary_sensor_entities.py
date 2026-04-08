@@ -10,7 +10,7 @@ from custom_components.cover_extender.binary_sensor import (
     CoverEnableAutoShadeBinarySensor,
     CoverEnableSolarGainBinarySensor,
 )
-from custom_components.cover_extender.const import DOMAIN, DATA_COVER_PROFILES, ATTR_SOLEIL_EN_FACE
+from custom_components.cover_extender.const import DOMAIN, DATA_COVER_PROFILES, ATTR_SUN_FACING
 
 
 @pytest.fixture
@@ -71,7 +71,7 @@ class TestCoverSunFacingBinarySensor:
         bs.async_write_ha_state = MagicMock()
         bs._attr_is_on = False
 
-        event = _make_state_event("cover.test", "open", {ATTR_SOLEIL_EN_FACE: True})
+        event = _make_state_event("cover.test", "open", {ATTR_SUN_FACING: True})
         bs._handle_cover_change(event)
         assert bs._attr_is_on is True
 
@@ -97,7 +97,7 @@ class TestCoverSunFacingBinarySensor:
         bs.async_write_ha_state = MagicMock()
         bs._attr_is_on = True
 
-        event = _make_state_event("cover.test", "open", {ATTR_SOLEIL_EN_FACE: True})
+        event = _make_state_event("cover.test", "open", {ATTR_SUN_FACING: True})
         bs._handle_cover_change(event)
         # Same value → write_ha_state must NOT be called
         bs.async_write_ha_state.assert_not_called()

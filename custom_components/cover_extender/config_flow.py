@@ -1,7 +1,7 @@
 """Config flow for Cover Extender."""
 from __future__ import annotations
 
-import os
+import pathlib
 
 import voluptuous as vol
 import yaml
@@ -12,6 +12,36 @@ from .const import DOMAIN, CONF_SOURCE
 _STEP_USER_SCHEMA = vol.Schema({
     vol.Required(CONF_SOURCE): str,
 })
+
+
+def _validate_source(config_dir: str, source: str) -> str | None:
+    """Validate source path and YAML content (runs in executor). Returns error key or None."""
+    config_root = pathlib.Path(config_dir).resolve()
+
+    if pathlib.Path(source).is_absolute():
+        resolved = pathlib.Path(source).resolve()
+    else:
+        resolved = (config_root / source).resolve()
+
+    # Reject paths outside the HA config directory
+    try:
+        resolved.relative_to(config_root)
+    except ValueError:
+        return "path_outside_config"
+
+    if not resolved.is_file():
+        return "file_not_found"
+
+    try:
+        with open(resolved, encoding="utf-8") as f:
+            raw = yaml.safe_load(f) or {}
+    except yaml.YAMLError:
+        return "yaml_invalid"
+
+    if not any(isinstance(k, str) and k.startswith("cover.") for k in raw):
+        return "no_covers_found"
+
+    return None
 
 
 class CoverExtenderConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -26,22 +56,15 @@ class CoverExtenderConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             source: str = user_input[CONF_SOURCE]
-            path = source if os.path.isabs(source) else self.hass.config.path(source)
-            if not os.path.isfile(path):
-                errors[CONF_SOURCE] = "file_not_found"
+            error = await self.hass.async_add_executor_job(
+                _validate_source, self.hass.config.config_dir, source
+            )
+            if error:
+                errors[CONF_SOURCE] = error
             else:
-                try:
-                    with open(path, encoding="utf-8") as f:
-                        raw = yaml.safe_load(f) or {}
-                except yaml.YAMLError:
-                    errors[CONF_SOURCE] = "yaml_invalid"
-                else:
-                    if not any(isinstance(k, str) and k.startswith("cover.") for k in raw):
-                        errors[CONF_SOURCE] = "no_covers_found"
-                    else:
-                        await self.async_set_unique_id(DOMAIN)
-                        self._abort_if_unique_id_configured(updates=user_input)
-                        return self.async_create_entry(title="Cover Extender", data=user_input)
+                await self.async_set_unique_id(DOMAIN)
+                self._abort_if_unique_id_configured(updates=user_input)
+                return self.async_create_entry(title="Cover Extender", data=user_input)
 
         return self.async_show_form(
             step_id="user",

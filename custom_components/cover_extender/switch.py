@@ -130,18 +130,21 @@ async def async_setup_entry(
     return True
 
 
-class CoverLockSwitch(SwitchEntity, RestoreEntity):
-    """Automation lock for a cover."""
+class _BaseCoverSwitch(SwitchEntity, RestoreEntity):
+    """Shared logic for all cover_extender switch entities."""
+
+    _icon_on: str
+    _icon_off: str
+    _suffix: str
 
     def __init__(self, cover_entity_id: str) -> None:
         self._cover_entity_id = cover_entity_id
         cover_name = cover_entity_id.split(".")[1]
         friendly = cover_name.replace("_", " ").title()
 
-        self.entity_id = f"switch.{cover_name}_lock"
-        self._attr_unique_id = f"{DOMAIN}_switch_{cover_name}_lock"
+        self.entity_id = f"switch.{cover_name}_{self._suffix}"
+        self._attr_unique_id = f"{DOMAIN}_switch_{cover_name}_{self._suffix}"
         self._attr_has_entity_name = True
-        self._attr_translation_key = "lock"
         self._attr_is_on = False
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, cover_entity_id)},
@@ -156,70 +159,45 @@ class CoverLockSwitch(SwitchEntity, RestoreEntity):
             self.async_write_ha_state()
 
     async def async_turn_on(self, **kwargs) -> None:
-        """Lock the cover."""
         self._attr_is_on = True
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs) -> None:
-        """Unlock the cover."""
         self._attr_is_on = False
         self.async_write_ha_state()
 
     @property
     def icon(self) -> str:
-        return "mdi:lock" if self._attr_is_on else "mdi:lock-open-variant"
+        return self._icon_on if self._attr_is_on else self._icon_off
 
     @property
     def extra_state_attributes(self) -> dict:
         return {"icon_color": "var(--primary-color)" if self._attr_is_on else "var(--disabled-color)"}
 
 
-class CoverShadingAutoSwitch(SwitchEntity, RestoreEntity):
+class CoverLockSwitch(_BaseCoverSwitch):
+    """Automation lock for a cover."""
+
+    _suffix = "lock"
+    _attr_translation_key = "lock"
+    _icon_on = "mdi:lock"
+    _icon_off = "mdi:lock-open-variant"
+
+
+class CoverShadingAutoSwitch(_BaseCoverSwitch):
     """Autonomous solar shade switch for a cover.
 
     When on, cover_extender computes and applies the shade position
     on every sun.sun state change, without a blueprint.
     """
 
-    def __init__(self, cover_entity_id: str) -> None:
-        self._cover_entity_id = cover_entity_id
-        cover_name = cover_entity_id.split(".")[1]
-        friendly = cover_name.replace("_", " ").title()
-
-        self.entity_id = f"switch.{cover_name}_auto_shade"
-        self._attr_unique_id = f"{DOMAIN}_switch_{cover_name}_auto_shade"
-        self._attr_has_entity_name = True
-        self._attr_translation_key = "auto_shade"
-        self._attr_is_on = False
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, cover_entity_id)},
-            name=friendly,
-            entry_type=DeviceEntryType.SERVICE,
-        )
-
-    async def async_added_to_hass(self) -> None:
-        if last_state := await self.async_get_last_state():
-            self._attr_is_on = last_state.state == "on"
-            self.async_write_ha_state()
-
-    async def async_turn_on(self, **kwargs) -> None:
-        self._attr_is_on = True
-        self.async_write_ha_state()
-
-    async def async_turn_off(self, **kwargs) -> None:
-        self._attr_is_on = False
-        self.async_write_ha_state()
-
-    @property
-    def icon(self) -> str:
-        return "mdi:sun-clock" if self._attr_is_on else "mdi:sun-clock-outline"
-
-    @property
-    def extra_state_attributes(self) -> dict:
-        return {"icon_color": "var(--primary-color)" if self._attr_is_on else "var(--disabled-color)"}
+    _suffix = "auto_shade"
+    _attr_translation_key = "auto_shade"
+    _icon_on = "mdi:sun-clock"
+    _icon_off = "mdi:sun-clock-outline"
 
 
-class CoverSolarGainAutoSwitch(SwitchEntity, RestoreEntity):
+class CoverSolarGainAutoSwitch(_BaseCoverSwitch):
     """Solar gain temperature-tracking switch for a cover.
 
     When on, cover_extender applies position_solar or position_cold based on
@@ -227,39 +205,7 @@ class CoverSolarGainAutoSwitch(SwitchEntity, RestoreEntity):
     Turned on automatically when a mode with solar_gain: true is applied.
     """
 
-    def __init__(self, cover_entity_id: str) -> None:
-        self._cover_entity_id = cover_entity_id
-        cover_name = cover_entity_id.split(".")[1]
-        friendly = cover_name.replace("_", " ").title()
-
-        self.entity_id = f"switch.{cover_name}_auto_solar_gain"
-        self._attr_unique_id = f"{DOMAIN}_switch_{cover_name}_auto_solar_gain"
-        self._attr_has_entity_name = True
-        self._attr_translation_key = "auto_solar_gain"
-        self._attr_is_on = False
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, cover_entity_id)},
-            name=friendly,
-            entry_type=DeviceEntryType.SERVICE,
-        )
-
-    async def async_added_to_hass(self) -> None:
-        if last_state := await self.async_get_last_state():
-            self._attr_is_on = last_state.state == "on"
-            self.async_write_ha_state()
-
-    async def async_turn_on(self, **kwargs) -> None:
-        self._attr_is_on = True
-        self.async_write_ha_state()
-
-    async def async_turn_off(self, **kwargs) -> None:
-        self._attr_is_on = False
-        self.async_write_ha_state()
-
-    @property
-    def icon(self) -> str:
-        return "mdi:thermometer-check" if self._attr_is_on else "mdi:thermometer-off"
-
-    @property
-    def extra_state_attributes(self) -> dict:
-        return {"icon_color": "var(--primary-color)" if self._attr_is_on else "var(--disabled-color)"}
+    _suffix = "auto_solar_gain"
+    _attr_translation_key = "auto_solar_gain"
+    _icon_on = "mdi:thermometer-check"
+    _icon_off = "mdi:thermometer-off"
