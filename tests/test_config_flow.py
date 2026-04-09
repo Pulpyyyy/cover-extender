@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 import yaml
 
-from custom_components.cover_extender.config_flow import CoverExtenderConfigFlow
+from custom_components.cover_extender.config_flow import CoverExtenderConfigFlow, _validate_source
 
 
 def _make_flow(hass, source="user"):
@@ -54,3 +54,16 @@ class TestConfigFlowUserStep:
         f.write_text(yaml.dump({"cover.test": {}}), encoding="utf-8")
         result = await _make_flow(hass, source="import").async_step_import({"source": str(f)})
         assert result["type"] == "create_entry"
+
+
+class TestValidateSource:
+
+    def test_relative_path_inside_config_dir(self, tmp_path):
+        """Relative path pointing inside config dir → valid."""
+        f = tmp_path / "covers.yaml"
+        f.write_text(yaml.dump({"cover.test": {}}), encoding="utf-8")
+        assert _validate_source(str(tmp_path), "covers.yaml") is None
+
+    def test_relative_path_traversal_rejected(self, tmp_path):
+        """Relative path escaping config dir → path_outside_config."""
+        assert _validate_source(str(tmp_path), "../../etc/passwd") == "path_outside_config"

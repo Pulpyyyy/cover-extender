@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+from unittest.mock import patch
 import pytest
 
 from custom_components.cover_extender.shade import compute_sun_facing, compute_shade_sync
@@ -276,8 +277,10 @@ class TestComputeShadeSync:
 
     def test_zero_division_fallback_is_safe(self, base_cfg):
         """gamma=±90° → cos(gamma)=0 → ZeroDivisionError handled, returns valid position."""
-        # facade=180, sun_azi=90 → gamma=90°
-        pos, _ = compute_shade_sync(make_hass(sun_azi=90.0, sun_ele=45.0), "cover.test", base_cfg)
+        # In IEEE 754 floating point math.cos(pi/2) is ~6e-17, not exactly 0,
+        # so we force cos to return 0 to exercise the defensive except branch.
+        with patch("custom_components.cover_extender.shade.math.cos", return_value=0.0):
+            pos, _ = compute_shade_sync(make_hass(sun_azi=90.0, sun_ele=45.0), "cover.test", base_cfg)
         assert 0 <= pos <= 100
 
     def test_equal_h_max_h_min_no_division(self, base_cfg):

@@ -10,9 +10,9 @@ from custom_components.cover_extender.const import DOMAIN, DATA_COVER_PROFILES, 
 
 
 _MODES_LIST = {
-    "Day":   {"icon": "mdi:sun",  "color": "orange", "lock": False, "auto_shade": False, "solar_gain": False, "hidden": False},
-    "Night": {"icon": "mdi:moon", "color": "blue",   "lock": True,  "auto_shade": False, "solar_gain": False, "hidden": False},
-    "Hidden":{"icon": "mdi:eye",  "color": "grey",   "lock": False, "auto_shade": False, "solar_gain": False, "hidden": True},
+    "Day":   {"icon": "mdi:sun",  "color": "orange", "lock": False, "behavior": None, "hidden": False},
+    "Night": {"icon": "mdi:moon", "color": "blue",   "lock": True,  "behavior": None, "hidden": False},
+    "Hidden":{"icon": "mdi:eye",  "color": "grey",   "lock": False, "behavior": None, "hidden": True},
 }
 
 _COVER_CFG = {"modes": {"Day": 40, "Night": 0}}
@@ -101,6 +101,17 @@ class TestCoverModeSelect:
         sel._handle_reload()
         assert sel._attr_current_option == "Day"
 
+    def test_handle_reload_empty_options_sets_none(self, setup_hass):
+        hass = setup_hass
+        sel = CoverModeSelect("cover.test", _COVER_CFG, _MODES_LIST)
+        sel.hass = hass
+        sel.async_write_ha_state = MagicMock()
+        sel._attr_current_option = "Day"
+
+        hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]["modes"] = {}
+        sel._handle_reload()
+        assert sel._attr_current_option is None
+
     async def test_async_select_option_turns_on_lock(self, setup_hass):
         hass = setup_hass
         sel = CoverModeSelect("cover.test", _COVER_CFG, _MODES_LIST)
@@ -115,8 +126,6 @@ class TestCoverModeSelect:
 
         # Night has lock=True; put switch in "off" state so it gets toggled
         hass.states.async_set("switch.test_lock", "off")
-        hass.states.async_set("switch.test_auto_shade", "off")
-        hass.states.async_set("switch.test_auto_solar_gain", "off")
 
         await sel.async_select_option("Night")
         assert sel._attr_current_option == "Night"
@@ -136,8 +145,6 @@ class TestCoverModeSelect:
         hass.services.async_register("switch", "turn_off", record)
 
         hass.states.async_set("switch.test_lock", "on")
-        hass.states.async_set("switch.test_auto_shade", "off")
-        hass.states.async_set("switch.test_auto_solar_gain", "off")
 
         await sel.async_select_option("Day")
         assert any(svc == "turn_off" and d.get("entity_id") == "switch.test_lock"
@@ -192,7 +199,7 @@ class TestCoverModesGlobalSelect:
 
         hass.data[DOMAIN][DATA_MODES]["Auto"] = {
             "icon": "mdi:auto", "color": "green",
-            "lock": False, "auto_shade": True, "solar_gain": False, "hidden": False,
+            "lock": False, "behavior": "auto_shade", "hidden": False,
         }
         sel._handle_reload()
         assert "Auto" in sel._attr_options

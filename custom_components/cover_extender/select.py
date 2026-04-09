@@ -137,43 +137,42 @@ class CoverModeSelect(SelectEntity, RestoreEntity):
             "color": display.get("color", "white"),
             "modes_list": {
                 opt: {
-                    "icon":       modes_list.get(opt, {}).get("icon",       "mdi:help-circle"),
-                    "color":      modes_list.get(opt, {}).get("color",      "white"),
-                    "lock":       modes_list.get(opt, {}).get("lock",       False),
-                    "auto_shade": modes_list.get(opt, {}).get("auto_shade", False),
-                    "solar_gain": modes_list.get(opt, {}).get("solar_gain", False),
+                    "icon":     modes_list.get(opt, {}).get("icon",     "mdi:help-circle"),
+                    "color":    modes_list.get(opt, {}).get("color",    "white"),
+                    "lock":     modes_list.get(opt, {}).get("lock",     False),
+                    "behavior": modes_list.get(opt, {}).get("behavior", None),
                 }
                 for opt in self._attr_options
             },
         }
 
     async def async_select_option(self, option: str) -> None:
-        """Change the selected option and sync auto switches with mode properties."""
+        """Change the selected option and immediately sync the lock switch.
+
+        The coordinator (_handle_select_mode_change → _apply_mode_core) handles the
+        full mode logic (lock, behavior, position, memory) asynchronously.  We also
+        apply the lock here synchronously so the UI reflects the new state without
+        waiting for the coordinator task to be scheduled.
+        """
         self._attr_current_option = option
         self.async_write_ha_state()
 
         modes_list: dict = self.hass.data.get(DOMAIN, {}).get(DATA_MODES, {})
         mode_props = modes_list.get(option, {})
         cover_name = self._cover_entity_id.split(".")[1]
+        lock_id = f"switch.{cover_name}_lock"
+        should_lock = mode_props.get("lock", False)
 
-        switch_map = {
-            f"switch.{cover_name}_auto_shade":       mode_props.get("auto_shade", False),
-            f"switch.{cover_name}_auto_solar_gain":  mode_props.get("solar_gain", False),
-            f"switch.{cover_name}_lock":             mode_props.get("lock", False),
-        }
-
-        for switch_entity_id, should_be_on in switch_map.items():
-            state = self.hass.states.get(switch_entity_id)
-            if state is None:
-                continue
+        state = self.hass.states.get(lock_id)
+        if state is not None:
             current_on = state.state == "on"
-            if should_be_on and not current_on:
+            if should_lock and not current_on:
                 await self.hass.services.async_call(
-                    "switch", "turn_on", {"entity_id": switch_entity_id}, blocking=True
+                    "switch", "turn_on", {"entity_id": lock_id}, blocking=True
                 )
-            elif not should_be_on and current_on:
+            elif not should_lock and current_on:
                 await self.hass.services.async_call(
-                    "switch", "turn_off", {"entity_id": switch_entity_id}, blocking=True
+                    "switch", "turn_off", {"entity_id": lock_id}, blocking=True
                 )
 
 
@@ -233,11 +232,10 @@ class CoverModesGlobalSelect(SelectEntity, RestoreEntity):
             "color": display.get("color", "white"),
             "modes_list": {
                 name: {
-                    "icon":       props.get("icon",       "mdi:help-circle"),
-                    "color":      props.get("color",      "white"),
-                    "lock":       props.get("lock",       False),
-                    "auto_shade": props.get("auto_shade", False),
-                    "solar_gain": props.get("solar_gain", False),
+                    "icon":     props.get("icon",     "mdi:help-circle"),
+                    "color":    props.get("color",    "white"),
+                    "lock":     props.get("lock",     False),
+                    "behavior": props.get("behavior", None),
                 }
                 for name, props in modes_list.items()
                 if not props.get("hidden", False)

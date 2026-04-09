@@ -158,3 +158,35 @@ class TestLoadCoversConfig:
         assert "cover.one" in profiles
         assert "cover.two" in profiles
         assert "not_a_cover" not in profiles
+
+    def test_invalid_mode_display_skipped(self, hass, tmp_path):
+        """A mode with an invalid behavior value is skipped (vol.Invalid)."""
+        cfg = {"cover_extender_modes": {"Bad": {"behavior": "not_valid"}}}
+        f = tmp_path / "covers.yaml"
+        f.write_text(yaml.dump(cfg), encoding="utf-8")
+        _, modes, _, _, _, _ = load_covers_config(hass, str(f))
+        assert "Bad" not in modes
+
+    def test_invalid_cover_profile_skipped(self, hass, tmp_path):
+        """A cover profile with an invalid field (angle_left: text) is skipped."""
+        cfg = {"cover.bad": {"angle_left": "not_a_number"}}
+        f = tmp_path / "covers.yaml"
+        f.write_text(yaml.dump(cfg), encoding="utf-8")
+        profiles, _, _, _, _, _ = load_covers_config(hass, str(f))
+        assert "cover.bad" not in profiles
+
+    def test_invalid_solar_gain_global_uses_defaults(self, hass, tmp_path):
+        """Invalid global solar_gain config falls back to schema defaults."""
+        cfg = {"solar_gain": {"temperature_threshold": "not_a_float"}}
+        f = tmp_path / "covers.yaml"
+        f.write_text(yaml.dump(cfg), encoding="utf-8")
+        _, _, _, _, solar, _ = load_covers_config(hass, str(f))
+        assert solar["temperature_threshold"] == 19.0
+
+    def test_non_numeric_command_interval_uses_default(self, hass, tmp_path):
+        """command_interval: text → TypeError → default."""
+        cfg = {"command_interval": "not_a_number"}
+        f = tmp_path / "covers.yaml"
+        f.write_text(yaml.dump(cfg), encoding="utf-8")
+        _, _, _, _, _, interval = load_covers_config(hass, str(f))
+        assert interval == DEFAULT_COMMAND_INTERVAL
