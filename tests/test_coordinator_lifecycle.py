@@ -19,6 +19,7 @@ from custom_components.cover_extender.const import (
     CONF_COMMAND_INTERVAL,
     SIGNAL_COVER_RELOAD,
 )
+from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 _PROFILES = {
@@ -316,7 +317,12 @@ class TestServiceReload:
 
     async def test_sends_reload_signal(self, coord, hass):
         signals = []
-        async_dispatcher_connect(hass, SIGNAL_COVER_RELOAD, lambda: signals.append(True))
+
+        @callback
+        def on_reload():
+            signals.append(True)
+
+        async_dispatcher_connect(hass, SIGNAL_COVER_RELOAD, on_reload)
 
         with patch("custom_components.cover_extender.coordinator.load_covers_config",
                    return_value=({}, {}, {}, {}, {}, 0.15)):

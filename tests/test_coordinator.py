@@ -8,7 +8,7 @@ handler — ServiceRegistry.async_call is read-only and cannot be patched.
 from __future__ import annotations
 
 import copy
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -220,6 +220,7 @@ class TestApplyModeCore:
     async def test_solar_mode_enables_solar_gain_and_lock(self, coord, hass, service_calls):
         """behavior=solar_gain → turn on auto_solar_gain + lock, call _apply_solar_gain."""
         hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]["modes"]["Solar"] = None
+        hass.data[DOMAIN][DATA_MODES]["Solar"] = {"lock": True, "behavior": "solar_gain", "icon": "mdi:solar", "color": "yellow", "hidden": False}
         _set_cover(hass, 50)
         with patch.object(coord, "_apply_solar_gain"):
             await coord._apply_mode_core("cover.test", "Solar", "Day")
@@ -230,6 +231,7 @@ class TestApplyModeCore:
     async def test_solar_mode_calls_apply_solar_gain(self, coord, hass, service_calls):
         """behavior=solar_gain → _apply_solar_gain is called immediately."""
         hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]["modes"]["Solar"] = None
+        hass.data[DOMAIN][DATA_MODES]["Solar"] = {"lock": True, "behavior": "solar_gain", "icon": "mdi:solar", "color": "yellow", "hidden": False}
         _set_cover(hass, 50)
         with patch.object(coord, "_apply_solar_gain") as mock_sg:
             await coord._apply_mode_core("cover.test", "Solar", "Day")
