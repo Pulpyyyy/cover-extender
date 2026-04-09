@@ -475,8 +475,6 @@ class CoverExtenderCoordinator:
         # ── Initial attribute injection on already-loaded covers ──────────────
         for entity_id, cfg in profiles.items():
             extra_attrs = build_extra_attrs(cfg, memory=self._get_memory(entity_id))
-            if not extra_attrs:
-                continue
             state = self.hass.states.get(entity_id)
             if state:
                 current_attrs = dict(state.attributes)
@@ -499,8 +497,6 @@ class CoverExtenderCoordinator:
         if new_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             return
         extra_attrs = build_extra_attrs(profiles[entity_id], memory=self._get_memory(entity_id))
-        if not extra_attrs:
-            return
         current_attrs = dict(new_state.attributes)
         if all(current_attrs.get(k) == v for k, v in extra_attrs.items()):
             return  # Guard against infinite loops

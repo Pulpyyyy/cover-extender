@@ -235,6 +235,17 @@ class TestCoverModesGlobalSelect:
         await sel.async_select_option("Night")
         assert sel._attr_current_option == "Night"
 
+    def test_handle_reload_empty_options_sets_none(self, setup_hass):
+        """All modes removed after reload → current_option reset to None."""
+        hass = setup_hass
+        sel = CoverModesGlobalSelect(_MODES_LIST)
+        sel.hass = hass
+        sel.async_write_ha_state = MagicMock()
+
+        hass.data[DOMAIN][DATA_MODES].clear()
+        sel._handle_reload()
+        assert sel._attr_current_option is None
+
     def test_empty_modes_list(self, setup_hass):
         hass = setup_hass
         sel = CoverModesGlobalSelect({})

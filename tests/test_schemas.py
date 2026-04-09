@@ -19,6 +19,12 @@ class TestLoadCoversConfig:
         assert facades == {}
         assert interval == DEFAULT_COMMAND_INTERVAL
 
+    def test_relative_source_resolved_via_hass_config(self, hass):
+        """Relative path → resolved through hass.config.path() (file not found → defaults)."""
+        profiles, _, _, _, _, interval = load_covers_config(hass, "nonexistent_relative.yaml")
+        assert profiles == {}
+        assert interval == DEFAULT_COMMAND_INTERVAL
+
     def test_yaml_parse_error_returns_empty(self, hass, tmp_path):
         bad = tmp_path / "bad.yaml"
         bad.write_text("[\n", encoding="utf-8")  # unclosed bracket → YAMLError

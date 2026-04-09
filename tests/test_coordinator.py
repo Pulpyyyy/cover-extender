@@ -217,6 +217,24 @@ class TestApplyModeCore:
 
         assert ("switch", "turn_off", {"entity_id": "switch.test_auto_shade"}) in service_calls
 
+    async def test_solar_mode_enables_solar_gain_and_lock(self, coord, hass, service_calls):
+        """behavior=solar_gain → turn on auto_solar_gain + lock, call _apply_solar_gain."""
+        hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]["modes"]["Solar"] = None
+        _set_cover(hass, 50)
+        with patch.object(coord, "_apply_solar_gain"):
+            await coord._apply_mode_core("cover.test", "Solar", "Day")
+
+        assert ("switch", "turn_on", {"entity_id": "switch.test_auto_solar_gain"}) in service_calls
+        assert ("switch", "turn_on", {"entity_id": "switch.test_lock"}) in service_calls
+
+    async def test_solar_mode_calls_apply_solar_gain(self, coord, hass, service_calls):
+        """behavior=solar_gain → _apply_solar_gain is called immediately."""
+        hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]["modes"]["Solar"] = None
+        _set_cover(hass, 50)
+        with patch.object(coord, "_apply_solar_gain") as mock_sg:
+            await coord._apply_mode_core("cover.test", "Solar", "Day")
+        mock_sg.assert_called_once_with("cover.test", hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"])
+
 
 # ════════════════════════════════════════════════════════════════════════════
 # _handle_lock_off
@@ -272,6 +290,22 @@ class TestHandleLockOff:
         coord._handle_lock_off(self._make_event(hass, "on", "off"))
         assert coord._cover_queue.empty()
 
+    def test_null_states_ignored(self, coord, hass):
+        """new_state or old_state is None → early return, no command."""
+        coord._lock_to_cover["switch.test_lock"] = "cover.test"
+        hass.data[DOMAIN][DATA_MEMORY]["cover.test"] = 45
+        event = MagicMock()
+        event.data = {"entity_id": "switch.test_lock", "old_state": None, "new_state": None}
+        coord._handle_lock_off(event)
+        assert coord._cover_queue.empty()
+
+    def test_unknown_lock_entity_ignored(self, coord, hass):
+        """Lock switch not in _lock_to_cover → early return, no command."""
+        hass.data[DOMAIN][DATA_MEMORY]["cover.test"] = 45
+        # _lock_to_cover is empty — switch not registered
+        coord._handle_lock_off(self._make_event(hass, "on", "off"))
+        assert coord._cover_queue.empty()
+
 
 # ════════════════════════════════════════════════════════════════════════════
 # _handle_solar_gain_switch_on
@@ -316,4 +350,16 @@ class TestHandleSolarGainSwitchOn:
         assert hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]["solar_gain"]["enable"] is False
         with patch.object(coord, "_apply_solar_gain") as mock_apply:
             coord._handle_solar_gain_switch_on(self._make_event("off", "on"))
+            mock_apply.assert_not_called()
+
+    def test_null_states_ignored(self, coord, hass):
+        """new_state or old_state is None → early return."""
+        hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]["solar_gain"]["enable"] = True
+        with patch.object(coord, "_apply_solar_gain") as mock_apply:
+            event = MagicMock()
+            event.data = {
+                "entity_id": "switch.test_auto_solar_gain",
+                "old_state": None, "new_state": None,
+            }
+            coord._handle_solar_gain_switch_on(event)
             mock_apply.assert_not_called()

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import copy
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -321,6 +321,36 @@ class TestBinarySensorAddedToHass:
 
         assert bs._attr_is_on is True
 
+    async def test_sun_facing_cover_change_no_attr_noop(self, hass):
+        """State change on cover without sun_facing attr → val is None → no update."""
+        hass.states.async_set("cover.test", "open", {ATTR_SUN_FACING: False})
+        bs = CoverSunFacingBinarySensor("cover.test")
+        bs.hass = hass
+        bs.async_write_ha_state = MagicMock()
+        bs.async_on_remove = MagicMock()
+        await bs.async_added_to_hass()
+
+        bs.async_write_ha_state.reset_mock()
+        hass.states.async_set("cover.test", "closed", {})  # no sun_facing attr
+        await hass.async_block_till_done()
+
+        bs.async_write_ha_state.assert_not_called()
+
+    async def test_switch_mirror_new_state_none_noop(self, hass):
+        """Switch entity removed (new_state=None) → early return, no update."""
+        hass.states.async_set("switch.test_auto_shade", "off")
+        bs = CoverEnableAutoShadeBinarySensor("cover.test", False)
+        bs.hass = hass
+        bs.async_write_ha_state = MagicMock()
+        bs.async_on_remove = MagicMock()
+        await bs.async_added_to_hass()
+
+        bs.async_write_ha_state.reset_mock()
+        hass.states.async_remove("switch.test_auto_shade")
+        await hass.async_block_till_done()
+
+        bs.async_write_ha_state.assert_not_called()
+
 
 # ════════════════════════════════════════════════════════════════════════════
 # Platform reload signal — switch
@@ -411,6 +441,45 @@ class TestSwitchPlatformReload:
 
         assert "cover.test" not in hass.data[DOMAIN][DATA_SWITCH_AUTO_SOLAR_GAIN_IDS]
 
+    async def test_removed_cover_calls_registry_remove_lock(self, setup_hass, mock_entry):
+        """When eid is found in registry, async_remove is called for the lock switch."""
+        hass = setup_hass
+        await switch_setup_entry(hass, mock_entry, lambda e: None)
+
+        mock_reg = MagicMock()
+        mock_reg.async_get_entity_id.return_value = "switch.test_lock"
+        with patch("custom_components.cover_extender.switch.er.async_get", return_value=mock_reg):
+            del hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]
+            async_dispatcher_send(hass, SIGNAL_COVER_RELOAD)
+
+        mock_reg.async_remove.assert_any_call("switch.test_lock")
+
+    async def test_auto_shade_removed_calls_registry_remove(self, setup_hass, mock_entry):
+        """When eid found, async_remove called for auto_shade switch."""
+        hass = setup_hass
+        await switch_setup_entry(hass, mock_entry, lambda e: None)
+
+        mock_reg = MagicMock()
+        mock_reg.async_get_entity_id.return_value = "switch.test_auto_shade"
+        with patch("custom_components.cover_extender.switch.er.async_get", return_value=mock_reg):
+            hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]["shade"]["enable"] = False
+            async_dispatcher_send(hass, SIGNAL_COVER_RELOAD)
+
+        mock_reg.async_remove.assert_any_call("switch.test_auto_shade")
+
+    async def test_solar_gain_removed_calls_registry_remove(self, setup_hass, mock_entry):
+        """When eid found, async_remove called for auto_solar_gain switch."""
+        hass = setup_hass
+        await switch_setup_entry(hass, mock_entry, lambda e: None)
+
+        mock_reg = MagicMock()
+        mock_reg.async_get_entity_id.return_value = "switch.test_auto_solar_gain"
+        with patch("custom_components.cover_extender.switch.er.async_get", return_value=mock_reg):
+            hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]["solar_gain"]["enable"] = False
+            async_dispatcher_send(hass, SIGNAL_COVER_RELOAD)
+
+        mock_reg.async_remove.assert_any_call("switch.test_auto_solar_gain")
+
 
 # ════════════════════════════════════════════════════════════════════════════
 # Platform reload signal — select
@@ -489,3 +558,42 @@ class TestBinarySensorPlatformReload:
         async_dispatcher_send(hass, SIGNAL_COVER_RELOAD)
 
         assert "cover.test" not in hass.data[DOMAIN][DATA_BINARY_SENSOR_AUTO_SHADE_IDS]
+
+    async def test_sun_facing_removed_calls_registry_remove(self, setup_hass, mock_entry):
+        """When eid found, async_remove called for sun_facing binary_sensor."""
+        hass = setup_hass
+        await binary_sensor_setup_entry(hass, mock_entry, lambda e: None)
+
+        mock_reg = MagicMock()
+        mock_reg.async_get_entity_id.return_value = "binary_sensor.test_sun_facing"
+        with patch("custom_components.cover_extender.binary_sensor.er.async_get", return_value=mock_reg):
+            del hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]
+            async_dispatcher_send(hass, SIGNAL_COVER_RELOAD)
+
+        mock_reg.async_remove.assert_any_call("binary_sensor.test_sun_facing")
+
+    async def test_auto_shade_bs_removed_calls_registry_remove(self, setup_hass, mock_entry):
+        """When eid found, async_remove called for auto_shade binary_sensor."""
+        hass = setup_hass
+        await binary_sensor_setup_entry(hass, mock_entry, lambda e: None)
+
+        mock_reg = MagicMock()
+        mock_reg.async_get_entity_id.return_value = "binary_sensor.test_auto_shade"
+        with patch("custom_components.cover_extender.binary_sensor.er.async_get", return_value=mock_reg):
+            del hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]
+            async_dispatcher_send(hass, SIGNAL_COVER_RELOAD)
+
+        mock_reg.async_remove.assert_any_call("binary_sensor.test_auto_shade")
+
+    async def test_solar_gain_bs_removed_calls_registry_remove(self, setup_hass, mock_entry):
+        """When eid found, async_remove called for solar_gain binary_sensor."""
+        hass = setup_hass
+        await binary_sensor_setup_entry(hass, mock_entry, lambda e: None)
+
+        mock_reg = MagicMock()
+        mock_reg.async_get_entity_id.return_value = "binary_sensor.test_solar_gain"
+        with patch("custom_components.cover_extender.binary_sensor.er.async_get", return_value=mock_reg):
+            del hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]
+            async_dispatcher_send(hass, SIGNAL_COVER_RELOAD)
+
+        mock_reg.async_remove.assert_any_call("binary_sensor.test_solar_gain")

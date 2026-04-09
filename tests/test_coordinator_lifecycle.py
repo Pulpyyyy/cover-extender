@@ -129,6 +129,31 @@ class TestOnWorkerDone:
             coord._on_worker_done(task)
             mock_start.assert_not_called()
 
+
+# ════════════════════════════════════════════════════════════════════════════
+# _on_save_done
+# ════════════════════════════════════════════════════════════════════════════
+
+class TestOnSaveDone:
+
+    def test_error_logged_when_task_has_exception(self, coord, hass):
+        """Task with an exception → error is logged without raising."""
+        task = MagicMock()
+        task.cancelled.return_value = False
+        task.exception.return_value = RuntimeError("storage failed")
+        coord._on_save_done(task)  # must not raise
+
+    def test_successful_task_does_nothing(self, coord, hass):
+        task = MagicMock()
+        task.cancelled.return_value = False
+        task.exception.return_value = None
+        coord._on_save_done(task)  # must not raise
+
+    def test_cancelled_task_does_nothing(self, coord, hass):
+        task = MagicMock()
+        task.cancelled.return_value = True
+        coord._on_save_done(task)  # must not raise
+
     def test_clean_exit_does_not_restart(self, coord, hass):
         task = MagicMock()
         task.cancelled.return_value = False

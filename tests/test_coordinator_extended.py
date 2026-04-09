@@ -469,6 +469,18 @@ class TestHandleCoverStateChange:
         # build_extra_attrs injects "auto_shade" at minimum
         assert "auto_shade" in new_state.attributes
 
+    def test_no_inject_when_attrs_already_match(self, coord, hass):
+        """When cover already has all expected extra attrs, skip state injection."""
+        from custom_components.cover_extender.helpers import build_extra_attrs
+        cfg = hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]
+        extra_attrs = build_extra_attrs(cfg)
+        hass.states.async_set("cover.test", "open", {"current_position": 50, **extra_attrs})
+        state = hass.states.get("cover.test")
+        event = MagicMock()
+        event.data = {"entity_id": "cover.test", "new_state": state}
+        # Should return early (all attrs already match) without raising
+        coord._handle_cover_state_change(event)
+
 
 # ════════════════════════════════════════════════════════════════════════════
 # Service handlers
@@ -655,3 +667,14 @@ class TestInjectSunFacing:
             with patch.object(coord, "_apply_solar_gain") as mock_sg:
                 coord._inject_sun_facing()
                 mock_sg.assert_not_called()
+
+    def test_solar_gain_applied_when_enabled(self, coord, hass):
+        hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]["solar_gain"]["enable"] = True
+        hass.states.async_set("cover.test", "open", {"current_position": 50})
+        with patch(
+            "custom_components.cover_extender.coordinator.compute_sun_facing",
+            return_value=None,
+        ):
+            with patch.object(coord, "_apply_solar_gain") as mock_sg:
+                coord._inject_sun_facing()
+                mock_sg.assert_called_once()
