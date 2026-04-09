@@ -44,8 +44,8 @@ from custom_components.cover_extender.const import (
 )
 
 _MODES = {
-    "Day":   {"icon": "mdi:sun", "color": "orange", "lock": False, "auto_shade": False, "solar_gain": False, "hidden": False},
-    "Night": {"icon": "mdi:moon","color": "blue",   "lock": True,  "auto_shade": False, "solar_gain": False, "hidden": False},
+    "Day":   {"icon": "mdi:sun", "color": "orange", "lock": False, "behavior": None, "hidden": False},
+    "Night": {"icon": "mdi:moon","color": "blue",   "lock": True,  "behavior": None, "hidden": False},
 }
 
 _PROFILES = {

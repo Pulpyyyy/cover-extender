@@ -32,8 +32,7 @@ _PROFILES = {
 }
 
 _MODES = {
-    "Day": {"lock": False, "auto_shade": False, "solar_gain": False,
-            "icon": "mdi:sun", "color": "orange", "hidden": False},
+    "Day": {"lock": False, "behavior": None, "icon": "mdi:sun", "color": "orange", "hidden": False},
 }
 
 

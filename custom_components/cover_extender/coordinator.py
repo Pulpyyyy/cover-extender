@@ -307,8 +307,9 @@ class CoverExtenderCoordinator:
         current_pos = cover_state.attributes.get("current_position") if cover_state else None
         old_memory  = self._get_memory(entity_id)
 
-        from_lock = from_mode_cfg.get("lock", False)
-        to_lock   = to_mode_cfg.get("lock", False)
+        from_lock    = from_mode_cfg.get("lock", False)
+        to_lock      = to_mode_cfg.get("lock", False)
+        to_behavior = to_mode_cfg.get("behavior")  # "auto_shade", "solar_gain", or None
 
         # 1. unlock → lock: save current position to memory
         if not from_lock and to_lock and current_pos is not None:
@@ -320,24 +321,24 @@ class CoverExtenderCoordinator:
             {"entity_id": lock_id},
         )
 
-        # 3. Apply auto_shade switch
-        if to_mode_cfg.get("auto_shade", False):
-            await self.hass.services.async_call("switch", "turn_on", {"entity_id": shading_id})
-            await self.hass.services.async_call("switch", "turn_on", {"entity_id": lock_id})
+        # 3. Apply auto_shade switch (on only if behavior == "auto_shade")
+        solar_gain_id = f"switch.{cover_name}_auto_solar_gain"
+        if to_behavior == "auto_shade":
+            await self.hass.services.async_call("switch", "turn_on",  {"entity_id": shading_id})
+            await self.hass.services.async_call("switch", "turn_on",  {"entity_id": lock_id})
         else:
             await self.hass.services.async_call("switch", "turn_off", {"entity_id": shading_id})
 
-        # 3b. Apply auto_solar_gain switch
-        solar_gain_id = f"switch.{cover_name}_auto_solar_gain"
-        if to_mode_cfg.get("solar_gain", False):
-            await self.hass.services.async_call("switch", "turn_on", {"entity_id": solar_gain_id})
-            await self.hass.services.async_call("switch", "turn_on", {"entity_id": lock_id})
+        # 3b. Apply auto_solar_gain switch (on only if behavior == "solar_gain"; mutually exclusive)
+        if to_behavior == "solar_gain":
+            await self.hass.services.async_call("switch", "turn_on",  {"entity_id": solar_gain_id})
+            await self.hass.services.async_call("switch", "turn_on",  {"entity_id": lock_id})
         else:
             await self.hass.services.async_call("switch", "turn_off", {"entity_id": solar_gain_id})
 
         # 4. Position (skipped when solar_gain active — _apply_solar_gain determines position)
         target_position: int | None = None
-        if not to_mode_cfg.get("solar_gain", False):
+        if to_behavior != "solar_gain":
             fixed_position = cfg.get(CONF_MODES, {}).get(mode)
             if fixed_position is not None:
                 target_position = resolve_mode_position(self.hass, fixed_position)
@@ -369,7 +370,7 @@ class CoverExtenderCoordinator:
                         await self._set_memory(entity_id, None)
 
         # 5. Solar gain: compute initial position on mode entry
-        if to_mode_cfg.get("solar_gain", False):
+        if to_behavior == "solar_gain":
             self._apply_solar_gain(entity_id, cfg)
 
         self.hass.bus.async_fire(

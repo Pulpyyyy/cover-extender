@@ -60,7 +60,8 @@ class TestLoadCoversConfig:
         _, modes, _, _, _, _ = load_covers_config(hass, str(f))
         assert "Day" in modes
         assert modes["Day"]["icon"] == "mdi:sun"
-        assert modes["Day"]["lock"] is False  # schema default
+        assert modes["Day"]["lock"] is False       # schema default
+        assert modes["Day"]["behavior"] is None  # schema default
 
     def test_show_entities_parsed(self, hass, tmp_path):
         cfg = {"show_entities": {"sun_facing": True, "auto_shade": True, "solar_gain": True}}

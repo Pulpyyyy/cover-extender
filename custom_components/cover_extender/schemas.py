@@ -54,8 +54,7 @@ _MODE_DISPLAY_SCHEMA = vol.Schema(
         vol.Optional("icon",       default="mdi:help-circle"): cv.string,
         vol.Optional("color",      default="white"):           cv.string,
         vol.Optional("lock",       default=False):             cv.boolean,
-        vol.Optional("auto_shade", default=False):             cv.boolean,
-        vol.Optional("solar_gain", default=False):             cv.boolean,
+        vol.Optional("behavior",   default=None):              vol.Any(None, vol.In(["auto_shade", "solar_gain"])),
         vol.Optional("hidden",     default=False):             cv.boolean,
     }
 )

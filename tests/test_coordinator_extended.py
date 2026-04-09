@@ -44,10 +44,10 @@ _PROFILES = {
 }
 
 _MODES = {
-    "Day":   {"lock": False, "auto_shade": False, "solar_gain": False, "icon": "mdi:sun",      "color": "orange", "hidden": False},
-    "Night": {"lock": True,  "auto_shade": False, "solar_gain": False, "icon": "mdi:moon",     "color": "blue",   "hidden": False},
-    "Auto":  {"lock": True,  "auto_shade": True,  "solar_gain": False, "icon": "mdi:sun-clock","color": "amber",  "hidden": False},
-    "Solar": {"lock": True,  "auto_shade": False, "solar_gain": True,  "icon": "mdi:thermometer","color": "red",  "hidden": False},
+    "Day":   {"lock": False, "behavior": None,         "icon": "mdi:sun",        "color": "orange", "hidden": False},
+    "Night": {"lock": True,  "behavior": None,         "icon": "mdi:moon",       "color": "blue",   "hidden": False},
+    "Auto":  {"lock": True,  "behavior": "auto_shade", "icon": "mdi:sun-clock",  "color": "amber",  "hidden": False},
+    "Solar": {"lock": True,  "behavior": "solar_gain", "icon": "mdi:thermometer","color": "red",    "hidden": False},
 }
 
 

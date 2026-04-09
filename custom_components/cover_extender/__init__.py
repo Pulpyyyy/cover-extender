@@ -8,6 +8,13 @@ and auto-creates the following helper entities for each configured cover:
   - switch.<cover>_auto_shade      autonomous solar shading (shade.enable: true only)
   - switch.<cover>_auto_solar_gain solar gain optimisation (solar_gain.enable: true only)
 
+Mode definition (cover_extender_modes section):
+  Each mode can declare an optional `behavior` field — at most one behavior
+  can be active at a time (auto_shade and solar_gain are mutually exclusive):
+    behavior: auto_shade   → turns on switch.<cover>_auto_shade when mode is applied
+    behavior: solar_gain   → turns on switch.<cover>_auto_solar_gain when mode is applied
+    behavior: null         → turns off both automation switches (default)
+
 Configuration in configuration.yaml:
   cover_extender:
     source: yaml_entities/covers_config.yaml

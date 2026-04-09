@@ -44,12 +44,9 @@ _PROFILES = {
 }
 
 _MODES = {
-    "Day":   {"lock": False, "auto_shade": False, "solar_gain": False,
-              "icon": "mdi:sun",      "color": "orange", "hidden": False},
-    "Night": {"lock": True,  "auto_shade": False, "solar_gain": False,
-              "icon": "mdi:moon",     "color": "blue",   "hidden": False},
-    "Auto":  {"lock": True,  "auto_shade": True,  "solar_gain": False,
-              "icon": "mdi:sun-clock","color": "amber",  "hidden": False},
+    "Day":   {"lock": False, "behavior": None,         "icon": "mdi:sun",      "color": "orange", "hidden": False},
+    "Night": {"lock": True,  "behavior": None,         "icon": "mdi:moon",     "color": "blue",   "hidden": False},
+    "Auto":  {"lock": True,  "behavior": "auto_shade", "icon": "mdi:sun-clock","color": "amber",  "hidden": False},
 }
 
 
@@ -181,7 +178,7 @@ class TestApplyModeCore:
         """
         # Add a "Free" mode: unlock, no fixed position → triggers memory restore path
         hass.data[DOMAIN][DATA_MODES]["Free"] = {
-            "lock": False, "auto_shade": False, "solar_gain": False,
+            "lock": False, "behavior": None,
             "icon": "mdi:home", "color": "white", "hidden": False,
         }
         hass.data[DOMAIN][DATA_COVER_PROFILES]["cover.test"]["modes"]["Free"] = None

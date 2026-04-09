@@ -21,13 +21,12 @@ def _validate_source(config_dir: str, source: str) -> str | None:
     if pathlib.Path(source).is_absolute():
         resolved = pathlib.Path(source).resolve()
     else:
+        # Restrict relative paths to the HA config directory to prevent traversal attacks
         resolved = (config_root / source).resolve()
-
-    # Reject paths outside the HA config directory
-    try:
-        resolved.relative_to(config_root)
-    except ValueError:
-        return "path_outside_config"
+        try:
+            resolved.relative_to(config_root)
+        except ValueError:
+            return "path_outside_config"
 
     if not resolved.is_file():
         return "file_not_found"

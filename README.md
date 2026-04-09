@@ -9,7 +9,7 @@ The integration injects attributes, creates helper entities, computes shading an
 ## ✨ Features
 
 - **Mode system**  
-  Named modes with icons, colors, lock, auto-shade, solar-gain behavior.
+  Named modes with icons, colors, lock, and an optional `behavior` field (`auto_shade` or `solar_gain`).
 
 - **Automation lock**  
   Prevents physical moves; requested positions are stored in memory until unlocked.
@@ -81,12 +81,12 @@ cover_extender_modes:
     icon: mdi:sun-clock
     color: amber
     lock: true
-    auto_shade: true
+    behavior: auto_shade
   Solar:
     icon: mdi:sun-thermometer
     color: "#FF8F00"
     lock: true
-    solar_gain: true
+    behavior: solar_gain
 
 cover.living_room:
   facade: south
@@ -147,10 +147,19 @@ cover_extender_modes:
     icon: mdi:icon
     color: "#RRGGBB"
     lock: true/false
-    auto_shade: true/false
-    solar_gain: true/false
+    behavior: auto_shade | solar_gain | null
     hidden: true/false
 ```
+
+The `behavior` field is **optional** (defaults to `null`) and determines which automation switch is activated when the mode is applied:
+
+| `behavior` value | Effect |
+|---|---|
+| `auto_shade` | Turns on `switch.<cover>_auto_shade` (+ lock) |
+| `solar_gain` | Turns on `switch.<cover>_auto_solar_gain` (+ lock) |
+| `null` / absent | Turns off both automation switches |
+
+`auto_shade` and `solar_gain` are mutually exclusive — a mode can only activate one at a time.
 
 Notes:
 - `hidden` prevents the mode from appearing in the global select entity.
@@ -175,7 +184,7 @@ cover.<entity>:
 
 ### Mode positions:
 - Integer → fixed position
-- `null` → no fixed position (auto-shade / solar-gain modes)
+- `null` → no fixed position (used with `behavior: auto_shade` or `behavior: solar_gain` modes)
 - Entity ID → dynamically read numeric position
 
 ### `exclusion`
@@ -202,7 +211,7 @@ As soon as all exclusion entities return to `off`, the next mode change or manua
 
 The attribute `sun_facing` is injected into each cover and automatically updated whenever:
 
-- the sun’s state changes  
+- the sun's state changes  
 - the cover updates  
 - configuration reloads
 
@@ -220,7 +229,7 @@ Activated when:
 
 - `shade.enable: true`  
 - AND `switch.<cover>_auto_shade` is ON  
-- (usually turned ON automatically by a mode with `auto_shade: true`)
+- (usually turned ON automatically by a mode with `behavior: auto_shade`)
 
 Shading uses:
 
@@ -244,6 +253,7 @@ Active when:
 
 - `solar_gain.enable: true`
 - AND `switch.<cover>_auto_solar_gain` is ON
+- (usually turned ON automatically by a mode with `behavior: solar_gain`)
 
 Behavior:
 
@@ -273,16 +283,14 @@ When a mode is applied:
 
 2. Apply `lock:` property
 
-3. Apply `auto_shade:`
+3. Apply `behavior:` (turns on/off `auto_shade` and `solar_gain` switches)
 
-4. Apply `solar_gain:`
-
-5. Determine position:
+4. Determine position:
    - fixed position in mode  
    - OR restore memory if previous mode was not locked  
-   - OR no move
+   - OR no move (for `behavior: solar_gain` — position determined by solar gain logic)
 
-6. If solar gain active → immediate evaluation
+5. If `behavior: solar_gain` → immediate solar gain evaluation
 
 ---
 
@@ -336,8 +344,8 @@ Creates:
 |--------|---------|
 | `select.mode_<cover>` | Choose mode |
 | `switch.<cover>_lock` | Automation lock |
-| `switch.<cover>_auto_shade` | Autonomous shading (if enabled) |
-| `switch.<cover>_auto_solar_gain` | Solar gain toggle (if enabled) |
+| `switch.<cover>_auto_shade` | Autonomous shading (if `shade.enable: true`) |
+| `switch.<cover>_auto_solar_gain` | Solar gain toggle (if `solar_gain.enable: true`) |
 | `binary_sensor.<cover>_sun_facing` | Optional (`show_entities`) |
 | `binary_sensor.<cover>_auto_shade` | Optional (`show_entities`) |
 | `binary_sensor.<cover>_solar_gain` | Optional (`show_entities`) |
