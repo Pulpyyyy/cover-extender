@@ -92,6 +92,15 @@ class TestCoverSunFacingBinarySensor:
         bs._handle_cover_change(event)
         assert bs._attr_is_on is False
 
+    async def test_async_added_to_hass_reads_initial_sun_facing(self, setup_hass):
+        hass = setup_hass
+        hass.states.async_set("cover.test", "open", {ATTR_SUN_FACING: True})
+        bs = CoverSunFacingBinarySensor("cover.test")
+        bs.hass = hass
+        bs.async_write_ha_state = MagicMock()
+        await bs.async_added_to_hass()
+        assert bs._attr_is_on is True
+
     def test_handle_cover_change_same_value_no_write(self):
         bs = CoverSunFacingBinarySensor("cover.test")
         bs.async_write_ha_state = MagicMock()
@@ -128,6 +137,15 @@ class TestCoverEnableAutoShadeBinarySensor:
         bs = CoverEnableAutoShadeBinarySensor("cover.test", False)
         bs._attr_is_on = False
         assert bs.icon == "mdi:sun-clock-outline"
+
+    async def test_async_added_to_hass_reads_initial_switch_on(self, setup_hass):
+        hass = setup_hass
+        hass.states.async_set("switch.test_auto_shade", "on")
+        bs = CoverEnableAutoShadeBinarySensor("cover.test", False)
+        bs.hass = hass
+        bs.async_write_ha_state = MagicMock()
+        await bs.async_added_to_hass()
+        assert bs._attr_is_on is True
 
     async def test_switch_state_change_updates_sensor(self, setup_hass):
         hass = setup_hass

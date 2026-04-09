@@ -1,7 +1,7 @@
 """Tests for select entity classes."""
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -150,6 +150,18 @@ class TestCoverModeSelect:
         assert any(svc == "turn_off" and d.get("entity_id") == "switch.test_lock"
                    for svc, d in calls)
 
+    async def test_async_added_to_hass_restores_state(self, setup_hass):
+        hass = setup_hass
+        sel = CoverModeSelect("cover.test", _COVER_CFG, _MODES_LIST)
+        sel.hass = hass
+        sel.async_write_ha_state = MagicMock()
+        last_state = MagicMock()
+        last_state.state = "Night"
+        with patch.object(sel, "async_get_last_state", new_callable=AsyncMock, return_value=last_state):
+            await sel.async_added_to_hass()
+        assert sel._attr_current_option == "Night"
+        sel.async_write_ha_state.assert_called()
+
     async def test_async_select_option_skips_missing_switches(self, setup_hass):
         hass = setup_hass
         sel = CoverModeSelect("cover.test", _COVER_CFG, _MODES_LIST)
@@ -226,6 +238,18 @@ class TestCoverModesGlobalSelect:
         del hass.data[DOMAIN][DATA_MODES]["Hidden"]
         sel._handle_reload()
         assert sel._attr_current_option in sel._attr_options or sel._attr_current_option is None
+
+    async def test_async_added_to_hass_restores_state(self, setup_hass):
+        hass = setup_hass
+        sel = CoverModesGlobalSelect(_MODES_LIST)
+        sel.hass = hass
+        sel.async_write_ha_state = MagicMock()
+        last_state = MagicMock()
+        last_state.state = "Day"
+        with patch.object(sel, "async_get_last_state", new_callable=AsyncMock, return_value=last_state):
+            await sel.async_added_to_hass()
+        assert sel._attr_current_option == "Day"
+        sel.async_write_ha_state.assert_called()
 
     async def test_async_select_option_changes_state(self, setup_hass):
         hass = setup_hass

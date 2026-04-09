@@ -521,6 +521,25 @@ class TestServiceComputeShadePosition:
         assert result["should_update"] is True
 
 
+class TestServiceSetCoverPosition:
+
+    async def test_moves_unlocked_cover(self, coord, hass):
+        _set_switch(hass, "switch.test_lock", "off")
+        call = MagicMock()
+        call.data = {"entity_id": ["cover.test"], "position": 65}
+        await coord.service_set_cover_position(call)
+        _, data = coord._cover_queue.get_nowait()
+        assert data["position"] == 65
+
+    async def test_locked_cover_stores_memory(self, coord, hass):
+        _set_switch(hass, "switch.test_lock", "on")
+        call = MagicMock()
+        call.data = {"entity_id": ["cover.test"], "position": 65}
+        await coord.service_set_cover_position(call)
+        assert coord._cover_queue.empty()
+        assert hass.data[DOMAIN][DATA_MEMORY]["cover.test"] == 65
+
+
 class TestServiceOpenCloseCover:
 
     async def test_open_cover_enqueues_100(self, coord, hass):
