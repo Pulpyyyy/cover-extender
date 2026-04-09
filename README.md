@@ -267,6 +267,7 @@ solar_gain:
 
 # 🔐 Mode System (Actual Behavior)
 
+```
            ┌──────────────┐
            │     MODE     │
            └──────────────┘
@@ -308,6 +309,7 @@ solar_gain:
               │ Position stored  │
               │ in memory        │
               └──────────────────┘
+```
 
 When a mode is applied:
 
