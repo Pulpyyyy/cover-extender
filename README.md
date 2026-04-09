@@ -277,6 +277,50 @@ solar_gain:
 
 # 🔐 Mode System (Actual Behavior)
 
+```
+           ┌──────────────┐
+           │     MODE     │
+           └──────────────┘
+                   │
+                   ▼
+        ┌────────────────────┐
+        │ Behavior context   │
+        │ - lock             │
+        │ - auto_shade       │
+        │ - solar_gain       │
+        └────────────────────┘
+                   │
+                   ▼
+        ┌────────────────────┐
+        │ Target position ?  │
+        └────────────────────┘
+          YES│          │NO
+             ▼          ▼
+ ┌──────────────────┐   ┌─────────────────────┐
+ │ Target position  │   │ No direct movement  │
+ │ (fixed / entity) │   │ Automation only     │
+ └──────────────────┘   └─────────────────────┘
+             │
+             ▼
+       ┌──────────────────────────────┐
+       │ Movement allowed ?           │
+       │ (lock OFF & no exclusion ?)  │
+       └──────────────────────────────┘
+          │ YES                     │ NO
+          ▼                         ▼
+ ┌──────────────────┐     ┌────────────────────┐
+ │ Move cover       │     │ Do NOT move cover  │
+ │ physically       │     └────────────────────┘
+ └──────────────────┘              |
+             └─────────────────────┘
+                        │
+                        ▼
+              ┌──────────────────┐
+              │ Position stored  │
+              │ in memory        │
+              └──────────────────┘
+```
+
 When a mode is applied:
 
 1. **Current position is always saved to memory**  
