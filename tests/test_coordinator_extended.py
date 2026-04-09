@@ -331,7 +331,7 @@ class TestHandleSelectModeChange:
 
     def test_mode_change_creates_task(self, coord, hass):
         coord._select_to_cover["select.mode_test"] = "cover.test"
-        with patch.object(hass, "async_create_task") as mock_task:
+        with patch.object(hass, "async_create_task", side_effect=lambda coro: coro.close()) as mock_task:
             coord._handle_select_mode_change(
                 self._make_select_event("select.mode_test", "Day", "Night")
             )
@@ -369,7 +369,7 @@ class TestHandleModeEntityChange:
             "entity_id": "sensor.pos",
             "new_state": MagicMock(state="60"),
         }
-        with patch.object(hass, "async_create_task") as mock_task:
+        with patch.object(hass, "async_create_task", side_effect=lambda coro: coro.close()) as mock_task:
             coord._handle_mode_entity_change(event)
             mock_task.assert_called_once()
 
