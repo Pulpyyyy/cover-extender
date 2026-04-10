@@ -278,47 +278,73 @@ solar_gain:
 # 🔐 Mode System (Actual Behavior)
 
 ```
-           ┌──────────────┐
-           │     MODE     │
-           └──────────────┘
-                   │
-                   ▼
-        ┌────────────────────┐
-        │ Behavior context   │
-        │ - lock             │
-        │ - auto_shade       │
-        │ - solar_gain       │
-        └────────────────────┘
-                   │
-                   ▼
-        ┌────────────────────┐
-        │ Target position ?  │
-        └────────────────────┘
-          YES│          │NO
-             ▼          ▼
- ┌──────────────────┐   ┌─────────────────────┐
- │ Target position  │   │ No direct movement  │
- │ (fixed / entity) │   │ Automation only     │
- └──────────────────┘   └─────────────────────┘
-             │
-             ▼
-       ┌──────────────────────────────┐
-       │ Movement allowed ?           │
-       │ (lock OFF & no exclusion ?)  │
-       └──────────────────────────────┘
-          │ YES                     │ NO
-          ▼                         ▼
- ┌──────────────────┐     ┌────────────────────┐
- │ Move cover       │     │ Do NOT move cover  │
- │ physically       │     └────────────────────┘
- └──────────────────┘              |
-             └─────────────────────┘
-                        │
-                        ▼
-              ┌──────────────────┐
-              │ Position stored  │
-              │ in memory        │
-              └──────────────────┘
+                     ┌────────────────────────┐
+                     │        APPLY MODE      │
+                     └────────────────────────┘
+                                  │
+                                  ▼
+                  ┌─────────────────────────────────┐
+                  │ Save CURRENT position to memory │
+                  └─────────────────────────────────┘
+                                  │
+                                  ▼
+         ┌─────────────────────────────────────────────┐
+         │ Apply mode context                          │
+         │ - lock on/off                               │
+         │ - behavior: auto_shade / solar_gain / none  │
+         │ - toggle automation switches                │
+         └─────────────────────────────────────────────┘
+                                  │
+                                  ▼
+                  ┌─────────────────────────────────┐
+                  │ Is a target position defined ?  │
+                  └─────────────────────────────────┘
+                     YES │                       │ NO
+                         ▼                       ▼
+        ┌───────────────────────────┐   ┌────────────────────────┐
+        │ Fixed / entity / memory   │   │ No direct movement     │
+        │ target position resolved  │   │ Automation only        │
+        └───────────────────────────┘   └────────────────────────┘
+                         │
+                         ▼
+             ┌────────────────────────────────────┐
+             │ Is physical movement allowed ?     │
+             │ - lock OFF ?                       │
+             │ - no exclusion entity ON ?         │
+             └────────────────────────────────────┘
+                   │ YES                      │ NO
+                   ▼                          ▼
+        ┌────────────────────────┐   ┌───────────────────────────┐
+        │ Send cover command     │   │ Do NOT move cover         │
+        │ (throttled queue)      │   └───────────────────────────┘
+        └────────────────────────┘               │
+                                                 ▼
+                                     ┌─────────────────────────┐
+                                     │ Store target in memory  │
+                                     └─────────────────────────┘
+```
+# 🔐 Lock System (Actual Behavior)
+```
+            ┌──────────────────────────┐
+            │        UNLOCK            │
+            │  (switch.lock → OFF)     │
+            └──────────────────────────┘
+                         │
+                         ▼
+         ┌────────────────────────────────────┐
+         │ Is a memory position stored ?      │
+         └────────────────────────────────────┘
+                     │ YES              │ NO
+                     ▼                  ▼
+      ┌─────────────────────────────────────┐
+      │ Are exclusion entities all OFF ?    │
+      └─────────────────────────────────────┘
+               │ YES                 │ NO
+               ▼                     ▼
+┌────────────────────────────┐   ┌────────────────────────────┐
+│ Apply memorized position   │   │ DO NOTHING                 │
+│ → physical move allowed    │   │ Memory kept                │
+└────────────────────────────┘   └────────────────────────────┘
 ```
 
 When a mode is applied:
