@@ -6,6 +6,153 @@ The integration injects attributes, creates helper entities, computes shading an
 
 ---
 
+## 🧠 Philosophy of the Component
+
+Cover Extender is built on a simple idea: **automation should enhance control, not replace it**.
+
+Rather than introducing new cover entities or abstracting your hardware behind opaque logic, Cover Extender **extends what already exists**. Your original `cover.*` entities remain the single source of truth. The integration adds intelligence *around* them — never *over* them.
+
+---
+
+### 🎯 Intention First, Mechanics Second
+
+Traditional automations often bind **conditions directly to actions**:
+
+> *If sun elevation > X → move cover to Y*
+
+While effective, this approach quickly becomes hard to reason about, override, or debug.
+
+Cover Extender takes a different path:
+- You express **intent** using **modes**
+- Each mode defines *context* (lock, behavior, strategy)
+- Automation logic only runs **when explicitly allowed**
+
+A mode answers the question:
+
+> *“What is this cover supposed to do right now?”*
+
+Not:
+
+> *“Which automation happens to fire?”*
+
+---
+
+### 🧩 Non‑Destructive by Design
+
+Cover Extender follows a strict rule:
+
+> **It never replaces, clones, or takes ownership of your covers.**
+
+Instead, it:
+- injects attributes
+- creates helper entities (selects, switches, sensors)
+- orchestrates commands through a controlled layer
+
+At any moment:
+- You can bypass Cover Extender and control the cover manually
+- A reboot or reload never corrupts native cover state
+- Removing the integration restores a clean system
+
+Your hardware remains autonomous. Cover Extender is optional intelligence.
+
+---
+
+### 🔐 Safety Over Surprise
+
+Unintended physical movement is one of the most common frustrations with cover automations.
+
+Cover Extender treats this as a **first‑class concern**:
+
+- **Lock** prevents movement — not just automation
+- **Exclusion entities** (e.g. open windows) block commands safely
+- **Target positions are remembered**, not lost
+- Nothing “catches up” later without your consent
+
+If a cover does not move, it is never a mystery:
+
+> *It is either locked, excluded, or waiting in memory.*
+
+---
+
+### 🧠 Memory Instead of Guesswork
+
+When automation is paused, many systems simply… give up.
+
+Cover Extender does not.
+
+- Every mode change saves the current position
+- Blocked movements are intentionally memorized
+- Unlocking applies memory only when movement is safe
+
+This creates **continuity of intent**:
+
+> *“I wanted this position — apply it when possible.”*
+
+Not:
+
+> *“Automation failed, state lost.”*
+
+---
+
+### 🌞 Sun Automation as a Strategy, Not a Reflex
+
+Solar logic in Cover Extender is **deliberate, not reactive**.
+
+- Sun data is always computed
+- But actions only occur when:
+  - the corresponding automation switch is ON
+  - usually enabled by a mode
+
+There is no background process constantly fighting the user.  
+Sun automation is:
+- scoped
+- reversible
+- visible
+
+You decide *when* the sun matters.
+
+---
+
+### 🧠 Explicit Is Better Than Clever
+
+Cover Extender intentionally avoids:
+- hidden assumptions
+- implicit behavior chains
+- “smart” actions with no clear trigger
+
+Instead, it favors:
+- explicit modes
+- visible switches
+- deterministic state changes
+- Home Assistant events for external orchestration
+
+Everything it does is:
+- observable
+- debuggable
+- reversible
+
+---
+
+### 🤝 A Good Home Assistant Citizen
+
+Cover Extender respects Home Assistant’s ecosystem:
+
+- YAML‑first configuration
+- Hot reload, no restart required
+- Native entities, services, and events
+- Plays well with dashboards and automations
+- No cloud, no polling hacks, no side effects
+
+It aims to feel like:
+
+> *“Something Home Assistant could have shipped — if covers were modes‑aware.”*
+
+---
+
+### ✅ In One Sentence
+
+**Cover Extender does not automate covers for you — it gives you the tools to express intent, safely, predictably, and on your own terms.**
+
 ## ✨ Features
 
 - **Mode system**  
