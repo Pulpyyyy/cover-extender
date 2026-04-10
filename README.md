@@ -153,6 +153,8 @@ It aims to feel like:
 
 **Cover Extender does not automate covers for you — it gives you the tools to express intent, safely, predictably, and on your own terms.**
 
+---
+
 ## ✨ Features
 
 - **Mode system**  
