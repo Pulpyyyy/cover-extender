@@ -67,10 +67,19 @@ EVENT_MODE_CHANGED  = f"{DOMAIN}_mode_changed"
 EVENT_MEMORY_SAVED  = f"{DOMAIN}_memory_saved"
 EVENT_SHADE_APPLIED = f"{DOMAIN}_shade_applied"
 
-# Configurable command interval (seconds between consecutive cover commands)
-CONF_COMMAND_INTERVAL    = "command_interval"
-DEFAULT_COMMAND_INTERVAL = 0.15
+# Configurable command interval
+# UI stores the value in milliseconds (int); the coordinator uses seconds (float).
+CONF_COMMAND_INTERVAL       = "command_interval"
+DEFAULT_COMMAND_INTERVAL_MS = 150    # stored in config data (ms, int)
+DEFAULT_COMMAND_INTERVAL    = 0.15   # used internally by coordinator (seconds, float)
 
 # Platform entity id suffixes  (domain.<suffix>)
 ENTITY_ID_SELECT = "mode_{cover}"   # select.mode_volet_sam
 ENTITY_ID_SWITCH = "{cover}_lock"   # switch.volet_sam_lock
+
+# Config subentry types (UI mode)
+SUBENTRY_TYPE_GLOBAL    = "global"
+SUBENTRY_TYPE_FACADE    = "facade"
+SUBENTRY_TYPE_MODE      = "mode"
+SUBENTRY_TYPE_COVER     = "cover"
+SUBENTRY_TYPE_TEMPLATE  = "cover_template"

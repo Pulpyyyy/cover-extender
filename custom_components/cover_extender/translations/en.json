@@ -2,22 +2,309 @@
   "config": {
     "step": {
       "user": {
-        "title": "Cover Extender",
-        "data": {
-          "source": "YAML configuration file path"
-        },
-        "data_description": {
-          "source": "Path to the YAML file containing cover profiles (absolute or relative to the config directory)"
-        }
+        "title": "Cover Extender"
       }
-    },
-    "error": {
-      "file_not_found": "YAML configuration file not found at the given path.",
-      "yaml_invalid": "The file contains invalid YAML syntax.",
-      "no_covers_found": "No cover profile found in the file (expected at least one key starting with 'cover.')."
     },
     "abort": {
       "already_configured": "Already configured. Only a single configuration possible."
+    }
+  },
+  "config_subentries": {
+    "facade": {
+      "initiate_flow": {
+        "user": "Add facade"
+      },
+      "entry_type": "Facade",
+      "step": {
+        "user": {
+          "title": "Add facade",
+          "data": {
+            "name":    "Name",
+            "azimuth": "Azimuth (°)"
+          },
+          "data_description": {
+            "name":    "Unique name for this facade (e.g. South, West).",
+            "azimuth": "Compass bearing of the facade in degrees (0 = North, 180 = South)."
+          }
+        },
+        "reconfigure": {
+          "title": "Edit facade",
+          "data": {
+            "name":    "Name",
+            "azimuth": "Azimuth (°)"
+          }
+        }
+      },
+      "error": {
+        "name_required":      "Name is required.",
+        "facade_name_exists": "A facade with this name already exists."
+      },
+      "abort": {
+        "reconfigure_successful": "Facade updated successfully.",
+        "already_configured": "Already configured."
+      }
+    },
+    "mode": {
+      "initiate_flow": {
+        "user": "Add mode"
+      },
+      "entry_type": "Mode",
+      "step": {
+        "user": {
+          "title": "Add mode",
+          "data": {
+            "name":     "Name",
+            "icon":     "Icon (MDI)",
+            "color":    "Color (hex #RRGGBB)",
+            "lock":     "Lock covers in this mode",
+            "behavior": "Automation behavior",
+            "hidden":   "Hide from global mode selector"
+          }
+        },
+        "reconfigure": {
+          "title": "Edit mode",
+          "data": {
+            "name":        "Name",
+            "icon":        "Icon (MDI)",
+            "color":       "Color (hex #RRGGBB)",
+            "lock":        "Lock covers in this mode",
+            "behavior":    "Automation behavior",
+            "hidden":      "Hide from global mode selector",
+            "delete_mode": "Delete this mode"
+          }
+        },
+        "confirm_delete": {
+          "title": "Confirm deletion",
+          "description": "Mode **{mode}** is used by {count} cover(s): {covers}.\n\nDeleting it will remove it from all those covers. This action cannot be undone."
+        }
+      },
+      "error": {
+        "name_required":    "Name is required.",
+        "mode_name_exists": "A mode with this name already exists."
+      },
+      "abort": {
+        "reconfigure_successful": "Mode updated successfully.",
+        "mode_deleted": "Mode deleted and removed from all covers."
+      }
+    },
+    "cover_template": {
+      "initiate_flow": {
+        "user": "Add cover template"
+      },
+      "entry_type": "Cover template",
+      "step": {
+        "user": {
+          "title": "Cover template — identity",
+          "data": {
+            "name":        "Name",
+            "angle_left":  "Left angle (°)",
+            "angle_right": "Right angle (°)"
+          },
+          "data_description": {
+            "name":        "Unique name for this template (e.g. Standard window, Bay window).",
+            "angle_left":  "Sun azimuth offset to the left of the facade normal (0–90°).",
+            "angle_right": "Sun azimuth offset to the right of the facade normal (0–90°)."
+          }
+        },
+        "reconfigure": {
+          "title": "Cover template — identity",
+          "data": {
+            "name":        "Name",
+            "angle_left":  "Left angle (°)",
+            "angle_right": "Right angle (°)"
+          }
+        },
+        "template_automation": {
+          "title": "Cover template — automation",
+          "sections": {
+            "shade": {
+              "name": "Autonomous shade",
+              "data": {
+                "shade_enable":           "Enable autonomous shade",
+                "shade_distance":         "Obstacle distance (m)",
+                "shade_max_height":       "Maximum shade height (m)",
+                "shade_min_height":       "Minimum shade height (m)",
+                "shade_degrees":          "Window width (°)",
+                "shade_max_elevation":    "Max sun elevation (°)",
+                "shade_min_elevation":    "Min sun elevation (°)",
+                "shade_minimum_position": "Minimum position (%)",
+                "shade_default_position": "Default position (%)",
+                "shade_change_threshold": "Change threshold (%)",
+                "shade_time_out":         "Stability timeout (min)"
+              }
+            },
+            "solar_gain": {
+              "name": "Solar gain optimisation",
+              "data": {
+                "solar_gain_enable":         "Enable solar gain optimisation",
+                "solar_gain_position_cold":  "Cold position (%)",
+                "solar_gain_position_solar": "Solar position (%)"
+              }
+            }
+          }
+        }
+      },
+      "error": {
+        "name_required":        "Name is required.",
+        "template_name_exists": "A template with this name already exists."
+      },
+      "abort": {
+        "reconfigure_successful": "Cover template updated successfully."
+      }
+    },
+    "cover": {
+      "initiate_flow": {
+        "user": "Configure cover profile"
+      },
+      "entry_type": "Cover profile",
+      "step": {
+        "user": {
+          "title": "Cover profile — identity",
+          "data": {
+            "entity_id":      "Cover entity",
+            "entity_picture": "Image URL (optional)"
+          },
+          "sections": {
+            "facade_section": {
+              "name": "Facade & template",
+              "data": {
+                "facade":   "Facade",
+                "template": "Cover template (optional)"
+              },
+              "data_description": {
+                "template": "Select a template to inherit angle and automation settings, or leave blank to configure manually."
+              }
+            },
+            "exclusion_section": {
+              "name": "Exclusions",
+              "data": {
+                "exclusion": "Exclusion entities"
+              }
+            }
+          }
+        },
+        "reconfigure": {
+          "title": "Cover profile — identity",
+          "data": {
+            "entity_id":      "Cover entity",
+            "entity_picture": "Image URL (optional)"
+          },
+          "sections": {
+            "facade_section": {
+              "name": "Facade & template",
+              "data": {
+                "facade":   "Facade",
+                "template": "Cover template (optional)"
+              }
+            },
+            "exclusion_section": {
+              "name": "Exclusions",
+              "data": {
+                "exclusion": "Exclusion entities"
+              }
+            }
+          }
+        },
+        "cover_angles": {
+          "title": "Cover profile — angles",
+          "data": {
+            "angle_left":  "Left angle (°)",
+            "angle_right": "Right angle (°)"
+          },
+          "data_description": {
+            "angle_left":  "Sun azimuth offset to the left of the facade normal (0–90°).",
+            "angle_right": "Sun azimuth offset to the right of the facade normal (0–90°)."
+          }
+        },
+        "cover_modes_select": {
+          "title": "Cover profile — mode selection",
+          "sections": {
+            "modes_section": {
+              "name": "Available modes",
+              "data": {
+                "modes": "Modes to configure for this cover"
+              }
+            }
+          }
+        },
+        "cover_modes_config": {
+          "title": "Cover profile — mode configuration",
+          "data": {}
+        },
+        "cover_automation": {
+          "title": "Cover profile — automation",
+          "sections": {
+            "shade": {
+              "name": "Autonomous shade",
+              "data": {
+                "shade_enable":           "Enable autonomous shade",
+                "shade_distance":         "Obstacle distance (m)",
+                "shade_max_height":       "Maximum shade height (m)",
+                "shade_min_height":       "Minimum shade height (m)",
+                "shade_degrees":          "Window width (°)",
+                "shade_max_elevation":    "Max sun elevation (°)",
+                "shade_min_elevation":    "Min sun elevation (°)",
+                "shade_minimum_position": "Minimum position (%)",
+                "shade_default_position": "Default position (%)",
+                "shade_change_threshold": "Change threshold (%)",
+                "shade_time_out":         "Stability timeout (min)"
+              }
+            },
+            "solar_gain": {
+              "name": "Solar gain optimisation",
+              "data": {
+                "solar_gain_enable":         "Enable solar gain optimisation",
+                "solar_gain_position_cold":  "Cold position (%)",
+                "solar_gain_position_solar": "Solar position (%)"
+              }
+            }
+          }
+        }
+      },
+      "error": {
+        "entity_required": "A cover entity must be selected."
+      },
+      "abort": {
+        "reconfigure_successful": "Cover profile updated successfully."
+      }
+    },
+    "global": {
+      "initiate_flow": {
+        "user": "Configure global settings"
+      },
+      "entry_type": "Global settings",
+      "step": {
+        "user": {
+          "title": "Global settings",
+          "data": {
+            "command_interval":         "Command interval (ms)",
+            "show_sun_facing":          "Show sun-facing binary sensors",
+            "show_auto_shade":          "Show auto-shade binary sensors",
+            "show_solar_gain":          "Show solar-gain binary sensors",
+            "sg_temperature_entity":    "Temperature entity",
+            "sg_temperature_threshold": "Temperature threshold (°C or input_number entity)",
+            "sg_weather_entity":        "Weather entity",
+            "sg_good_conditions":       "Good weather conditions"
+          }
+        },
+        "reconfigure": {
+          "title": "Global settings",
+          "data": {
+            "command_interval":         "Command interval (ms)",
+            "show_sun_facing":          "Show sun-facing binary sensors",
+            "show_auto_shade":          "Show auto-shade binary sensors",
+            "show_solar_gain":          "Show solar-gain binary sensors",
+            "sg_temperature_entity":    "Temperature entity",
+            "sg_temperature_threshold": "Temperature threshold (°C or input_number entity)",
+            "sg_weather_entity":        "Weather entity",
+            "sg_good_conditions":       "Good weather conditions"
+          }
+        }
+      },
+      "abort": {
+        "reconfigure_successful": "Settings updated successfully.",
+        "already_configured": "Global settings already configured. Use the Configure button to edit them."
+      }
     }
   },
   "entity": {

@@ -76,13 +76,9 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up cover_extender from a config entry."""
-    source = entry.data.get(CONF_SOURCE)
-    if not source:
-        return False
-
     hass.data.setdefault(DOMAIN, {})
 
-    coordinator = CoverExtenderCoordinator(hass, source)
+    coordinator = CoverExtenderCoordinator(hass, entry)
     hass.data[DOMAIN]["coordinator"] = coordinator
 
     await coordinator.async_start()

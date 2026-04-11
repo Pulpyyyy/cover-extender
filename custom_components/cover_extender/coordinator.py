@@ -23,6 +23,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, ServiceCall, Event, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -31,6 +32,7 @@ from homeassistant.helpers.storage import Store
 
 from .const import (
     DOMAIN,
+    CONF_SOURCE,
     CONF_MODES,
     CONF_SHADING,
     CONF_SOLAR_GAIN,
@@ -53,7 +55,7 @@ from .const import (
 )
 from .helpers import build_extra_attrs, resolve_mode_position
 from .shade import compute_sun_facing, compute_shade_sync
-from .schemas import load_covers_config
+from .schemas import load_covers_config, build_profiles_from_subentries
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -64,9 +66,10 @@ _WORKER_RESTART_DELAY = 1.0
 class CoverExtenderCoordinator:
     """Encapsulates all business logic for cover_extender."""
 
-    def __init__(self, hass: HomeAssistant, source: str) -> None:
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
-        self._source = source
+        self._entry = entry
+        self._source: str = entry.data.get(CONF_SOURCE, "")
         self._store: Store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._cover_queue: asyncio.Queue[tuple[str, dict]] = asyncio.Queue()
         self._worker_task: asyncio.Task | None = None
@@ -78,6 +81,46 @@ class CoverExtenderCoordinator:
         self._entity_mode_map: dict[str, list[tuple[str, str]]] = {}
         # Listener unsubscribe callbacks (rebuilt on every _setup_profiles call)
         self._unsubs: list[Callable[[], None]] = []
+
+    # ── Source detection ──────────────────────────────────────────────────────
+
+    @property
+    def _is_ui_mode(self) -> bool:
+        """Return True when the integration is configured via UI subentries."""
+        return not self._source
+
+    async def _load_data(
+        self,
+    ) -> tuple[dict, dict, dict, dict, dict, float]:
+        """Load configuration from the active source (UI subentries or YAML file)."""
+        if self._is_ui_mode:
+            return build_profiles_from_subentries(self._entry)
+        return await self.hass.async_add_executor_job(
+            load_covers_config, self.hass, self._source
+        )
+
+    # ── Subentry update listener (UI mode) ────────────────────────────────────
+
+    async def _on_entry_updated(
+        self, hass: HomeAssistant, entry: ConfigEntry
+    ) -> None:
+        """Reload profiles whenever a subentry is added / updated / removed."""
+        self._entry = entry
+        profiles, modes_list, facades, show_entities, solar_gain_global, interval = (
+            build_profiles_from_subentries(entry)
+        )
+        self.hass.data[DOMAIN][DATA_COVER_PROFILES]   = profiles
+        self.hass.data[DOMAIN][DATA_MODES]            = modes_list
+        self.hass.data[DOMAIN][DATA_FACADES]          = facades
+        self.hass.data[DOMAIN][DATA_SHOW_ENTITIES]    = show_entities
+        self.hass.data[DOMAIN][DATA_SOLAR_GAIN]       = solar_gain_global
+        self.hass.data[DOMAIN][CONF_COMMAND_INTERVAL] = interval
+        self._command_interval = interval
+        self._setup_profiles()
+        async_dispatcher_send(self.hass, SIGNAL_COVER_RELOAD)
+        _LOGGER.info(
+            "cover_extender: subentry change — reloaded %d profiles", len(profiles)
+        )
 
     # ── Shortcuts to shared hass.data ─────────────────────────────────────────
 
@@ -227,7 +270,16 @@ class CoverExtenderCoordinator:
 
         # Temperature check
         temp_entity = global_solar_gain.get("temperature_entity")
-        threshold = float(global_solar_gain.get("temperature_threshold", 19.0))
+        raw_threshold = global_solar_gain.get("temperature_threshold", 19.0)
+        # threshold may be a static float OR an input_number entity id
+        if isinstance(raw_threshold, str):
+            th_state = self.hass.states.get(raw_threshold)
+            try:
+                threshold = float(th_state.state) if th_state else 19.0
+            except (ValueError, TypeError):
+                threshold = 19.0
+        else:
+            threshold = float(raw_threshold)
         if temp_entity:
             temp_state = self.hass.states.get(temp_entity)
             if not temp_state:
@@ -442,6 +494,10 @@ class CoverExtenderCoordinator:
         solar_gain_watch: list[str] = []
         if temp_ent := global_solar_gain.get("temperature_entity"):
             solar_gain_watch.append(temp_ent)
+        # temperature_threshold can be a static float OR an input_number entity id
+        raw_thr = global_solar_gain.get("temperature_threshold", 19.0)
+        if isinstance(raw_thr, str):
+            solar_gain_watch.append(raw_thr)
         if weather_ent := global_solar_gain.get("weather_entity"):
             solar_gain_watch.append(weather_ent)
         if solar_gain_watch:
@@ -713,9 +769,9 @@ class CoverExtenderCoordinator:
             )
 
     async def service_reload(self, call: ServiceCall) -> None:
-        """Reload cover configuration from YAML without restarting HA."""
+        """Reload cover configuration (YAML file or subentries) without restarting HA."""
         new_profiles, new_modes_list, new_facades, new_vas, new_solar_gain, new_interval = (
-            await self.hass.async_add_executor_job(load_covers_config, self.hass, self._source)
+            await self._load_data()
         )
         self.hass.data[DOMAIN][DATA_COVER_PROFILES]   = new_profiles
         self.hass.data[DOMAIN][DATA_MODES]            = new_modes_list
@@ -738,7 +794,7 @@ class CoverExtenderCoordinator:
         self._start_worker()
 
         profiles, modes_list, facades, show_entities, solar_gain_global, command_interval = (
-            await self.hass.async_add_executor_job(load_covers_config, self.hass, self._source)
+            await self._load_data()
         )
         self.hass.data[DOMAIN][DATA_COVER_PROFILES]      = profiles
         self.hass.data[DOMAIN][DATA_MODES]               = modes_list
@@ -747,6 +803,12 @@ class CoverExtenderCoordinator:
         self.hass.data[DOMAIN][DATA_SOLAR_GAIN]          = solar_gain_global
         self.hass.data[DOMAIN][CONF_COMMAND_INTERVAL]    = command_interval
         self._command_interval                           = command_interval
+
+        # In UI mode, react to subentry changes automatically
+        if self._is_ui_mode:
+            self._entry.async_on_unload(
+                self._entry.add_update_listener(self._on_entry_updated)
+            )
 
         # _setup_profiles requires cover entities to already be in the state machine
         self.hass.bus.async_listen_once(

@@ -2,22 +2,326 @@
   "config": {
     "step": {
       "user": {
-        "title": "Cover Extender",
-        "data": {
-          "source": "Chemin du fichier de configuration YAML"
-        },
-        "data_description": {
-          "source": "Chemin vers le fichier YAML contenant les profils de volets (absolu ou relatif au répertoire de configuration)"
-        }
+        "title": "Cover Extender"
       }
-    },
-    "error": {
-      "file_not_found": "Fichier de configuration YAML introuvable au chemin indiqué.",
-      "yaml_invalid": "Le fichier contient une syntaxe YAML invalide.",
-      "no_covers_found": "Aucun profil de volet trouvé dans le fichier (au moins une clé commençant par 'cover.' est attendue)."
     },
     "abort": {
       "already_configured": "Déjà configuré. Une seule configuration possible."
+    }
+  },
+  "config_subentries": {
+    "facade": {
+      "initiate_flow": {
+        "user": "Ajouter une façade"
+      },
+      "entry_type": "Façade",
+      "step": {
+        "user": {
+          "title": "Ajouter une façade",
+          "data": {
+            "name":    "Nom",
+            "azimuth": "Azimut (°)"
+          },
+          "data_description": {
+            "name":    "Nom unique pour cette façade (ex. Sud, Ouest).",
+            "azimuth": "Orientation de la façade en degrés (0 = Nord, 180 = Sud)."
+          }
+        },
+        "reconfigure": {
+          "title": "Modifier la façade",
+          "data": {
+            "name":    "Nom",
+            "azimuth": "Azimut (°)"
+          }
+        }
+      },
+      "error": {
+        "name_required":      "Le nom est obligatoire.",
+        "facade_name_exists": "Une façade portant ce nom existe déjà."
+      },
+      "abort": {
+        "reconfigure_successful": "La façade a été mise à jour avec succès.",
+        "already_configured": "Déjà configuré."
+      }
+    },
+    "mode": {
+      "initiate_flow": {
+        "user": "Ajouter un mode"
+      },
+      "entry_type": "Mode",
+      "step": {
+        "user": {
+          "title": "Ajouter un mode",
+          "data": {
+            "name":     "Nom",
+            "icon":     "Icône (MDI)",
+            "color":    "Couleur (hex #RRVVBB)",
+            "lock":     "Verrouiller les volets dans ce mode",
+            "behavior": "Comportement automatique",
+            "hidden":   "Masquer du sélecteur de mode global"
+          },
+          "sections": {
+            "advanced_section": {
+              "name": "Avancé",
+              "data": {
+                "hidden": "Masquer du sélecteur de mode global"
+              }
+            }
+          }
+        },
+        "reconfigure": {
+          "title": "Modifier le mode",
+          "data": {
+            "name":        "Nom",
+            "icon":        "Icône (MDI)",
+            "color":       "Couleur (hex #RRVVBB)",
+            "lock":        "Verrouiller les volets dans ce mode",
+            "behavior":    "Comportement automatique",
+            "hidden":      "Masquer du sélecteur de mode global",
+            "delete_mode": "Supprimer ce mode"
+          },
+          "sections": {
+            "advanced_section": {
+              "name": "Avancé",
+              "data": {
+                "hidden":      "Masquer du sélecteur de mode global",
+                "delete_mode": "Supprimer ce mode"
+              }
+            }
+          }
+        },
+        "confirm_delete": {
+          "title": "Confirmer la suppression",
+          "description": "Le mode **{mode}** est utilisé par {count} volet(s) : {covers}.\n\nLe supprimer le retirera de tous ces volets. Cette action est irréversible."
+        }
+      },
+      "error": {
+        "name_required":    "Le nom est obligatoire.",
+        "mode_name_exists": "Un mode portant ce nom existe déjà."
+      },
+      "abort": {
+        "reconfigure_successful": "Le mode a été mis à jour avec succès.",
+        "mode_deleted": "Mode supprimé et retiré de tous les volets."
+      }
+    },
+    "cover_template": {
+      "initiate_flow": {
+        "user": "Ajouter un modèle de volet"
+      },
+      "entry_type": "Modèle de volet",
+      "step": {
+        "user": {
+          "title": "Modèle — identité",
+          "data": {
+            "name":        "Nom",
+            "angle_left":  "Angle gauche (°)",
+            "angle_right": "Angle droit (°)"
+          },
+          "data_description": {
+            "name":        "Nom unique pour ce modèle (ex. Fenêtre standard, Fenêtre baie).",
+            "angle_left":  "Décalage azimutal vers la gauche par rapport à la normale de la façade (0–90°).",
+            "angle_right": "Décalage azimutal vers la droite par rapport à la normale de la façade (0–90°)."
+          }
+        },
+        "reconfigure": {
+          "title": "Modèle — identité",
+          "data": {
+            "name":        "Nom",
+            "angle_left":  "Angle gauche (°)",
+            "angle_right": "Angle droit (°)"
+          }
+        },
+        "template_automation": {
+          "title": "Modèle — automatisation",
+          "sections": {
+            "shade": {
+              "name": "Ombrage autonome",
+              "data": {
+                "shade_enable":           "Activer l'ombrage autonome",
+                "shade_distance":         "Distance de l'obstacle (m)",
+                "shade_max_height":       "Hauteur d'ombre maximale (m)",
+                "shade_min_height":       "Hauteur d'ombre minimale (m)",
+                "shade_degrees":          "Largeur de la fenêtre (°)",
+                "shade_max_elevation":    "Élévation solaire max (°)",
+                "shade_min_elevation":    "Élévation solaire min (°)",
+                "shade_minimum_position": "Position minimale (%)",
+                "shade_default_position": "Position par défaut (%)",
+                "shade_change_threshold": "Seuil de changement (%)",
+                "shade_time_out":         "Délai de stabilité (min)"
+              }
+            },
+            "solar_gain": {
+              "name": "Gain solaire",
+              "data": {
+                "solar_gain_enable":         "Activer l'optimisation du gain solaire",
+                "solar_gain_position_cold":  "Position froide (%)",
+                "solar_gain_position_solar": "Position solaire (%)"
+              }
+            }
+          }
+        }
+      },
+      "error": {
+        "name_required":        "Le nom est obligatoire.",
+        "template_name_exists": "Un modèle portant ce nom existe déjà."
+      },
+      "abort": {
+        "reconfigure_successful": "Le modèle de volet a été mis à jour avec succès."
+      }
+    },
+    "cover": {
+      "initiate_flow": {
+        "user": "Configurer un profil de volet"
+      },
+      "entry_type": "Profil de volet",
+      "step": {
+        "user": {
+          "title": "Profil de volet — identité",
+          "data": {
+            "entity_id":      "Entité volet",
+            "entity_picture": "URL de l'image (optionnel)"
+          },
+          "sections": {
+            "facade_section": {
+              "name": "Façade et modèle",
+              "data": {
+                "facade":   "Façade",
+                "template": "Modèle de volet (optionnel)"
+              },
+              "data_description": {
+                "template": "Sélectionnez un modèle pour hériter des réglages d'angle et d'automatisation, ou laissez vide pour configurer manuellement."
+              }
+            },
+            "exclusion_section": {
+              "name": "Exclusions",
+              "data": {
+                "exclusion": "Entités d'exclusion"
+              }
+            }
+          }
+        },
+        "reconfigure": {
+          "title": "Profil de volet — identité",
+          "data": {
+            "entity_id":      "Entité volet",
+            "entity_picture": "URL de l'image (optionnel)"
+          },
+          "sections": {
+            "facade_section": {
+              "name": "Façade et modèle",
+              "data": {
+                "facade":   "Façade",
+                "template": "Modèle de volet (optionnel)"
+              }
+            },
+            "exclusion_section": {
+              "name": "Exclusions",
+              "data": {
+                "exclusion": "Entités d'exclusion"
+              }
+            }
+          }
+        },
+        "cover_angles": {
+          "title": "Profil de volet — angles",
+          "data": {
+            "angle_left":  "Angle gauche (°)",
+            "angle_right": "Angle droit (°)"
+          },
+          "data_description": {
+            "angle_left":  "Décalage azimutal vers la gauche par rapport à la normale de la façade (0–90°).",
+            "angle_right": "Décalage azimutal vers la droite par rapport à la normale de la façade (0–90°)."
+          }
+        },
+        "cover_modes_select": {
+          "title": "Profil de volet — sélection des modes",
+          "sections": {
+            "modes_section": {
+              "name": "Modes disponibles",
+              "data": {
+                "modes": "Modes à configurer pour ce volet"
+              }
+            }
+          }
+        },
+        "cover_modes_config": {
+          "title": "Profil de volet — configuration des modes",
+          "data": {}
+        },
+        "cover_automation": {
+          "title": "Profil de volet — automatisation",
+          "sections": {
+            "shade": {
+              "name": "Ombrage autonome",
+              "data": {
+                "shade_enable":           "Activer l'ombrage autonome",
+                "shade_distance":         "Distance de l'obstacle (m)",
+                "shade_max_height":       "Hauteur d'ombre maximale (m)",
+                "shade_min_height":       "Hauteur d'ombre minimale (m)",
+                "shade_degrees":          "Largeur de la fenêtre (°)",
+                "shade_max_elevation":    "Élévation solaire max (°)",
+                "shade_min_elevation":    "Élévation solaire min (°)",
+                "shade_minimum_position": "Position minimale (%)",
+                "shade_default_position": "Position par défaut (%)",
+                "shade_change_threshold": "Seuil de changement (%)",
+                "shade_time_out":         "Délai de stabilité (min)"
+              }
+            },
+            "solar_gain": {
+              "name": "Gain solaire",
+              "data": {
+                "solar_gain_enable":         "Activer l'optimisation du gain solaire",
+                "solar_gain_position_cold":  "Position froide (%)",
+                "solar_gain_position_solar": "Position solaire (%)"
+              }
+            }
+          }
+        }
+      },
+      "error": {
+        "entity_required": "Une entité volet doit être sélectionnée."
+      },
+      "abort": {
+        "reconfigure_successful": "Le profil de volet a été mis à jour avec succès."
+      }
+    },
+    "global": {
+      "initiate_flow": {
+        "user": "Configurer les paramètres globaux"
+      },
+      "entry_type": "Paramètres de l'intégration",
+      "step": {
+        "user": {
+          "title": "Paramètres de l'intégration",
+          "data": {
+            "command_interval":         "Intervalle entre commandes (ms)",
+            "show_sun_facing":          "Afficher les capteurs binaires d'ensoleillement",
+            "show_auto_shade":          "Afficher les capteurs binaires d'ombrage auto",
+            "show_solar_gain":          "Afficher les capteurs binaires de gain solaire",
+            "sg_temperature_entity":    "Entité température",
+            "sg_temperature_threshold": "Seuil de température (°C ou entité input_number)",
+            "sg_weather_entity":        "Entité météo",
+            "sg_good_conditions":       "Conditions météo favorables"
+          }
+        },
+        "reconfigure": {
+          "title": "Paramètres de l'intégration",
+          "data": {
+            "command_interval":         "Intervalle entre commandes (ms)",
+            "show_sun_facing":          "Afficher les capteurs binaires d'ensoleillement",
+            "show_auto_shade":          "Afficher les capteurs binaires d'ombrage auto",
+            "show_solar_gain":          "Afficher les capteurs binaires de gain solaire",
+            "sg_temperature_entity":    "Entité température",
+            "sg_temperature_threshold": "Seuil de température (°C ou entité input_number)",
+            "sg_weather_entity":        "Entité météo",
+            "sg_good_conditions":       "Conditions météo favorables"
+          }
+        }
+      },
+      "abort": {
+        "reconfigure_successful": "Les paramètres ont été mis à jour avec succès.",
+        "already_configured": "Paramètres de l'intégration déjà configurés. Utilisez le bouton Configurer pour les modifier."
+      }
     }
   },
   "entity": {

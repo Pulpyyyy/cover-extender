@@ -29,11 +29,11 @@ Cover Extender takes a different path:
 
 A mode answers the question:
 
-> *“What is this cover supposed to do right now?”*
+> *"What is this cover supposed to do right now?"*
 
 Not:
 
-> *“Which automation happens to fire?”*
+> *"Which automation happens to fire?"*
 
 ---
 
@@ -66,7 +66,7 @@ Cover Extender treats this as a **first‑class concern**:
 - **Lock** prevents movement — not just automation
 - **Exclusion entities** (e.g. open windows) block commands safely
 - **Target positions are remembered**, not lost
-- Nothing “catches up” later without your consent
+- Nothing "catches up" later without your consent
 
 If a cover does not move, it is never a mystery:
 
@@ -86,11 +86,11 @@ Cover Extender does not.
 
 This creates **continuity of intent**:
 
-> *“I wanted this position — apply it when possible.”*
+> *"I wanted this position — apply it when possible."*
 
 Not:
 
-> *“Automation failed, state lost.”*
+> *"Automation failed, state lost."*
 
 ---
 
@@ -118,7 +118,7 @@ You decide *when* the sun matters.
 Cover Extender intentionally avoids:
 - hidden assumptions
 - implicit behavior chains
-- “smart” actions with no clear trigger
+- "smart" actions with no clear trigger
 
 Instead, it favors:
 - explicit modes
@@ -135,9 +135,9 @@ Everything it does is:
 
 ### 🤝 A Good Home Assistant Citizen
 
-Cover Extender respects Home Assistant’s ecosystem:
+Cover Extender respects Home Assistant's ecosystem:
 
-- YAML‑first configuration
+- Full UI configuration via config flow and subentries
 - Hot reload, no restart required
 - Native entities, services, and events
 - Plays well with dashboards and automations
@@ -145,7 +145,7 @@ Cover Extender respects Home Assistant’s ecosystem:
 
 It aims to feel like:
 
-> *“Something Home Assistant could have shipped — if covers were modes‑aware.”*
+> *"Something Home Assistant could have shipped — if covers were modes‑aware."*
 
 ---
 
@@ -172,17 +172,20 @@ It aims to feel like:
 - **Solar gain optimization**  
   Temperature‑ and weather‑aware auto‑positioning to capture or block heat.
 
+- **Cover templates**  
+  Reusable angle + shade/solar-gain settings shared across multiple covers. Editing a template propagates automatically to every cover that references it.
+
 - **Attribute injection**  
   `facade`, `modes`, `auto_shade`, `sun_facing`, and `memory` are added to each cover entity.
 
 - **Optional binary sensors**  
-  `sun_facing`, `auto_shade`, and `solar_gain` can be exposed as binary sensors via `show_entities`.
+  `sun_facing`, `auto_shade`, and `solar_gain` can be exposed as binary sensors.
 
 - **Dynamic entity creation**  
   Selects, switches, and binary sensors appear/disappear automatically after reload.
 
 - **Hot reload**  
-  Reload YAML config without restarting Home Assistant.
+  Reload configuration without restarting Home Assistant.
 
 - **Command throttling**  
   All physical cover commands are queued with a configurable delay (default 150 ms) to prevent hardware saturation.
@@ -194,165 +197,130 @@ It aims to feel like:
 
 ## 📦 Installation
 
-1. Copy the folder `cover_extender/` into:
-   ```
-   custom_components/
-   ```
+1. Copy the `cover_extender/` folder into `custom_components/`.
 
-2. Add to `configuration.yaml`:
-   ```yaml
-   cover_extender:
-     source: yaml_entities/covers_config.yaml
-   ```
+2. Restart Home Assistant.
 
-3. Restart Home Assistant.
+3. Go to **Settings → Integrations → Add integration** and search for **Cover Extender**.
+
+4. The setup wizard opens. Configure your facades, modes, cover templates and covers directly from the UI.
+
+> Requires Home Assistant 2024.11 or later.
 
 ---
 
 # 🧾 Configuration
 
-All configuration lives inside the YAML file referenced by `source:`.
+All configuration is managed through **Settings → Integrations → Cover Extender** using subentries.
 
-## Example
+## Subentry types
 
-```yaml
-facades:
-  south:
-    azimuth: 180
-  east:
-    azimuth: 90
-
-cover_extender_modes:
-  Day:
-    icon: mdi:white-balance-sunny
-    color: orange
-  Shade:
-    icon: mdi:sun-clock
-    color: amber
-    lock: true
-    behavior: auto_shade
-  Solar:
-    icon: mdi:sun-thermometer
-    color: "#FF8F00"
-    lock: true
-    behavior: solar_gain
-
-cover.living_room:
-  facade: south
-  modes:
-    Day: 40
-    Shade: null
-    Solar: null
-
-  shade:
-    enable: true
-    distance: 0.4
-    max_height: 1.8
-    min_height: 0.0
-    degrees: 90
-    max_elevation: 90
-    min_elevation: 5
-    minimum_position: 15
-    default_position: 100
-    change_threshold: 5
-    time_out: 2
-
-  solar_gain:
-    enable: true
-    position_solar: 80
-    position_cold: 10
-
-show_entities:
-  sun_facing: true
-  auto_shade: true
-  solar_gain: true
-
-command_interval: 0.3   # optional — seconds between cover commands, default 0.15
-```
-
----
-
-# 🗂️ Configuration Structure
-
-## 1. `facades`
-Defines the facade orientation in degrees.
-
-```yaml
-facades:
-  south:
-    azimuth: 180
-```
-
-Used in sun-facing calculations.
-
----
-
-## 2. `cover_extender_modes`
-Defines global mode metadata.
-
-```yaml
-cover_extender_modes:
-  ModeName:
-    icon: mdi:icon
-    color: "#RRGGBB"
-    lock: true/false
-    behavior: auto_shade | solar_gain | null
-    hidden: true/false
-```
-
-The `behavior` field is **optional** (defaults to `null`) and determines which automation switch is activated when the mode is applied:
-
-| `behavior` value | Effect |
+| Type | Description |
 |---|---|
-| `auto_shade` | Turns on `switch.<cover>_auto_shade` (+ lock) |
-| `solar_gain` | Turns on `switch.<cover>_auto_solar_gain` (+ lock) |
-| `null` / absent | Turns off both automation switches |
-
-`auto_shade` and `solar_gain` are mutually exclusive — a mode can only activate one at a time.
-
-Notes:
-- `hidden` prevents the mode from appearing in the global select entity.
-- Colors are not validated — any string is accepted.
+| **Facade** | A building orientation with a compass azimuth (°). |
+| **Mode** | A named operating mode: icon, color, lock flag, automation behavior. |
+| **Cover template** | Shared angle + shade/solar-gain settings reused across covers. |
+| **Cover** | A cover profile: entity, facade, modes, automation, exclusion. |
+| **Global settings** | Command interval, binary sensor visibility, solar-gain global config. |
 
 ---
 
-## 3. Per-cover configuration
+## Facades
 
-```yaml
-cover.<entity>:
-  facade: south
-  modes:
-    ModeName: <0‑100 | null | entity_id>
-  angle_left: 85.0
-  angle_right: 85.0
-  entity_picture: http://...
-  exclusion: [entity_id, ...]
-  shade: {...}
-  solar_gain: {...}
-```
+A facade defines the compass orientation of a wall in degrees (0 = North, 180 = South). It is referenced by each cover to compute sun-facing status and shading geometry.
 
-### Mode positions:
-- Integer → fixed position
-- `null` → no fixed position (used with `behavior: auto_shade` or `behavior: solar_gain` modes)
-- Entity ID → dynamically read numeric position
+---
 
-### `exclusion`
-A list of entity IDs (typically `binary_sensor`, `input_boolean`, or `switch`) that block physical movement of the cover when any of them is `on`.
+## Modes
 
-```yaml
-cover.living_room:
-  exclusion:
-    - binary_sensor.window_living_room_open
-```
+Each mode defines the context in which a cover operates:
 
-When an exclusion entity is `on`:
+| Field | Description |
+|---|---|
+| `name` | Unique identifier (e.g. Day, Shade, Night). |
+| `icon` | MDI icon name (e.g. `mdi:white-balance-sunny`). |
+| `color` | Hex color for dashboards (e.g. `#FF8F00`). |
+| `lock` | Whether the cover is locked in this mode. |
+| `behavior` | `auto_shade`, `solar_gain`, or none. Determines which automation switch is activated. |
+| `hidden` | If `true`, the mode is excluded from the global mode selector. |
 
-- **Mode apply** — the target position is saved to memory instead of being sent to the cover.
-- **Lock release** — the stored memory is not applied; the cover stays put.
+`auto_shade` and `solar_gain` are mutually exclusive per mode.
 
-As soon as all exclusion entities return to `off`, the next mode change or manual lock release will apply the memorized position normally.
+---
 
-**Typical use case:** prevent a cover from moving while a window is open.
+## Cover templates
+
+A **cover template** groups the physical-window parameters that are identical for several covers, avoiding repetition. It acts as a **live reference**: editing a template immediately propagates its values to all covers using it.
+
+**Template parameters:**
+
+| Parameter | Description |
+|---|---|
+| `name` | Unique template name. |
+| `angle_left` / `angle_right` | Sun azimuth offset (°) relative to the facade normal. |
+| Shade parameters | `distance`, `max_height`, `min_height`, `degrees`, `min/max_elevation`, positions, threshold, timeout. |
+| Solar-gain parameters | `position_cold`, `position_solar`. |
+
+**When to use a template:**  
+If two or more covers have the same physical window geometry and the same shading/solar-gain parameters, create one template and reference it from each cover. If a cover has unique characteristics, configure it without a template.
+
+---
+
+## Covers
+
+Each cover profile links a `cover.*` entity to its facade, modes and automation settings.
+
+### Identity step
+- Cover entity, optional image URL, facade, optional cover template, exclusion entities.
+
+### Angles step *(only when no template)*
+- `angle_left` / `angle_right`: sun azimuth offsets relative to the facade normal (0–90°).
+
+### Mode selection and configuration
+- Choose which modes apply to this cover.
+- For each mode, set the target position: fixed integer (0–100), `auto` (no fixed position, used with behavior modes), or an entity ID read at runtime.
+
+### Automation step *(only when no template)*
+All shade and solar-gain parameters for this cover:
+
+**Shade (`shade`):**
+
+| Parameter | Default | Description |
+|---|---|---|
+| `enable` | `false` | Activate autonomous shading. |
+| `distance` | `0.3` m | Horizontal distance to the obstacle (e.g. balcony depth). |
+| `max_height` | `1.5` m | Maximum shadow height to cast on the window. |
+| `min_height` | `0.0` m | Minimum shadow height; below this, the cover opens. |
+| `degrees` | `90` ° | Azimuth window within which the sun triggers shading. |
+| `max_elevation` | `90` ° | Above this elevation the cover is not moved. |
+| `min_elevation` | `5` ° | Below this elevation the cover is not moved. |
+| `minimum_position` | `10` % | Floor position during shading. |
+| `default_position` | `100` % | Position used when sun is outside the window. |
+| `change_threshold` | `5` % | Minimum position delta before issuing a new command. |
+| `time_out` | `1` min | Stability delay before applying a new shading position. |
+
+**Solar gain (`solar_gain`):**
+
+| Parameter | Default | Description |
+|---|---|---|
+| `enable` | `false` | Activate solar-gain optimization. |
+| `position_cold` | `0` % | Position when conditions are cold or unfavorable. |
+| `position_solar` | `100` % | Position when sun is facing and conditions are favorable. |
+
+---
+
+## Global settings
+
+| Field | Description |
+|---|---|
+| `command_interval` | Delay (s) between consecutive cover commands. Default `0.15`. |
+| `show_sun_facing` | Create `binary_sensor.<cover>_sun_facing` for each cover. |
+| `show_auto_shade` | Create `binary_sensor.<cover>_auto_shade`. |
+| `show_solar_gain` | Create `binary_sensor.<cover>_solar_gain`. |
+| Temperature entity | Sensor used to evaluate the solar-gain temperature threshold. |
+| Temperature threshold | Static float **or** `input_number` entity ID, resolved at runtime. |
+| Weather entity | `weather.*` entity used to check conditions. |
+| Good conditions | Weather states that allow solar-gain positioning. |
 
 ---
 
@@ -376,7 +344,7 @@ Computation uses:
 
 Activated when:
 
-- `shade.enable: true`  
+- shade is enabled on the cover (or its template)  
 - AND `switch.<cover>_auto_shade` is ON  
 - (usually turned ON automatically by a mode with `behavior: auto_shade`)
 
@@ -386,13 +354,7 @@ Shading uses:
 (distance / cos(gamma)) * tan(alpha)
 ```
 
-And respects:
-
-- sun FOV (`degrees`, `min_elevation`, `max_elevation`)
-- `minimum_position`
-- `default_position`
-- `time_out`
-- `change_threshold`
+And respects: sun FOV, `minimum_position`, `default_position`, `time_out`, `change_threshold`.
 
 ---
 
@@ -400,7 +362,7 @@ And respects:
 
 Active when:
 
-- `solar_gain.enable: true`
+- solar gain is enabled on the cover (or its template)
 - AND `switch.<cover>_auto_solar_gain` is ON
 - (usually turned ON automatically by a mode with `behavior: solar_gain`)
 
@@ -409,18 +371,6 @@ Behavior:
 - If temperature ≥ threshold → no action  
 - Else if sun_facing & weather good → `position_solar`  
 - Else → `position_cold`
-
-Global config (top level):
-
-```yaml
-solar_gain:
-  temperature_entity: sensor.outdoor_temp
-  temperature_threshold: 19.0
-  weather_entity: weather.home
-  good_conditions:
-    - sunny
-    - partlycloudy
-```
 
 ---
 
@@ -496,21 +446,6 @@ solar_gain:
 └────────────────────────────┘   └────────────────────────────┘
 ```
 
-When a mode is applied:
-
-1. **Current position is always saved to memory**  
-
-2. Apply `lock:` property
-
-3. Apply `behavior:` (turns on/off `auto_shade` and `solar_gain` switches)
-
-4. Determine position:
-   - fixed position in mode  
-   - OR restore memory if previous mode was not locked  
-   - OR no move (for `behavior: solar_gain` — position determined by solar gain logic)
-
-5. If `behavior: solar_gain` → immediate solar gain evaluation
-
 ---
 
 # 🧱 Injected Attributes
@@ -527,47 +462,17 @@ Attributes update on each state change.
 
 ---
 
-## 5. `command_interval` *(optional)*
-
-Minimum delay in seconds between two consecutive physical cover commands.
-
-```yaml
-command_interval: 0.3   # default: 0.15
-```
-
-Useful when your hardware bridge rejects commands that arrive too close together. Applies globally to all covers. Takes effect immediately after a `cover_extender.reload`.
-
----
-
-# 🆕 Optional Binary Sensors
-
-Enabled with:
-```yaml
-show_entities:
-  sun_facing: true
-  auto_shade: true
-  solar_gain: true
-```
-
-Creates:
-
-- `binary_sensor.<cover>_sun_facing`
-- `binary_sensor.<cover>_auto_shade`
-- `binary_sensor.<cover>_solar_gain`
-
----
-
 # 🧰 Entities Created Per Cover
 
 | Entity | Purpose |
 |--------|---------|
 | `select.mode_<cover>` | Choose mode |
 | `switch.<cover>_lock` | Automation lock |
-| `switch.<cover>_auto_shade` | Autonomous shading (if `shade.enable: true`) |
-| `switch.<cover>_auto_solar_gain` | Solar gain toggle (if `solar_gain.enable: true`) |
-| `binary_sensor.<cover>_sun_facing` | Optional (`show_entities`) |
-| `binary_sensor.<cover>_auto_shade` | Optional (`show_entities`) |
-| `binary_sensor.<cover>_solar_gain` | Optional (`show_entities`) |
+| `switch.<cover>_auto_shade` | Autonomous shading switch |
+| `switch.<cover>_auto_solar_gain` | Solar gain toggle |
+| `binary_sensor.<cover>_sun_facing` | Optional (global settings) |
+| `binary_sensor.<cover>_auto_shade` | Optional (global settings) |
+| `binary_sensor.<cover>_solar_gain` | Optional (global settings) |
 
 Global selector:
 
@@ -604,13 +509,13 @@ Returns:
 Reads configured mode position.
 
 ### `cover_extender.reload`
-Reloads YAML configuration without restarting Home Assistant.
+Reloads configuration without restarting Home Assistant.
 
 ---
 
 # 🚨 Command Throttling
 
-All physical `cover.*` commands are routed through a global queue and executed with a minimum delay between commands (default 150 ms, configurable via `command_interval`).
+All physical `cover.*` commands are routed through a global queue and executed with a minimum delay between commands (default 150 ms, configurable via global settings).
 
 Switch toggles are **not** throttled.
 

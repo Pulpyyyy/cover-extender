@@ -28,6 +28,12 @@ from .const import (
     CONF_AZIMUTH,
     CONF_COMMAND_INTERVAL,
     DEFAULT_COMMAND_INTERVAL,
+    DEFAULT_COMMAND_INTERVAL_MS,
+    SUBENTRY_TYPE_GLOBAL,
+    SUBENTRY_TYPE_FACADE,
+    SUBENTRY_TYPE_MODE,
+    SUBENTRY_TYPE_COVER,
+    SUBENTRY_TYPE_TEMPLATE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -59,19 +65,33 @@ _MODE_DISPLAY_SCHEMA = vol.Schema(
     }
 )
 
+SHADE_DEFAULTS: dict[str, Any] = {
+    "enable":           False,
+    "distance":         0.4,
+    "max_height":       1.8,
+    "min_height":       0.0,
+    "degrees":          90.0,
+    "max_elevation":    90.0,
+    "min_elevation":    5.0,
+    "minimum_position": 15.0,
+    "default_position": 100.0,
+    "change_threshold": 5.0,
+    "time_out":         2.0,
+}
+
 _SHADING_SCHEMA = vol.Schema(
     {
-        vol.Optional("enable",           default=False): cv.boolean,
-        vol.Optional("distance",         default=0.3):   vol.Coerce(float),
-        vol.Optional("max_height",       default=1.5):   vol.Coerce(float),
-        vol.Optional("min_height",       default=0.0):   vol.Coerce(float),
-        vol.Optional("degrees",          default=90):    vol.Coerce(float),
-        vol.Optional("max_elevation",    default=90):    vol.Coerce(float),
-        vol.Optional("min_elevation",    default=5):     vol.Coerce(float),
-        vol.Optional("minimum_position", default=10):    vol.Coerce(float),
-        vol.Optional("default_position", default=100):   vol.Coerce(float),
-        vol.Optional("change_threshold", default=5):     vol.Coerce(float),
-        vol.Optional("time_out",         default=1):     vol.Coerce(float),
+        vol.Optional("enable",           default=SHADE_DEFAULTS["enable"]):           cv.boolean,
+        vol.Optional("distance",         default=SHADE_DEFAULTS["distance"]):         vol.Coerce(float),
+        vol.Optional("max_height",       default=SHADE_DEFAULTS["max_height"]):       vol.Coerce(float),
+        vol.Optional("min_height",       default=SHADE_DEFAULTS["min_height"]):       vol.Coerce(float),
+        vol.Optional("degrees",          default=SHADE_DEFAULTS["degrees"]):          vol.Coerce(float),
+        vol.Optional("max_elevation",    default=SHADE_DEFAULTS["max_elevation"]):    vol.Coerce(float),
+        vol.Optional("min_elevation",    default=SHADE_DEFAULTS["min_elevation"]):    vol.Coerce(float),
+        vol.Optional("minimum_position", default=SHADE_DEFAULTS["minimum_position"]): vol.Coerce(float),
+        vol.Optional("default_position", default=SHADE_DEFAULTS["default_position"]): vol.Coerce(float),
+        vol.Optional("change_threshold", default=SHADE_DEFAULTS["change_threshold"]): vol.Coerce(float),
+        vol.Optional("time_out",         default=SHADE_DEFAULTS["time_out"]):         vol.Coerce(float),
     }
 )
 
@@ -86,7 +106,8 @@ _SOLAR_GAIN_COVER_SCHEMA = vol.Schema(
 _SOLAR_GAIN_GLOBAL_SCHEMA = vol.Schema(
     {
         vol.Optional("temperature_entity"):                     cv.entity_id,
-        vol.Optional("temperature_threshold", default=19.0):   vol.Coerce(float),
+        # Accept either a static float or an input_number entity id (resolved at runtime)
+        vol.Optional("temperature_threshold", default=19.0):   vol.Any(vol.Coerce(float), cv.entity_id),
         vol.Optional("weather_entity"):                         cv.entity_id,
         vol.Optional("good_conditions",       default=[]):      vol.All(cv.ensure_list, [cv.string]),
     }
@@ -186,4 +207,141 @@ def load_covers_config(
         command_interval = DEFAULT_COMMAND_INTERVAL
 
     _LOGGER.info("Loaded %d cover profiles from %s", len(profiles), source)
+    return profiles, modes_list, facades, show_entities, solar_gain_global, command_interval
+
+
+def build_profiles_from_subentries(
+    entry: Any,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], float]:
+    """Convert UI subentries into the same 6-tuple that load_covers_config returns.
+
+    Returns (profiles, modes_list, facades, show_entities, solar_gain_global, command_interval).
+    """
+    facades: dict[str, Any] = {}
+    modes_list: dict[str, Any] = {}
+    profiles: dict[str, Any] = {}
+    show_entities: dict[str, Any] = {
+        "sun_facing": False,
+        "auto_shade": False,
+        "solar_gain": False,
+    }
+    solar_gain_global: dict[str, Any] = _SOLAR_GAIN_GLOBAL_SCHEMA({})
+    command_interval: float = DEFAULT_COMMAND_INTERVAL
+
+    # ── First pass: collect cover templates ──────────────────────────────────
+    templates: dict[str, dict[str, Any]] = {}
+    for subentry in entry.subentries.values():
+        if subentry.subentry_type != SUBENTRY_TYPE_TEMPLATE:
+            continue
+        d = subentry.data
+        try:
+            tpl_shade = _SHADING_SCHEMA(d.get("shade") or {})
+        except vol.Invalid:
+            tpl_shade = _SHADING_SCHEMA({})
+        try:
+            tpl_sg = _SOLAR_GAIN_COVER_SCHEMA(d.get("solar_gain") or {})
+        except vol.Invalid:
+            tpl_sg = _SOLAR_GAIN_COVER_SCHEMA({})
+        templates[d["name"]] = {
+            "angle_left":  float(d.get("angle_left",  85.0)),
+            "angle_right": float(d.get("angle_right", 85.0)),
+            "shade":       tpl_shade,
+            "solar_gain":  tpl_sg,
+        }
+
+    # ── Main pass ─────────────────────────────────────────────────────────────
+    for subentry in entry.subentries.values():
+        stype = subentry.subentry_type
+        d = subentry.data
+
+        if stype == SUBENTRY_TYPE_FACADE:
+            facades[d["name"]] = {"azimuth": float(d.get("azimuth", 180.0))}
+
+        elif stype == SUBENTRY_TYPE_MODE:
+            name = d["name"]
+            modes_list[name] = {
+                "icon":     d.get("icon",     "mdi:help-circle"),
+                "color":    d.get("color",    "white"),
+                "lock":     bool(d.get("lock", False)),
+                "behavior": d.get("behavior") or None,
+                "hidden":   bool(d.get("hidden", False)),
+            }
+
+        elif stype == SUBENTRY_TYPE_COVER:
+            entity_id = d["entity_id"]
+
+            # Resolve angle / shade / solar_gain from template or cover itself
+            template_name = d.get("template", "")
+            if template_name:
+                if template_name in templates:
+                    tpl = templates[template_name]
+                    angle_left  = tpl["angle_left"]
+                    angle_right = tpl["angle_right"]
+                    shade_cfg   = tpl["shade"]
+                    sg_cfg      = tpl["solar_gain"]
+                else:
+                    _LOGGER.warning(
+                        "Cover %s references template '%s' which does not exist — using defaults",
+                        entity_id, template_name,
+                    )
+                    angle_left  = float(d.get("angle_left",  85.0))
+                    angle_right = float(d.get("angle_right", 85.0))
+                    shade_cfg   = _SHADING_SCHEMA({})
+                    sg_cfg      = _SOLAR_GAIN_COVER_SCHEMA({})
+            else:
+                angle_left  = float(d.get("angle_left",  85.0))
+                angle_right = float(d.get("angle_right", 85.0))
+                try:
+                    shade_cfg = _SHADING_SCHEMA(d.get("shade") or {})
+                except vol.Invalid:
+                    shade_cfg = _SHADING_SCHEMA({})
+                try:
+                    sg_cfg = _SOLAR_GAIN_COVER_SCHEMA(d.get("solar_gain") or {})
+                except vol.Invalid:
+                    sg_cfg = _SOLAR_GAIN_COVER_SCHEMA({})
+
+            # Convert modes from UI format {"type": ..., "value": ...} → coordinator format
+            raw_modes: dict[str, Any] = d.get("modes", {})
+            modes: dict[str, Any] = {}
+            for mode_name, mode_cfg in raw_modes.items():
+                if isinstance(mode_cfg, dict):
+                    mode_type = mode_cfg.get("type", "fixed")
+                    value = mode_cfg.get("value")
+                    if mode_type == "fixed":
+                        try:
+                            modes[mode_name] = int(value) if value is not None else None
+                        except (ValueError, TypeError):
+                            modes[mode_name] = None
+                    elif mode_type == "entity":
+                        modes[mode_name] = str(value).strip() if value else None
+                    else:  # "auto"
+                        modes[mode_name] = None
+                else:
+                    # Already in coordinator format (unlikely but safe)
+                    modes[mode_name] = mode_cfg
+
+            profiles[entity_id] = {
+                CONF_FACADE:         d.get("facade") or None,
+                CONF_ENTITY_PICTURE: d.get("entity_picture") or None,
+                CONF_ANGLE_LEFT:     angle_left,
+                CONF_ANGLE_RIGHT:    angle_right,
+                CONF_MODES:          modes,
+                CONF_SHADING:        shade_cfg,
+                CONF_SOLAR_GAIN:     sg_cfg,
+                CONF_EXCLUSION:      list(d.get("exclusion") or []),
+            }
+
+        elif stype == SUBENTRY_TYPE_GLOBAL:
+            # Stored as ms (int) in UI config → convert to seconds for the coordinator
+            command_interval = int(d.get("command_interval", DEFAULT_COMMAND_INTERVAL_MS)) / 1000.0
+            show_entities = d.get("show_entities", show_entities)
+            try:
+                solar_gain_global = _SOLAR_GAIN_GLOBAL_SCHEMA(d.get("solar_gain") or {})
+            except vol.Invalid:
+                solar_gain_global = _SOLAR_GAIN_GLOBAL_SCHEMA({})
+
+    _LOGGER.debug(
+        "build_profiles_from_subentries: %d profiles, %d modes, %d facades, %d templates",
+        len(profiles), len(modes_list), len(facades), len(templates),
+    )
     return profiles, modes_list, facades, show_entities, solar_gain_global, command_interval
