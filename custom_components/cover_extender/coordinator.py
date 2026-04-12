@@ -94,7 +94,7 @@ class CoverExtenderCoordinator:
     ) -> tuple[dict, dict, dict, dict, dict, float]:
         """Load configuration from the active source (UI subentries or YAML file)."""
         if self._is_ui_mode:
-            return build_profiles_from_subentries(self._entry)
+            return build_profiles_from_subentries(self._entry, self.hass)
         return await self.hass.async_add_executor_job(
             load_covers_config, self.hass, self._source
         )
@@ -107,7 +107,7 @@ class CoverExtenderCoordinator:
         """Reload profiles whenever a subentry is added / updated / removed."""
         self._entry = entry
         profiles, modes_list, facades, show_entities, solar_gain_global, interval = (
-            build_profiles_from_subentries(entry)
+            build_profiles_from_subentries(entry, hass)
         )
         self.hass.data[DOMAIN][DATA_COVER_PROFILES]   = profiles
         self.hass.data[DOMAIN][DATA_MODES]            = modes_list

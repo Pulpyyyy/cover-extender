@@ -2,357 +2,243 @@
   "config": {
     "step": {
       "user": {
-        "title": "Cover Extender"
+        "title": "Cover Extender — general settings",
+        "data": {
+          "command_interval": "Command interval",
+          "show_sun_facing": "Show sun-facing sensors",
+          "show_auto_shade": "Show auto-shade sensors",
+          "show_solar_gain": "Show solar-gain sensors",
+          "sg_temperature_entity": "Temperature entity",
+          "sg_temperature_threshold": "Temperature threshold (value or input_number entity)",
+          "sg_weather_entity": "Weather entity",
+          "sg_good_conditions": "Good weather conditions"
+        }
       }
     },
     "abort": {
-      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+      "already_configured": "Cover Extender is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Cover Extender — general settings",
+        "data": {
+          "command_interval": "Command interval",
+          "show_sun_facing": "Show sun-facing sensors",
+          "show_auto_shade": "Show auto-shade sensors",
+          "show_solar_gain": "Show solar-gain sensors",
+          "sg_temperature_entity": "Temperature entity",
+          "sg_temperature_threshold": "Temperature threshold (value or input_number entity)",
+          "sg_weather_entity": "Weather entity",
+          "sg_good_conditions": "Good weather conditions"
+        }
+      }
+    }
+  },
+  "selector": {
+    "mode_behavior": {
+      "options": {
+        "auto": "Automatic",
+        "manual": "Manual (Lock)",
+        "ignore": "Ignore"
+      }
+    },
+    "facade_manage": {
+      "options": {
+        "__add__": "Add facade"
+      }
+    },
+    "mode_manage": {
+      "options": {
+        "__add__": "Add mode"
+      }
+    },
+    "template_manage": {
+      "options": {
+        "__add__": "Add template"
+      }
     }
   },
   "config_subentries": {
     "facade": {
+      "entry_title": "Facades",
       "initiate_flow": {
-        "user": "Add facade"
-      },
-      "entry_type": "Facade",
-      "step": {
-        "user": {
-          "title": "Add facade",
-          "data": {
-            "name":    "Name",
-            "azimuth": "Azimuth (°)"
-          },
-          "data_description": {
-            "name":    "Unique name for this facade (e.g. South, West).",
-            "azimuth": "Compass bearing of the facade in degrees (0 = North, 180 = South)."
-          }
-        },
-        "reconfigure": {
-          "title": "Edit facade",
-          "data": {
-            "name":    "Name",
-            "azimuth": "Azimuth (°)"
-          }
-        }
-      },
-      "error": {
-        "name_required":     "Name is required.",
-        "facade_name_exists": "A facade with this name already exists."
+        "user": "Manage facades"
       },
       "abort": {
-        "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]",
-        "already_configured": "[%key:common::config_flow::abort::already_configured_service%]"
+        "reconfigure_successful": "Facades updated successfully.",
+        "already_configured": "Facades are already configured. Use the ✏ button on the Facades entry to manage them."
+      },
+      "step": {
+        "manage": {
+          "title": "Manage facades",
+          "data": {
+            "action": "Action"
+          }
+        },
+        "add": {
+          "title": "Add facade",
+          "data": {
+            "name": "Name",
+            "azimuth": "Azimuth"
+          }
+        },
+        "item": {
+          "title": "Facade — {name}",
+          "menu_options": {
+            "edit": "Edit",
+            "delete": "Delete"
+          }
+        },
+        "edit": {
+          "title": "Edit facade",
+          "data": {
+            "name": "Name",
+            "azimuth": "Azimuth"
+          }
+        }
       }
     },
     "mode": {
+      "entry_title": "Modes",
       "initiate_flow": {
-        "user": "Add mode"
-      },
-      "entry_type": "Mode",
-      "step": {
-        "user": {
-          "title": "Add mode",
-          "data": {
-            "name":     "Name",
-            "icon":     "Icon (MDI)",
-            "color":    "Color (hex #RRGGBB)",
-            "lock":     "Lock covers in this mode",
-            "behavior": "Automation behavior",
-            "hidden":   "Hide from global mode selector"
-          },
-          "sections": {
-            "advanced_section": {
-              "name": "Advanced",
-              "data": {
-                "hidden": "Hide from global mode selector"
-              }
-            }
-          }
-        },
-        "reconfigure": {
-          "title": "Edit mode",
-          "data": {
-            "name":        "Name",
-            "icon":        "Icon (MDI)",
-            "color":       "Color (hex #RRGGBB)",
-            "lock":        "Lock covers in this mode",
-            "behavior":    "Automation behavior",
-            "hidden":      "Hide from global mode selector",
-            "delete_mode": "Delete this mode"
-          },
-          "sections": {
-            "advanced_section": {
-              "name": "Advanced",
-              "data": {
-                "hidden":      "Hide from global mode selector",
-                "delete_mode": "Delete this mode"
-              }
-            }
-          }
-        },
-        "confirm_delete": {
-          "title": "Confirm deletion",
-          "description": "Mode **{mode}** is used by {count} cover(s): {covers}.\n\nDeleting it will remove it from all those covers. This action cannot be undone."
-        }
-      },
-      "error": {
-        "name_required":    "Name is required.",
-        "mode_name_exists": "A mode with this name already exists."
+        "user": "Manage modes"
       },
       "abort": {
-        "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]",
-        "mode_deleted": "Mode deleted and removed from all covers."
+        "reconfigure_successful": "Modes updated successfully.",
+        "already_configured": "Modes are already configured. Use the ✏ button on the Modes entry to manage them."
+      },
+      "step": {
+        "manage": {
+          "title": "Manage modes",
+          "data": {
+            "action": "Action"
+          }
+        },
+        "add": {
+          "title": "Add mode",
+          "data": {
+            "name": "Name",
+            "icon": "Icon",
+            "color": "Color",
+            "lock": "Lock covers",
+            "behavior": "Automation behavior",
+            "hidden": "Hidden"
+          }
+        },
+        "item": {
+          "title": "Mode — {name}",
+          "menu_options": {
+            "edit": "Edit",
+            "delete": "Delete"
+          }
+        },
+        "edit": {
+          "title": "Edit mode",
+          "data": {
+            "name": "Name",
+            "icon": "Icon",
+            "color": "Color",
+            "lock": "Lock covers",
+            "behavior": "Automation behavior",
+            "hidden": "Hidden"
+          }
+        }
       }
     },
     "cover_template": {
+      "entry_title": "Templates",
       "initiate_flow": {
-        "user": "Add cover template"
-      },
-      "entry_type": "Cover template",
-      "step": {
-        "user": {
-          "title": "Cover template — identity",
-          "data": {
-            "name":        "Name",
-            "angle_left":  "Left angle (°)",
-            "angle_right": "Right angle (°)"
-          },
-          "data_description": {
-            "name":        "Unique name for this template (e.g. Standard window, Bay window).",
-            "angle_left":  "Sun azimuth offset to the left of the facade normal (0–90°).",
-            "angle_right": "Sun azimuth offset to the right of the facade normal (0–90°)."
-          }
-        },
-        "reconfigure": {
-          "title": "Cover template — identity",
-          "data": {
-            "name":        "Name",
-            "angle_left":  "Left angle (°)",
-            "angle_right": "Right angle (°)"
-          }
-        },
-        "template_automation": {
-          "title": "Cover template — automation",
-          "sections": {
-            "shade": {
-              "name": "Autonomous shade",
-              "data": {
-                "shade_enable":           "Enable autonomous shade",
-                "shade_distance":         "Obstacle distance (m)",
-                "shade_max_height":       "Maximum shade height (m)",
-                "shade_min_height":       "Minimum shade height (m)",
-                "shade_degrees":          "Window width (°)",
-                "shade_max_elevation":    "Max sun elevation (°)",
-                "shade_min_elevation":    "Min sun elevation (°)",
-                "shade_minimum_position": "Minimum position (%)",
-                "shade_default_position": "Default position (%)",
-                "shade_change_threshold": "Change threshold (%)",
-                "shade_time_out":         "Stability timeout (min)"
-              }
-            },
-            "solar_gain": {
-              "name": "Solar gain optimisation",
-              "data": {
-                "solar_gain_enable":         "Enable solar gain optimisation",
-                "solar_gain_position_cold":  "Cold position (%)",
-                "solar_gain_position_solar": "Solar position (%)"
-              }
-            }
-          }
-        }
-      },
-      "error": {
-        "name_required":        "Name is required.",
-        "template_name_exists": "A template with this name already exists."
+        "user": "Manage cover templates"
       },
       "abort": {
-        "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]"
+        "reconfigure_successful": "Templates updated successfully.",
+        "already_configured": "Templates are already configured. Use the ✏ button on the Templates entry to manage them."
+      },
+      "step": {
+        "manage": {
+          "title": "Manage templates",
+          "data": {
+            "action": "Action"
+          }
+        },
+        "item": {
+          "title": "Template — {name}",
+          "menu_options": {
+            "edit": "Edit",
+            "delete": "Delete"
+          }
+        },
+        "add": {
+          "title": "Add template — identity",
+          "data": {
+            "name": "Name",
+            "angle_left": "Left angle",
+            "angle_right": "Right angle"
+          }
+        },
+        "add_automation": {
+          "title": "Add template — automation",
+          "data": {
+            "shade_enable": "Enable auto-shade",
+            "shade_distance": "Obstacle distance",
+            "shade_max_height": "Max shade height",
+            "shade_degrees": "Window width",
+            "shade_minimum_position": "Minimum position",
+            "shade_time_out": "Stability timeout",
+            "solar_gain_enable": "Enable solar gain",
+            "solar_gain_position_solar": "Solar position"
+          }
+        },
+        "edit": {
+          "title": "Edit template — identity",
+          "data": {
+            "name": "Name",
+            "angle_left": "Left angle",
+            "angle_right": "Right angle"
+          }
+        },
+        "edit_automation": {
+          "title": "Edit template — automation",
+          "data": {
+            "shade_enable": "Enable auto-shade",
+            "shade_distance": "Obstacle distance",
+            "shade_max_height": "Max shade height",
+            "shade_degrees": "Window width",
+            "shade_minimum_position": "Minimum position",
+            "shade_time_out": "Stability timeout",
+            "solar_gain_enable": "Enable solar gain",
+            "solar_gain_position_solar": "Solar position"
+          }
+        }
       }
     },
     "cover": {
       "initiate_flow": {
-        "user": "Configure cover profile"
+        "user": "Extend a cover entity"
       },
-      "entry_type": "Cover profile",
       "step": {
         "user": {
-          "title": "Cover profile — identity",
+          "title": "Add cover profile",
           "data": {
-            "entity_id":      "Cover entity",
-            "entity_picture": "Image URL (optional)"
-          },
-          "sections": {
-            "facade_section": {
-              "name": "Facade & template",
-              "data": {
-                "facade":   "Facade",
-                "template": "Cover template (optional)"
-              },
-              "data_description": {
-                "template": "Select a template to inherit angle and automation settings, or leave blank to configure manually."
-              }
-            },
-            "exclusion_section": {
-              "name": "Exclusions",
-              "data": {
-                "exclusion": "Exclusion entities"
-              }
-            }
+            "entity_id": "Cover entity",
+            "entity_picture": "Entity picture URL",
+            "facade": "Facade",
+            "template": "Template (optional)",
+            "exclusion": "Exclusion entities"
           }
         },
         "reconfigure": {
-          "title": "Cover profile — identity",
+          "title": "Edit cover profile",
           "data": {
-            "entity_id":      "Cover entity",
-            "entity_picture": "Image URL (optional)"
-          },
-          "sections": {
-            "facade_section": {
-              "name": "Facade & template",
-              "data": {
-                "facade":   "Facade",
-                "template": "Cover template (optional)"
-              }
-            },
-            "exclusion_section": {
-              "name": "Exclusions",
-              "data": {
-                "exclusion": "Exclusion entities"
-              }
-            }
-          }
-        },
-        "cover_angles": {
-          "title": "Cover profile — angles",
-          "data": {
-            "angle_left":  "Left angle (°)",
-            "angle_right": "Right angle (°)"
-          },
-          "data_description": {
-            "angle_left":  "Sun azimuth offset to the left of the facade normal (0–90°).",
-            "angle_right": "Sun azimuth offset to the right of the facade normal (0–90°)."
-          }
-        },
-        "cover_modes_select": {
-          "title": "Cover profile — mode selection",
-          "sections": {
-            "modes_section": {
-              "name": "Available modes",
-              "data": {
-                "modes": "Modes to configure for this cover"
-              }
-            }
-          }
-        },
-        "cover_modes_config": {
-          "title": "Cover profile — mode configuration",
-          "data": {}
-        },
-        "cover_automation": {
-          "title": "Cover profile — automation",
-          "sections": {
-            "shade": {
-              "name": "Autonomous shade",
-              "data": {
-                "shade_enable":           "Enable autonomous shade",
-                "shade_distance":         "Obstacle distance (m)",
-                "shade_max_height":       "Maximum shade height (m)",
-                "shade_min_height":       "Minimum shade height (m)",
-                "shade_degrees":          "Window width (°)",
-                "shade_max_elevation":    "Max sun elevation (°)",
-                "shade_min_elevation":    "Min sun elevation (°)",
-                "shade_minimum_position": "Minimum position (%)",
-                "shade_default_position": "Default position (%)",
-                "shade_change_threshold": "Change threshold (%)",
-                "shade_time_out":         "Stability timeout (min)"
-              }
-            },
-            "solar_gain": {
-              "name": "Solar gain optimisation",
-              "data": {
-                "solar_gain_enable":         "Enable solar gain optimisation",
-                "solar_gain_position_cold":  "Cold position (%)",
-                "solar_gain_position_solar": "Solar position (%)"
-              }
-            }
+            "entity_id": "Cover entity",
+            "entity_picture": "Entity picture URL",
+            "facade": "Facade",
+            "template": "Template (optional)",
+            "exclusion": "Exclusion entities"
           }
         }
-      },
-      "error": {
-        "entity_required": "A cover entity must be selected."
-      },
-      "abort": {
-        "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]"
-      }
-    },
-    "global": {
-      "initiate_flow": {
-        "user": "Configure global settings"
-      },
-      "entry_type": "Global settings",
-      "step": {
-        "user": {
-          "title": "Global settings",
-          "data": {
-            "command_interval":          "Command interval (ms)",
-            "show_sun_facing":           "Show sun-facing binary sensors",
-            "show_auto_shade":           "Show auto-shade binary sensors",
-            "show_solar_gain":           "Show solar-gain binary sensors",
-            "sg_temperature_entity":     "Temperature entity",
-            "sg_temperature_threshold":  "Temperature threshold (°C or input_number entity)",
-            "sg_weather_entity":         "Weather entity",
-            "sg_good_conditions":        "Good weather conditions"
-          }
-        },
-        "reconfigure": {
-          "title": "Global settings",
-          "data": {
-            "command_interval":          "Command interval (ms)",
-            "show_sun_facing":           "Show sun-facing binary sensors",
-            "show_auto_shade":           "Show auto-shade binary sensors",
-            "show_solar_gain":           "Show solar-gain binary sensors",
-            "sg_temperature_entity":     "Temperature entity",
-            "sg_temperature_threshold":  "Temperature threshold (°C or input_number entity)",
-            "sg_weather_entity":         "Weather entity",
-            "sg_good_conditions":        "Good weather conditions"
-          }
-        }
-      },
-      "abort": {
-        "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]",
-        "already_configured": "Global settings already configured. Use the Configure button to edit them."
-      }
-    }
-  },
-  "entity": {
-    "select": {
-      "mode": {
-        "name": "Mode"
-      },
-      "cover_extender_modes": {
-        "name": "Modes"
-      }
-    },
-    "switch": {
-      "lock": {
-        "name": "Lock"
-      },
-      "auto_shade": {
-        "name": "Auto shade"
-      },
-      "auto_solar_gain": {
-        "name": "Solar gain auto"
-      }
-    },
-    "binary_sensor": {
-      "sun_facing": {
-        "name": "Sun facing"
-      },
-      "auto_shade": {
-        "name": "Auto shade enabled"
-      },
-      "solar_gain": {
-        "name": "Solar gain enabled"
       }
     }
   }

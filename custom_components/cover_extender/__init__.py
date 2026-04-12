@@ -54,11 +54,47 @@ from .const import (
     SERVICE_OPEN_COVER,
     SERVICE_CLOSE_COVER,
     SERVICE_APPLY_MEMORY,
+    SUBENTRY_TYPE_FACADE,
+    SUBENTRY_TYPE_MODE,
+    SUBENTRY_TYPE_TEMPLATE,
 )
 from .coordinator import CoverExtenderCoordinator
 from .schemas import CONFIG_SCHEMA  # noqa: F401  (re-exported for HA schema discovery)
 
+import logging
+_LOGGER = logging.getLogger(__name__)
+
 PLATFORMS = ["select", "switch", "binary_sensor"]
+
+_SINGLETON_TYPES = {SUBENTRY_TYPE_FACADE, SUBENTRY_TYPE_MODE, SUBENTRY_TYPE_TEMPLATE}
+
+
+def _cleanup_empty_singletons(hass: HomeAssistant) -> None:
+    """Remove singleton subentries whose items list is empty.
+
+    These are left behind when a facade/mode/template subentry was created
+    then emptied (or created before the singleton-enforcement fix). They
+    confuse _find_singleton which would return them before a non-empty one.
+    Called synchronously before the coordinator starts so no listener fires.
+    """
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        for sub in list(entry.subentries.values()):
+            if (
+                sub.subentry_type in _SINGLETON_TYPES
+                and "items" in sub.data
+                and not sub.data["items"]
+            ):
+                _LOGGER.debug(
+                    "cover_extender: removing empty singleton subentry %s (type=%s)",
+                    sub.subentry_id, sub.subentry_type,
+                )
+                try:
+                    hass.config_entries.async_remove_subentry(entry, sub.subentry_id)
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.warning(
+                        "cover_extender: could not remove empty subentry %s: %s",
+                        sub.subentry_id, err,
+                    )
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -77,6 +113,10 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up cover_extender from a config entry."""
     hass.data.setdefault(DOMAIN, {})
+
+    # Remove empty singleton subentries left by old code before the coordinator
+    # registers its listener — avoids spurious reload triggers.
+    _cleanup_empty_singletons(hass)
 
     coordinator = CoverExtenderCoordinator(hass, entry)
     hass.data[DOMAIN]["coordinator"] = coordinator
@@ -131,6 +171,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     return True
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Remove persisted storage when the entry is deleted."""
+    from homeassistant.helpers.storage import Store
+    from .const import STORAGE_KEY, STORAGE_VERSION
+    await Store(hass, STORAGE_VERSION, STORAGE_KEY).async_remove()
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
