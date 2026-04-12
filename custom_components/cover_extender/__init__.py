@@ -47,7 +47,6 @@ from .const import (
     DOMAIN,
     CONF_SOURCE,
     SERVICE_APPLY_MODE,
-    SERVICE_RELOAD,
     SERVICE_GET_MODE_POSITION,
     SERVICE_COMPUTE_SHADE_POSITION,
     SERVICE_SET_COVER_POSITION,
@@ -324,10 +323,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         supports_response=SupportsResponse.OPTIONAL,
     )
     hass.services.async_register(
-        DOMAIN, SERVICE_RELOAD, coordinator.service_reload,
-        schema=vol.Schema({}),
-    )
-    hass.services.async_register(
         DOMAIN, SERVICE_GET_MODE_POSITION, coordinator.service_get_mode_position,
         schema=vol.Schema({
             vol.Required("entity_id"): cv.entity_id,
@@ -377,7 +372,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await coordinator.async_stop()
         hass.data[DOMAIN].pop("coordinator", None)
         for service in (
-            SERVICE_APPLY_MODE, SERVICE_RELOAD, SERVICE_GET_MODE_POSITION,
+            SERVICE_APPLY_MODE, SERVICE_GET_MODE_POSITION,
             SERVICE_COMPUTE_SHADE_POSITION, SERVICE_SET_COVER_POSITION,
             SERVICE_OPEN_COVER, SERVICE_CLOSE_COVER, SERVICE_APPLY_MEMORY,
         ):

@@ -35,6 +35,18 @@ _WEATHER_CONDITIONS = [
 
 _ACTION_ADD = "__add__"
 
+# Behavior keys that a template can define and a cover can override.
+# Activation flags (shade_enable, solar_gain_enable) are intentionally absent:
+# they are always cover-specific and never inherited from a template.
+_TEMPLATE_BEHAVIOR_KEYS: tuple[str, ...] = (
+    "angle_left", "angle_right",
+    "shade_distance", "shade_max_height", "shade_min_height",
+    "shade_degrees", "shade_min_elevation", "shade_max_elevation",
+    "shade_minimum_position", "shade_default_position",
+    "shade_change_threshold", "shade_time_out",
+    "solar_gain_position_solar", "solar_gain_position_cold",
+)
+
 _TITLE_FALLBACKS: dict[str, str] = {
     "global":         "General settings",
     "facade":         "Facades",
@@ -1066,6 +1078,50 @@ class CoverFlowHandler(ConfigSubentryFlow):
             "solar_gain_position_cold":  d.get("solar_gain_position_cold",  sg.get("position_cold",      0)),
         }
 
+    def _behavior_prefill(self, cover_data: dict[str, Any]) -> dict[str, Any]:
+        """Build pre-fill values for the behavior form.
+
+        Priority: stored cover overrides → template defaults → schema defaults.
+        Handles both the new flat format and the old nested shade/solar_gain format.
+        """
+        tpl_name = cover_data.get("template", "")
+        tpl = self._get_template_item(tpl_name) if tpl_name else {}
+        # Start from template defaults (gives correct base when no cover override exists)
+        base = self._behavior_defaults_from_template(tpl) if tpl else {}
+        # Layer stored cover overrides (only keys actually present in cover data)
+        for key in _TEMPLATE_BEHAVIOR_KEYS:
+            if key in cover_data:
+                base[key] = cover_data[key]
+        # Activation flags: cover-specific, handle both flat and legacy nested formats
+        shade = cover_data.get("shade", {})
+        sg    = cover_data.get("solar_gain", {})
+        base["shade_enable"]      = cover_data.get("shade_enable",      shade.get("enable", False))
+        base["solar_gain_enable"] = cover_data.get("solar_gain_enable", sg.get("enable",    False))
+        return base
+
+    @staticmethod
+    def _strip_template_defaults(
+        behavior: dict[str, Any],
+        tpl: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Remove behavior values that match the template — keep only true overrides.
+
+        Activation flags (shade_enable, solar_gain_enable) are always kept because
+        they are cover-specific and have no template counterpart.
+        If *tpl* is empty (no template selected) the dict is returned unchanged.
+        """
+        if not tpl:
+            return behavior
+        tpl_vals = CoverFlowHandler._behavior_defaults_from_template(tpl)
+        result: dict[str, Any] = {}
+        for key, val in behavior.items():
+            if key in ("shade_enable", "solar_gain_enable"):
+                result[key] = val  # always keep activation flags
+            elif key not in tpl_vals or val != tpl_vals[key]:
+                result[key] = val  # keep only if different from template
+            # else: matches template → omit (template value applies at runtime)
+        return result
+
     # ── Helpers ────────────────────────────────────────────────────────────────
 
     def _cover_label(self, item: dict[str, Any]) -> str:
@@ -1150,11 +1206,11 @@ class CoverFlowHandler(ConfigSubentryFlow):
     async def async_step_add_behavior(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
+        tpl = self._get_template_item(self._pending_identity.get("template", ""))
         if user_input is not None:
             _LOGGER.debug("config_flow [cover] async_step_add_behavior: behavior saved, going to modes")
-            self._pending_behavior = user_input
+            self._pending_behavior = self._strip_template_defaults(user_input, tpl)
             return await self.async_step_add_modes()
-        tpl = self._get_template_item(self._pending_identity.get("template", ""))
         defaults = self._behavior_defaults_from_template(tpl) if tpl else {}
         return self.async_show_form(
             step_id="add_behavior",
@@ -1214,15 +1270,14 @@ class CoverFlowHandler(ConfigSubentryFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         existing = self._items[self._edit_idx]
+        # Template from the NEW identity (user may have changed it in step 1)
+        tpl = self._get_template_item(self._pending_identity.get("template", ""))
         if user_input is not None:
             _LOGGER.debug("config_flow [cover] async_step_edit_behavior: behavior saved, going to modes")
-            self._pending_behavior = user_input
+            self._pending_behavior = self._strip_template_defaults(user_input, tpl)
             return await self.async_step_edit_modes()
-        if "shade_enable" in existing:
-            defaults = self._behavior_values_from_cover(existing)
-        else:
-            tpl = self._get_template_item(existing.get("template", ""))
-            defaults = self._behavior_defaults_from_template(tpl) if tpl else {}
+        # Pre-fill: template defaults + stored cover overrides
+        defaults = self._behavior_prefill(existing)
         return self.async_show_form(
             step_id="edit_behavior",
             data_schema=self.add_suggested_values_to_schema(self._behavior_schema(), defaults),

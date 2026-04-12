@@ -1,4 +1,62 @@
 {
+  "services": {
+    "set_cover_position": {
+      "name": "Définir la position du volet",
+      "description": "Déplace un ou plusieurs volets à la position indiquée, en respectant le verrou d'automatisation. Verrou OFF : déplacement immédiat. Verrou ON : enregistré en mémoire, appliqué au déverrouillage.",
+      "fields": {
+        "position": {
+          "name": "Position",
+          "description": "Position cible (0 = fermé, 100 = ouvert)."
+        }
+      }
+    },
+    "open_cover": {
+      "name": "Ouvrir le volet",
+      "description": "Ouvre un ou plusieurs volets (position 100), en respectant le verrou. Verrou OFF : ouverture immédiate. Verrou ON : enregistre 100 en mémoire."
+    },
+    "close_cover": {
+      "name": "Fermer le volet",
+      "description": "Ferme un ou plusieurs volets (position 0), en respectant le verrou. Verrou OFF : fermeture immédiate. Verrou ON : enregistre 0 en mémoire."
+    },
+    "apply_memory": {
+      "name": "Appliquer la position mémorisée",
+      "description": "Force le déplacement du volet vers sa position mémorisée, quel que soit l'état du verrou."
+    },
+    "apply_mode": {
+      "name": "Appliquer un mode",
+      "description": "Déplace les volets à la position définie pour le mode donné. Retourne {\"applied\": [...], \"skipped\": [...]} comme variable de réponse.",
+      "fields": {
+        "mode": {
+          "name": "Mode",
+          "description": "Nom du mode à appliquer (ex. Nuit, Canicule, Absence…)"
+        }
+      }
+    },
+    "compute_shade_position": {
+      "name": "Calculer la position d'ombrage",
+      "description": "Calcule la position d'ombrage solaire d'un volet en fonction de sa configuration et de la position actuelle du soleil. Retourne la position (0–100 %) et should_update.",
+      "fields": {
+        "entity_id": {
+          "name": "Volet",
+          "description": "Entité volet cible."
+        }
+      }
+    },
+    "get_mode_position": {
+      "name": "Obtenir la position d'un mode",
+      "description": "Retourne la position configurée pour un mode donné sur un volet spécifique.",
+      "fields": {
+        "entity_id": {
+          "name": "Volet",
+          "description": "Entité volet cible."
+        },
+        "mode": {
+          "name": "Mode",
+          "description": "Nom du mode à interroger."
+        }
+      }
+    }
+  },
   "config": {
     "abort": {
       "already_configured": "Cover Extender est déjà configuré."

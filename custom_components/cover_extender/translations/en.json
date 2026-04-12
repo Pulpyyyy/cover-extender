@@ -1,4 +1,62 @@
 {
+  "services": {
+    "set_cover_position": {
+      "name": "Set cover position",
+      "description": "Moves one or more covers to the given position, respecting the automation lock. Lock OFF: moves immediately. Lock ON: writes to memory, applied on unlock.",
+      "fields": {
+        "position": {
+          "name": "Position",
+          "description": "Target position (0 = closed, 100 = open)."
+        }
+      }
+    },
+    "open_cover": {
+      "name": "Open cover",
+      "description": "Opens one or more covers (position 100), respecting the automation lock. Lock OFF: opens immediately. Lock ON: writes 100 to memory."
+    },
+    "close_cover": {
+      "name": "Close cover",
+      "description": "Closes one or more covers (position 0), respecting the automation lock. Lock OFF: closes immediately. Lock ON: writes 0 to memory."
+    },
+    "apply_memory": {
+      "name": "Apply memory position",
+      "description": "Forces the cover to move to its stored memory position, regardless of the lock state."
+    },
+    "apply_mode": {
+      "name": "Apply mode",
+      "description": "Moves the given covers to the position defined for the given mode. Returns {\"applied\": [...], \"skipped\": [...]} as a response variable.",
+      "fields": {
+        "mode": {
+          "name": "Mode",
+          "description": "Name of the mode to apply (e.g. Night, Heat, Away…)"
+        }
+      }
+    },
+    "compute_shade_position": {
+      "name": "Compute shade position",
+      "description": "Computes the solar shade position for a cover based on its configuration and the current sun position. Returns position (0–100 %) and should_update.",
+      "fields": {
+        "entity_id": {
+          "name": "Cover",
+          "description": "Target cover entity."
+        }
+      }
+    },
+    "get_mode_position": {
+      "name": "Get mode position",
+      "description": "Returns the configured position for a given mode on a specific cover.",
+      "fields": {
+        "entity_id": {
+          "name": "Cover",
+          "description": "Target cover entity."
+        },
+        "mode": {
+          "name": "Mode",
+          "description": "Name of the mode to query."
+        }
+      }
+    }
+  },
   "config": {
     "abort": {
       "already_configured": "Cover Extender is already configured."
