@@ -1,39 +1,7 @@
 {
   "config": {
-    "step": {
-      "user": {
-        "title": "Cover Extender — Paramètres généraux",
-        "data": {
-          "command_interval": "Intervalle entre commandes",
-          "show_sun_facing": "Afficher les capteurs d'exposition",
-          "show_auto_shade": "Afficher les capteurs d'ombrage",
-          "show_solar_gain": "Afficher les capteurs de gain solaire",
-          "sg_temperature_entity": "Entité de température",
-          "sg_temperature_threshold": "Seuil de température (valeur ou entité input_number)",
-          "sg_weather_entity": "Entité météo",
-          "sg_good_conditions": "Conditions météo favorables"
-        }
-      }
-    },
     "abort": {
       "already_configured": "Cover Extender est déjà configuré."
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "Cover Extender — Paramètres généraux",
-        "data": {
-          "command_interval": "Intervalle entre commandes",
-          "show_sun_facing": "Afficher les capteurs d'exposition",
-          "show_auto_shade": "Afficher les capteurs d'ombrage",
-          "show_solar_gain": "Afficher les capteurs de gain solaire",
-          "sg_temperature_entity": "Entité de température",
-          "sg_temperature_threshold": "Seuil de température (valeur ou entité input_number)",
-          "sg_weather_entity": "Entité météo",
-          "sg_good_conditions": "Conditions météo favorables"
-        }
-      }
     }
   },
   "selector": {
@@ -58,9 +26,52 @@
       "options": {
         "__add__": "Ajouter un gabarit"
       }
+    },
+    "cover_manage": {
+      "options": {
+        "__add__": "Ajouter un volet"
+      }
     }
   },
   "config_subentries": {
+    "global": {
+      "entry_title": "Paramètres généraux",
+      "initiate_flow": {
+        "user": "Configurer les paramètres généraux"
+      },
+      "abort": {
+        "already_configured": "Les paramètres généraux sont déjà configurés. Utilisez le bouton ✏ pour les modifier.",
+        "reconfigure_successful": "Paramètres généraux mis à jour avec succès."
+      },
+      "step": {
+        "user": {
+          "title": "Paramètres généraux",
+          "data": {
+            "command_interval": "Intervalle entre commandes",
+            "show_sun_facing": "Afficher les capteurs d'exposition",
+            "show_auto_shade": "Afficher les capteurs d'ombrage",
+            "show_solar_gain": "Afficher les capteurs de gain solaire",
+            "sg_temperature_entity": "Entité de température",
+            "sg_temperature_threshold": "Seuil de température (valeur ou entité input_number)",
+            "sg_weather_entity": "Entité météo",
+            "sg_good_conditions": "Conditions météo favorables"
+          }
+        },
+        "reconfigure": {
+          "title": "Modifier les paramètres généraux",
+          "data": {
+            "command_interval": "Intervalle entre commandes",
+            "show_sun_facing": "Afficher les capteurs d'exposition",
+            "show_auto_shade": "Afficher les capteurs d'ombrage",
+            "show_solar_gain": "Afficher les capteurs de gain solaire",
+            "sg_temperature_entity": "Entité de température",
+            "sg_temperature_threshold": "Seuil de température (valeur ou entité input_number)",
+            "sg_weather_entity": "Entité météo",
+            "sg_good_conditions": "Conditions météo favorables"
+          }
+        }
+      }
+    },
     "facade": {
       "entry_title": "Façades",
       "initiate_flow": {
@@ -181,14 +192,18 @@
         "add_automation": {
           "title": "Ajouter un gabarit — automatisation",
           "data": {
-            "shade_enable": "Activer l'ombrage auto",
             "shade_distance": "Distance de l'obstacle",
-            "shade_max_height": "Hauteur d'ombre max",
-            "shade_degrees": "Largeur de la fenêtre",
+            "shade_max_height": "Hauteur max du volet",
+            "shade_min_height": "Hauteur min du volet",
+            "shade_degrees": "Angle d'ouverture",
+            "shade_min_elevation": "Élévation solaire min",
+            "shade_max_elevation": "Élévation solaire max",
             "shade_minimum_position": "Position minimale",
+            "shade_default_position": "Position par défaut",
+            "shade_change_threshold": "Seuil de déplacement",
             "shade_time_out": "Délai de stabilité",
-            "solar_gain_enable": "Activer le gain solaire",
-            "solar_gain_position_solar": "Position solaire"
+            "solar_gain_position_solar": "Position (ensoleillé)",
+            "solar_gain_position_cold": "Position (froid)"
           }
         },
         "edit": {
@@ -202,25 +217,47 @@
         "edit_automation": {
           "title": "Modifier un gabarit — automatisation",
           "data": {
-            "shade_enable": "Activer l'ombrage auto",
             "shade_distance": "Distance de l'obstacle",
-            "shade_max_height": "Hauteur d'ombre max",
-            "shade_degrees": "Largeur de la fenêtre",
+            "shade_max_height": "Hauteur max du volet",
+            "shade_min_height": "Hauteur min du volet",
+            "shade_degrees": "Angle d'ouverture",
+            "shade_min_elevation": "Élévation solaire min",
+            "shade_max_elevation": "Élévation solaire max",
             "shade_minimum_position": "Position minimale",
+            "shade_default_position": "Position par défaut",
+            "shade_change_threshold": "Seuil de déplacement",
             "shade_time_out": "Délai de stabilité",
-            "solar_gain_enable": "Activer le gain solaire",
-            "solar_gain_position_solar": "Position solaire"
+            "solar_gain_position_solar": "Position (ensoleillé)",
+            "solar_gain_position_cold": "Position (froid)"
           }
         }
       }
     },
     "cover": {
+      "entry_title": "Volets",
       "initiate_flow": {
-        "user": "Étendre un volet existant"
+        "user": "Gérer les volets"
+      },
+      "abort": {
+        "reconfigure_successful": "Volets mis à jour avec succès.",
+        "already_configured": "Les volets sont déjà configurés. Utilisez le bouton ✏ sur l'entrée Volets pour les gérer."
       },
       "step": {
-        "user": {
-          "title": "Ajouter un profil de volet",
+        "manage": {
+          "title": "Gérer les volets",
+          "data": {
+            "action": "Action"
+          }
+        },
+        "item": {
+          "title": "Volet — {name}",
+          "menu_options": {
+            "edit": "Modifier",
+            "delete": "Supprimer"
+          }
+        },
+        "add": {
+          "title": "Ajouter un volet — identité",
           "data": {
             "entity_id": "Entité volet",
             "entity_picture": "URL de l'image",
@@ -229,8 +266,40 @@
             "exclusion": "Entités d'exclusion"
           }
         },
-        "reconfigure": {
-          "title": "Modifier le profil de volet",
+        "add_behavior": {
+          "title": "Ajouter un volet — comportement",
+          "data": {
+            "angle_left": "Angle gauche",
+            "angle_right": "Angle droit",
+            "shade_distance": "Distance de l'obstacle",
+            "shade_max_height": "Hauteur max du volet",
+            "shade_min_height": "Hauteur min du volet",
+            "shade_degrees": "Angle d'ouverture",
+            "shade_min_elevation": "Élévation solaire min",
+            "shade_max_elevation": "Élévation solaire max",
+            "shade_minimum_position": "Position minimale",
+            "shade_default_position": "Position par défaut",
+            "shade_change_threshold": "Seuil de déplacement",
+            "shade_time_out": "Délai de stabilité",
+            "solar_gain_position_solar": "Position (ensoleillé)",
+            "solar_gain_position_cold": "Position (froid)",
+            "shade_enable": "Activer l'ombrage auto",
+            "solar_gain_enable": "Activer le gain solaire"
+          }
+        },
+        "add_modes": {
+          "title": "Ajouter un volet — modes applicables",
+          "description": "Sélectionnez les modes qui peuvent être appliqués à ce volet.",
+          "data": {
+            "selected_modes": "Modes"
+          }
+        },
+        "add_modes_positions": {
+          "title": "Ajouter un volet — positions par mode",
+          "description": "Définissez optionnellement une position fixe par mode. Laissez vide pour laisser l'automatisation gérer (~)."
+        },
+        "edit": {
+          "title": "Modifier le volet — identité",
           "data": {
             "entity_id": "Entité volet",
             "entity_picture": "URL de l'image",
@@ -238,6 +307,38 @@
             "template": "Gabarit (optionnel)",
             "exclusion": "Entités d'exclusion"
           }
+        },
+        "edit_behavior": {
+          "title": "Modifier le volet — comportement",
+          "data": {
+            "angle_left": "Angle gauche",
+            "angle_right": "Angle droit",
+            "shade_distance": "Distance de l'obstacle",
+            "shade_max_height": "Hauteur max du volet",
+            "shade_min_height": "Hauteur min du volet",
+            "shade_degrees": "Angle d'ouverture",
+            "shade_min_elevation": "Élévation solaire min",
+            "shade_max_elevation": "Élévation solaire max",
+            "shade_minimum_position": "Position minimale",
+            "shade_default_position": "Position par défaut",
+            "shade_change_threshold": "Seuil de déplacement",
+            "shade_time_out": "Délai de stabilité",
+            "solar_gain_position_solar": "Position (ensoleillé)",
+            "solar_gain_position_cold": "Position (froid)",
+            "shade_enable": "Activer l'ombrage auto",
+            "solar_gain_enable": "Activer le gain solaire"
+          }
+        },
+        "edit_modes": {
+          "title": "Modifier le volet — modes applicables",
+          "description": "Sélectionnez les modes qui peuvent être appliqués à ce volet.",
+          "data": {
+            "selected_modes": "Modes"
+          }
+        },
+        "edit_modes_positions": {
+          "title": "Modifier le volet — positions par mode",
+          "description": "Définissez optionnellement une position fixe par mode. Laissez vide pour laisser l'automatisation gérer (~)."
         }
       }
     }

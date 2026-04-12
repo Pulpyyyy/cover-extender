@@ -10,7 +10,6 @@ import logging
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -140,17 +139,11 @@ class _BaseCoverSwitch(SwitchEntity, RestoreEntity):
     def __init__(self, cover_entity_id: str) -> None:
         self._cover_entity_id = cover_entity_id
         cover_name = cover_entity_id.split(".")[1]
-        friendly = cover_name.replace("_", " ").title()
 
         self.entity_id = f"switch.{cover_name}_{self._suffix}"
         self._attr_unique_id = f"{DOMAIN}_switch_{cover_name}_{self._suffix}"
         self._attr_has_entity_name = True
         self._attr_is_on = False
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, cover_entity_id)},
-            name=friendly,
-            entry_type=DeviceEntryType.SERVICE,
-        )
 
     async def async_added_to_hass(self) -> None:
         """Restore last known state after restart."""

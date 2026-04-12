@@ -9,7 +9,6 @@ import logging
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -79,17 +78,11 @@ class CoverModeSelect(SelectEntity, RestoreEntity):
     def __init__(self, cover_entity_id: str, cfg: dict, modes_list: dict) -> None:
         self._cover_entity_id = cover_entity_id
         cover_name = cover_entity_id.split(".")[1]
-        friendly = cover_name.replace("_", " ").title()
 
         self.entity_id = f"select.mode_{cover_name}"
         self._attr_unique_id = f"{DOMAIN}_select_mode_{cover_name}"
         self._attr_has_entity_name = True
         self._attr_translation_key = "mode"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, cover_entity_id)},
-            name=friendly,
-            entry_type=DeviceEntryType.SERVICE,
-        )
 
         modes: dict = cfg.get(CONF_MODES, {})
         self._attr_options = list(modes)
@@ -189,11 +182,6 @@ class CoverModesGlobalSelect(SelectEntity, RestoreEntity):
         self._attr_translation_key = "cover_extender_modes"
         self._attr_options = [m for m, p in modes_list.items() if not p.get("hidden", False)]
         self._attr_current_option = self._attr_options[0] if self._attr_options else None
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, "global")},
-            name="Cover Extender",
-            entry_type=DeviceEntryType.SERVICE,
-        )
 
     async def async_added_to_hass(self) -> None:
         """Restore last known state and subscribe to reloads."""

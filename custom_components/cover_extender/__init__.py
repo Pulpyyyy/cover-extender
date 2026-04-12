@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry, SOURCE_IMPORT
+from homeassistant.config_entries import ConfigEntry, ConfigSubentry, SOURCE_IMPORT
 from homeassistant.core import HomeAssistant, SupportsResponse
 from homeassistant.helpers import config_validation as cv
 
@@ -54,19 +54,42 @@ from .const import (
     SERVICE_OPEN_COVER,
     SERVICE_CLOSE_COVER,
     SERVICE_APPLY_MEMORY,
+    SUBENTRY_TYPE_COVER,
     SUBENTRY_TYPE_FACADE,
+    SUBENTRY_TYPE_GLOBAL,
     SUBENTRY_TYPE_MODE,
     SUBENTRY_TYPE_TEMPLATE,
 )
 from .coordinator import CoverExtenderCoordinator
 from .schemas import CONFIG_SCHEMA  # noqa: F401  (re-exported for HA schema discovery)
+from .config_flow import _subentry_title
 
 import logging
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["select", "switch", "binary_sensor"]
 
-_SINGLETON_TYPES = {SUBENTRY_TYPE_FACADE, SUBENTRY_TYPE_MODE, SUBENTRY_TYPE_TEMPLATE}
+_SINGLETON_TYPES = {SUBENTRY_TYPE_FACADE, SUBENTRY_TYPE_MODE, SUBENTRY_TYPE_TEMPLATE, SUBENTRY_TYPE_COVER}
+_SINGLETON_TYPES_WITH_GLOBAL = _SINGLETON_TYPES | {SUBENTRY_TYPE_GLOBAL}
+
+
+async def _async_sync_subentry_titles(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Update stored subentry titles to the current HA language.
+
+    HA stores the title set at creation time.  When the UI language changes (or
+    when subentries were created in a different language), the stored title drifts
+    from the translation.  This re-syncs all singleton subentry titles on startup.
+    """
+    for sub in entry.subentries.values():
+        if sub.subentry_type not in _SINGLETON_TYPES_WITH_GLOBAL:
+            continue
+        translated = await _subentry_title(hass, sub.subentry_type)
+        if sub.title != translated:
+            _LOGGER.debug(
+                "cover_extender: updating subentry title %r → %r (type=%s)",
+                sub.title, translated, sub.subentry_type,
+            )
+            hass.config_entries.async_update_subentry(entry, sub, title=translated)
 
 
 def _cleanup_empty_singletons(hass: HomeAssistant) -> None:
@@ -97,6 +120,166 @@ def _cleanup_empty_singletons(hass: HomeAssistant) -> None:
                     )
 
 
+async def _async_migrate_yaml_to_subentries(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> None:
+    """One-time migration: convert YAML source config into UI subentries.
+
+    Triggered when entry.data contains CONF_SOURCE (YAML mode) and no subentries
+    exist yet.  After migration the source key is cleared from entry.data so the
+    migration never runs again.
+    """
+    from .schemas import load_covers_config
+
+    source = entry.data.get(CONF_SOURCE)
+    if not source:
+        return
+    if entry.subentries:
+        _LOGGER.debug("cover_extender: YAML migration skipped — subentries already exist")
+        return
+
+    _LOGGER.info("cover_extender: migrating YAML config from '%s' to UI subentries", source)
+
+    try:
+        profiles, modes_list, facades, show_entities, solar_gain_global, command_interval = (
+            await hass.async_add_executor_job(load_covers_config, hass, source)
+        )
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.error("cover_extender: YAML migration failed — could not load source: %s", err)
+        return
+
+    if not profiles and not modes_list and not facades:
+        _LOGGER.warning("cover_extender: YAML migration — file empty or not found, skipping")
+        return
+
+    # ── Global subentry ───────────────────────────────────────────────────────
+    global_data: dict = {
+        "command_interval": int(command_interval * 1000),
+        "show_sun_facing":  bool(show_entities.get("sun_facing", False)),
+        "show_auto_shade":  bool(show_entities.get("auto_shade", False)),
+        "show_solar_gain":  bool(show_entities.get("solar_gain", False)),
+    }
+    if temp_entity := solar_gain_global.get("temperature_entity"):
+        global_data["sg_temperature_entity"] = temp_entity
+    if (threshold := solar_gain_global.get("temperature_threshold")) is not None:
+        global_data["sg_temperature_threshold"] = str(threshold)
+    if weather_entity := solar_gain_global.get("weather_entity"):
+        global_data["sg_weather_entity"] = weather_entity
+    if conditions := solar_gain_global.get("good_conditions"):
+        global_data["sg_good_conditions"] = list(conditions)
+
+    hass.config_entries.async_add_subentry(
+        entry,
+        ConfigSubentry(
+            data=global_data,
+            subentry_type=SUBENTRY_TYPE_GLOBAL,
+            title=await _subentry_title(hass, SUBENTRY_TYPE_GLOBAL),
+            unique_id=None,
+        ),
+    )
+
+    # ── Facades subentry ──────────────────────────────────────────────────────
+    if facades:
+        facade_items = [
+            {"name": name, "azimuth": int(float(cfg.get("azimuth", 180)))}
+            for name, cfg in facades.items()
+        ]
+        hass.config_entries.async_add_subentry(
+            entry,
+            ConfigSubentry(
+                data={"items": facade_items},
+                subentry_type=SUBENTRY_TYPE_FACADE,
+                title=await _subentry_title(hass, SUBENTRY_TYPE_FACADE),
+                unique_id=None,
+            ),
+        )
+
+    # ── Modes subentry ────────────────────────────────────────────────────────
+    if modes_list:
+        mode_items = [
+            {
+                "name":     name,
+                "icon":     cfg.get("icon",     "mdi:help-circle"),
+                "color":    cfg.get("color",    "#FFFFFF"),
+                "lock":     bool(cfg.get("lock",    False)),
+                "behavior": cfg.get("behavior") or None,
+                "hidden":   bool(cfg.get("hidden",  False)),
+            }
+            for name, cfg in modes_list.items()
+        ]
+        hass.config_entries.async_add_subentry(
+            entry,
+            ConfigSubentry(
+                data={"items": mode_items},
+                subentry_type=SUBENTRY_TYPE_MODE,
+                title=await _subentry_title(hass, SUBENTRY_TYPE_MODE),
+                unique_id=None,
+            ),
+        )
+
+    # ── Covers subentry ───────────────────────────────────────────────────────
+    if profiles:
+        cover_items = []
+        for entity_id, cfg in profiles.items():
+            from .const import (
+                CONF_FACADE, CONF_ENTITY_PICTURE,
+                CONF_ANGLE_LEFT, CONF_ANGLE_RIGHT,
+                CONF_MODES, CONF_SHADING, CONF_SOLAR_GAIN, CONF_EXCLUSION,
+            )
+            shade = cfg.get(CONF_SHADING) or {}
+            sg    = cfg.get(CONF_SOLAR_GAIN) or {}
+            # Convert coordinator modes format (int|None) → UI format
+            modes_ui: dict = {}
+            for mode_name, val in (cfg.get(CONF_MODES) or {}).items():
+                if isinstance(val, int):
+                    modes_ui[mode_name] = {"type": "fixed", "value": val}
+                else:
+                    modes_ui[mode_name] = {"type": "auto"}
+
+            cover_items.append({
+                "entity_id":                entity_id,
+                "entity_picture":           cfg.get(CONF_ENTITY_PICTURE) or "",
+                "facade":                   cfg.get(CONF_FACADE) or "",
+                "template":                 "",
+                "exclusion":                list(cfg.get(CONF_EXCLUSION) or []),
+                "angle_left":               float(cfg.get(CONF_ANGLE_LEFT,  85)),
+                "angle_right":              float(cfg.get(CONF_ANGLE_RIGHT, 85)),
+                "shade_enable":             bool(shade.get("enable",           False)),
+                "solar_gain_enable":        bool(sg.get("enable",             False)),
+                "shade_distance":           float(shade.get("distance",        0.4)),
+                "shade_max_height":         float(shade.get("max_height",      1.8)),
+                "shade_min_height":         float(shade.get("min_height",      0.0)),
+                "shade_degrees":            float(shade.get("degrees",         90)),
+                "shade_min_elevation":      float(shade.get("min_elevation",   5)),
+                "shade_max_elevation":      float(shade.get("max_elevation",   90)),
+                "shade_minimum_position":   float(shade.get("minimum_position",15)),
+                "shade_default_position":   float(shade.get("default_position",100)),
+                "shade_change_threshold":   float(shade.get("change_threshold",5)),
+                "shade_time_out":           float(shade.get("time_out",        2)),
+                "solar_gain_position_solar":int(sg.get("position_solar",       100)),
+                "solar_gain_position_cold": int(sg.get("position_cold",        0)),
+                "modes":                    modes_ui,
+            })
+
+        hass.config_entries.async_add_subentry(
+            entry,
+            ConfigSubentry(
+                data={"items": cover_items},
+                subentry_type=SUBENTRY_TYPE_COVER,
+                title=await _subentry_title(hass, SUBENTRY_TYPE_COVER),
+                unique_id=None,
+            ),
+        )
+
+    # Clear the source so the migration never runs again
+    hass.config_entries.async_update_entry(entry, data={})
+
+    _LOGGER.info(
+        "cover_extender: YAML migration complete — %d cover(s), %d mode(s), %d facade(s)",
+        len(profiles), len(modes_list), len(facades),
+    )
+
+
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Import existing YAML configuration as a config entry (backward compat)."""
     if DOMAIN in config:
@@ -114,9 +297,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up cover_extender from a config entry."""
     hass.data.setdefault(DOMAIN, {})
 
+    # One-time migration: YAML source → UI subentries (runs only if entry has
+    # a CONF_SOURCE key and no subentries yet).
+    await _async_migrate_yaml_to_subentries(hass, entry)
+
     # Remove empty singleton subentries left by old code before the coordinator
     # registers its listener — avoids spurious reload triggers.
     _cleanup_empty_singletons(hass)
+    await _async_sync_subentry_titles(hass, entry)
 
     coordinator = CoverExtenderCoordinator(hass, entry)
     hass.data[DOMAIN]["coordinator"] = coordinator

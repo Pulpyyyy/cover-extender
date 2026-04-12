@@ -30,6 +30,7 @@ from .const import (
     DEFAULT_COMMAND_INTERVAL,
     DEFAULT_COMMAND_INTERVAL_MS,
     SUBENTRY_TYPE_FACADE,
+    SUBENTRY_TYPE_GLOBAL,
     SUBENTRY_TYPE_MODE,
     SUBENTRY_TYPE_COVER,
     SUBENTRY_TYPE_TEMPLATE,
@@ -108,7 +109,7 @@ _SOLAR_GAIN_GLOBAL_SCHEMA = vol.Schema(
         # Accept either a static float or an input_number entity id (resolved at runtime)
         vol.Optional("temperature_threshold", default=19.0):   vol.Any(vol.Coerce(float), cv.entity_id),
         vol.Optional("weather_entity"):                         cv.entity_id,
-        vol.Optional("good_conditions",       default=[]):      vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional("good_conditions",       default=["sunny", "partlycloudy"]): vol.All(cv.ensure_list, [cv.string]),
     }
 )
 
@@ -209,6 +210,99 @@ def load_covers_config(
     return profiles, modes_list, facades, show_entities, solar_gain_global, command_interval
 
 
+def _add_cover_profile(
+    d: dict[str, Any],
+    templates: dict[str, dict[str, Any]],
+    profiles: dict[str, Any],
+) -> None:
+    """Parse one cover item dict and append to profiles (mutates profiles in place)."""
+    entity_id = d.get("entity_id")
+    if not entity_id:
+        return
+
+    # Resolve template data for fallback values
+    template_name = d.get("template", "")
+    tpl: dict[str, Any] = {}
+    if template_name:
+        if template_name in templates:
+            tpl = templates[template_name]
+        else:
+            _LOGGER.warning(
+                "Cover %s references template '%s' which does not exist — using defaults",
+                entity_id, template_name,
+            )
+    tpl_shade: dict[str, Any] = tpl.get("shade", {})
+    tpl_sg:    dict[str, Any] = tpl.get("solar_gain", {})
+
+    # Enable flags: from cover data (new format), or template (backward compat)
+    shade_enable = d.get("shade_enable", tpl_shade.get("enable", SHADE_DEFAULTS["enable"]))
+    sg_enable    = d.get("solar_gain_enable", tpl_sg.get("enable", False))
+
+    # Angles: cover overrides template overrides default
+    angle_left  = float(d.get("angle_left",  tpl.get("angle_left",  85.0)))
+    angle_right = float(d.get("angle_right", tpl.get("angle_right", 85.0)))
+
+    # Shade config: cover overrides template overrides SHADE_DEFAULTS
+    shade_raw: dict[str, Any] = {
+        "enable":           shade_enable,
+        "distance":         d.get("shade_distance",         tpl_shade.get("distance",         SHADE_DEFAULTS["distance"])),
+        "max_height":       d.get("shade_max_height",       tpl_shade.get("max_height",       SHADE_DEFAULTS["max_height"])),
+        "min_height":       d.get("shade_min_height",       tpl_shade.get("min_height",       SHADE_DEFAULTS["min_height"])),
+        "degrees":          d.get("shade_degrees",          tpl_shade.get("degrees",          SHADE_DEFAULTS["degrees"])),
+        "min_elevation":    d.get("shade_min_elevation",    tpl_shade.get("min_elevation",    SHADE_DEFAULTS["min_elevation"])),
+        "max_elevation":    d.get("shade_max_elevation",    tpl_shade.get("max_elevation",    SHADE_DEFAULTS["max_elevation"])),
+        "minimum_position": d.get("shade_minimum_position", tpl_shade.get("minimum_position", SHADE_DEFAULTS["minimum_position"])),
+        "default_position": d.get("shade_default_position", tpl_shade.get("default_position", SHADE_DEFAULTS["default_position"])),
+        "change_threshold": d.get("shade_change_threshold", tpl_shade.get("change_threshold", SHADE_DEFAULTS["change_threshold"])),
+        "time_out":         d.get("shade_time_out",         tpl_shade.get("time_out",         SHADE_DEFAULTS["time_out"])),
+    }
+    try:
+        shade_cfg = _SHADING_SCHEMA(shade_raw)
+    except vol.Invalid:
+        shade_cfg = _SHADING_SCHEMA({"enable": shade_enable})
+
+    # Solar-gain config: cover overrides template overrides defaults
+    sg_raw: dict[str, Any] = {
+        "enable":         sg_enable,
+        "position_solar": d.get("solar_gain_position_solar", tpl_sg.get("position_solar", 100)),
+        "position_cold":  d.get("solar_gain_position_cold",  tpl_sg.get("position_cold",  0)),
+    }
+    try:
+        sg_cfg = _SOLAR_GAIN_COVER_SCHEMA(sg_raw)
+    except vol.Invalid:
+        sg_cfg = _SOLAR_GAIN_COVER_SCHEMA({"enable": sg_enable})
+
+    # Convert modes from UI format {"type": ..., "value": ...} → coordinator format
+    raw_modes: dict[str, Any] = d.get("modes", {})
+    modes: dict[str, Any] = {}
+    for mode_name, mode_cfg in raw_modes.items():
+        if isinstance(mode_cfg, dict):
+            mode_type = mode_cfg.get("type", "fixed")
+            value = mode_cfg.get("value")
+            if mode_type == "fixed":
+                try:
+                    modes[mode_name] = int(value) if value is not None else None
+                except (ValueError, TypeError):
+                    modes[mode_name] = None
+            elif mode_type == "entity":
+                modes[mode_name] = str(value).strip() if value else None
+            else:  # "auto"
+                modes[mode_name] = None
+        else:
+            modes[mode_name] = mode_cfg
+
+    profiles[entity_id] = {
+        CONF_FACADE:         d.get("facade") or None,
+        CONF_ENTITY_PICTURE: d.get("entity_picture") or None,
+        CONF_ANGLE_LEFT:     angle_left,
+        CONF_ANGLE_RIGHT:    angle_right,
+        CONF_MODES:          modes,
+        CONF_SHADING:        shade_cfg,
+        CONF_SOLAR_GAIN:     sg_cfg,
+        CONF_EXCLUSION:      list(d.get("exclusion") or []),
+    }
+
+
 def build_profiles_from_subentries(
     entry: Any,
     hass: HomeAssistant | None = None,
@@ -231,8 +325,18 @@ def build_profiles_from_subentries(
     else:
         all_entries = [entry]
 
-    # ── Global settings live in entry.options (filled during initial setup) ─────
-    global_data = entry.options or {}
+    # ── Global settings live in the "global" singleton subentry ─────────────────
+    global_data: dict[str, Any] = {}
+    for _e in all_entries:
+        for _sub in _e.subentries.values():
+            if _sub.subentry_type == SUBENTRY_TYPE_GLOBAL:
+                global_data = dict(_sub.data)
+                break
+        if global_data:
+            break
+    # Fallback: support legacy installations that stored global settings in options
+    if not global_data:
+        global_data = entry.options or {}
     command_interval: float = int(global_data.get("command_interval", DEFAULT_COMMAND_INTERVAL_MS)) / 1000.0
 
     # UI stores individual flat keys (show_sun_facing, show_auto_shade, show_solar_gain)
@@ -334,68 +438,10 @@ def build_profiles_from_subentries(
                     }
 
             elif stype == SUBENTRY_TYPE_COVER:
-                entity_id = d["entity_id"]
-
-                # Resolve angle / shade / solar_gain from template or cover itself
-                template_name = d.get("template", "")
-                if template_name:
-                    if template_name in templates:
-                        tpl = templates[template_name]
-                        angle_left  = tpl["angle_left"]
-                        angle_right = tpl["angle_right"]
-                        shade_cfg   = tpl["shade"]
-                        sg_cfg      = tpl["solar_gain"]
-                    else:
-                        _LOGGER.warning(
-                            "Cover %s references template '%s' which does not exist — using defaults",
-                            entity_id, template_name,
-                        )
-                        angle_left  = float(d.get("angle_left",  85.0))
-                        angle_right = float(d.get("angle_right", 85.0))
-                        shade_cfg   = _SHADING_SCHEMA({})
-                        sg_cfg      = _SOLAR_GAIN_COVER_SCHEMA({})
-                else:
-                    angle_left  = float(d.get("angle_left",  85.0))
-                    angle_right = float(d.get("angle_right", 85.0))
-                    try:
-                        shade_cfg = _SHADING_SCHEMA(d.get("shade") or {})
-                    except vol.Invalid:
-                        shade_cfg = _SHADING_SCHEMA({})
-                    try:
-                        sg_cfg = _SOLAR_GAIN_COVER_SCHEMA(d.get("solar_gain") or {})
-                    except vol.Invalid:
-                        sg_cfg = _SOLAR_GAIN_COVER_SCHEMA({})
-
-                # Convert modes from UI format {"type": ..., "value": ...} → coordinator format
-                raw_modes: dict[str, Any] = d.get("modes", {})
-                modes: dict[str, Any] = {}
-                for mode_name, mode_cfg in raw_modes.items():
-                    if isinstance(mode_cfg, dict):
-                        mode_type = mode_cfg.get("type", "fixed")
-                        value = mode_cfg.get("value")
-                        if mode_type == "fixed":
-                            try:
-                                modes[mode_name] = int(value) if value is not None else None
-                            except (ValueError, TypeError):
-                                modes[mode_name] = None
-                        elif mode_type == "entity":
-                            modes[mode_name] = str(value).strip() if value else None
-                        else:  # "auto"
-                            modes[mode_name] = None
-                    else:
-                        # Already in coordinator format (unlikely but safe)
-                        modes[mode_name] = mode_cfg
-
-                profiles[entity_id] = {
-                    CONF_FACADE:         d.get("facade") or None,
-                    CONF_ENTITY_PICTURE: d.get("entity_picture") or None,
-                    CONF_ANGLE_LEFT:     angle_left,
-                    CONF_ANGLE_RIGHT:    angle_right,
-                    CONF_MODES:          modes,
-                    CONF_SHADING:        shade_cfg,
-                    CONF_SOLAR_GAIN:     sg_cfg,
-                    CONF_EXCLUSION:      list(d.get("exclusion") or []),
-                }
+                # Support both new singleton format {"items": [...]} and legacy individual format
+                cover_items: list[dict[str, Any]] = d.get("items") if "items" in d else [d]
+                for cover_data in cover_items:
+                    _add_cover_profile(cover_data, templates, profiles)
 
 
 

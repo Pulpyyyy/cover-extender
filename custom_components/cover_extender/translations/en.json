@@ -1,39 +1,7 @@
 {
   "config": {
-    "step": {
-      "user": {
-        "title": "Cover Extender — general settings",
-        "data": {
-          "command_interval": "Command interval",
-          "show_sun_facing": "Show sun-facing sensors",
-          "show_auto_shade": "Show auto-shade sensors",
-          "show_solar_gain": "Show solar-gain sensors",
-          "sg_temperature_entity": "Temperature entity",
-          "sg_temperature_threshold": "Temperature threshold (value or input_number entity)",
-          "sg_weather_entity": "Weather entity",
-          "sg_good_conditions": "Good weather conditions"
-        }
-      }
-    },
     "abort": {
       "already_configured": "Cover Extender is already configured."
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "Cover Extender — general settings",
-        "data": {
-          "command_interval": "Command interval",
-          "show_sun_facing": "Show sun-facing sensors",
-          "show_auto_shade": "Show auto-shade sensors",
-          "show_solar_gain": "Show solar-gain sensors",
-          "sg_temperature_entity": "Temperature entity",
-          "sg_temperature_threshold": "Temperature threshold (value or input_number entity)",
-          "sg_weather_entity": "Weather entity",
-          "sg_good_conditions": "Good weather conditions"
-        }
-      }
     }
   },
   "selector": {
@@ -58,9 +26,52 @@
       "options": {
         "__add__": "Add template"
       }
+    },
+    "cover_manage": {
+      "options": {
+        "__add__": "Add cover"
+      }
     }
   },
   "config_subentries": {
+    "global": {
+      "entry_title": "General settings",
+      "initiate_flow": {
+        "user": "Configure general settings"
+      },
+      "abort": {
+        "already_configured": "General settings are already configured. Use the ✏ button to edit them.",
+        "reconfigure_successful": "General settings updated successfully."
+      },
+      "step": {
+        "user": {
+          "title": "General settings",
+          "data": {
+            "command_interval": "Command interval",
+            "show_sun_facing": "Show sun-facing sensors",
+            "show_auto_shade": "Show auto-shade sensors",
+            "show_solar_gain": "Show solar-gain sensors",
+            "sg_temperature_entity": "Temperature entity",
+            "sg_temperature_threshold": "Temperature threshold (value or input_number entity)",
+            "sg_weather_entity": "Weather entity",
+            "sg_good_conditions": "Good weather conditions"
+          }
+        },
+        "reconfigure": {
+          "title": "Edit general settings",
+          "data": {
+            "command_interval": "Command interval",
+            "show_sun_facing": "Show sun-facing sensors",
+            "show_auto_shade": "Show auto-shade sensors",
+            "show_solar_gain": "Show solar-gain sensors",
+            "sg_temperature_entity": "Temperature entity",
+            "sg_temperature_threshold": "Temperature threshold (value or input_number entity)",
+            "sg_weather_entity": "Weather entity",
+            "sg_good_conditions": "Good weather conditions"
+          }
+        }
+      }
+    },
     "facade": {
       "entry_title": "Facades",
       "initiate_flow": {
@@ -181,14 +192,18 @@
         "add_automation": {
           "title": "Add template — automation",
           "data": {
-            "shade_enable": "Enable auto-shade",
             "shade_distance": "Obstacle distance",
-            "shade_max_height": "Max shade height",
-            "shade_degrees": "Window width",
+            "shade_max_height": "Max cover height",
+            "shade_min_height": "Min cover height",
+            "shade_degrees": "Opening angle",
+            "shade_min_elevation": "Min sun elevation",
+            "shade_max_elevation": "Max sun elevation",
             "shade_minimum_position": "Minimum position",
+            "shade_default_position": "Default position",
+            "shade_change_threshold": "Change threshold",
             "shade_time_out": "Stability timeout",
-            "solar_gain_enable": "Enable solar gain",
-            "solar_gain_position_solar": "Solar position"
+            "solar_gain_position_solar": "Position (sunny)",
+            "solar_gain_position_cold": "Position (cold)"
           }
         },
         "edit": {
@@ -202,25 +217,47 @@
         "edit_automation": {
           "title": "Edit template — automation",
           "data": {
-            "shade_enable": "Enable auto-shade",
             "shade_distance": "Obstacle distance",
-            "shade_max_height": "Max shade height",
-            "shade_degrees": "Window width",
+            "shade_max_height": "Max cover height",
+            "shade_min_height": "Min cover height",
+            "shade_degrees": "Opening angle",
+            "shade_min_elevation": "Min sun elevation",
+            "shade_max_elevation": "Max sun elevation",
             "shade_minimum_position": "Minimum position",
+            "shade_default_position": "Default position",
+            "shade_change_threshold": "Change threshold",
             "shade_time_out": "Stability timeout",
-            "solar_gain_enable": "Enable solar gain",
-            "solar_gain_position_solar": "Solar position"
+            "solar_gain_position_solar": "Position (sunny)",
+            "solar_gain_position_cold": "Position (cold)"
           }
         }
       }
     },
     "cover": {
+      "entry_title": "Covers",
       "initiate_flow": {
-        "user": "Extend a cover entity"
+        "user": "Manage covers"
+      },
+      "abort": {
+        "reconfigure_successful": "Covers updated successfully.",
+        "already_configured": "Covers are already configured. Use the ✏ button on the Covers entry to manage them."
       },
       "step": {
-        "user": {
-          "title": "Add cover profile",
+        "manage": {
+          "title": "Manage covers",
+          "data": {
+            "action": "Action"
+          }
+        },
+        "item": {
+          "title": "Cover — {name}",
+          "menu_options": {
+            "edit": "Edit",
+            "delete": "Delete"
+          }
+        },
+        "add": {
+          "title": "Add cover — identity",
           "data": {
             "entity_id": "Cover entity",
             "entity_picture": "Entity picture URL",
@@ -229,8 +266,40 @@
             "exclusion": "Exclusion entities"
           }
         },
-        "reconfigure": {
-          "title": "Edit cover profile",
+        "add_behavior": {
+          "title": "Add cover — behavior",
+          "data": {
+            "angle_left": "Left angle",
+            "angle_right": "Right angle",
+            "shade_distance": "Obstacle distance",
+            "shade_max_height": "Max cover height",
+            "shade_min_height": "Min cover height",
+            "shade_degrees": "Opening angle",
+            "shade_min_elevation": "Min sun elevation",
+            "shade_max_elevation": "Max sun elevation",
+            "shade_minimum_position": "Minimum position",
+            "shade_default_position": "Default position",
+            "shade_change_threshold": "Change threshold",
+            "shade_time_out": "Stability timeout",
+            "solar_gain_position_solar": "Position (sunny)",
+            "solar_gain_position_cold": "Position (cold)",
+            "shade_enable": "Enable auto-shade",
+            "solar_gain_enable": "Enable solar gain"
+          }
+        },
+        "add_modes": {
+          "title": "Add cover — applicable modes",
+          "description": "Select the modes that can be applied to this cover.",
+          "data": {
+            "selected_modes": "Modes"
+          }
+        },
+        "add_modes_positions": {
+          "title": "Add cover — mode positions",
+          "description": "Optionally set a fixed position per mode. Leave blank to let the automation handle it (~)."
+        },
+        "edit": {
+          "title": "Edit cover — identity",
           "data": {
             "entity_id": "Cover entity",
             "entity_picture": "Entity picture URL",
@@ -238,6 +307,38 @@
             "template": "Template (optional)",
             "exclusion": "Exclusion entities"
           }
+        },
+        "edit_behavior": {
+          "title": "Edit cover — behavior",
+          "data": {
+            "angle_left": "Left angle",
+            "angle_right": "Right angle",
+            "shade_distance": "Obstacle distance",
+            "shade_max_height": "Max cover height",
+            "shade_min_height": "Min cover height",
+            "shade_degrees": "Opening angle",
+            "shade_min_elevation": "Min sun elevation",
+            "shade_max_elevation": "Max sun elevation",
+            "shade_minimum_position": "Minimum position",
+            "shade_default_position": "Default position",
+            "shade_change_threshold": "Change threshold",
+            "shade_time_out": "Stability timeout",
+            "solar_gain_position_solar": "Position (sunny)",
+            "solar_gain_position_cold": "Position (cold)",
+            "shade_enable": "Enable auto-shade",
+            "solar_gain_enable": "Enable solar gain"
+          }
+        },
+        "edit_modes": {
+          "title": "Edit cover — applicable modes",
+          "description": "Select the modes that can be applied to this cover.",
+          "data": {
+            "selected_modes": "Modes"
+          }
+        },
+        "edit_modes_positions": {
+          "title": "Edit cover — mode positions",
+          "description": "Optionally set a fixed position per mode. Leave blank to let the automation handle it (~)."
         }
       }
     }
