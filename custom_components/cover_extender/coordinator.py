@@ -367,26 +367,24 @@ class CoverExtenderCoordinator:
         if not from_lock and to_lock and current_pos is not None:
             await self._set_memory(entity_id, int(current_pos))
 
-        # 2. Apply lock switch
-        await self.hass.services.async_call(
-            "switch", "turn_on" if to_lock else "turn_off",
-            {"entity_id": lock_id},
-        )
-
-        # 3. Apply auto_shade switch (on only if behavior == "auto_shade")
+        # 2+3+3b. Apply lock, auto_shade, and auto_solar_gain in parallel.
+        # Behaviors auto_shade and solar_gain force the lock on (mutually exclusive).
         solar_gain_id = f"switch.{cover_name}_auto_solar_gain"
-        if to_behavior == "auto_shade":
-            await self.hass.services.async_call("switch", "turn_on",  {"entity_id": shading_id})
-            await self.hass.services.async_call("switch", "turn_on",  {"entity_id": lock_id})
-        else:
-            await self.hass.services.async_call("switch", "turn_off", {"entity_id": shading_id})
-
-        # 3b. Apply auto_solar_gain switch (on only if behavior == "solar_gain"; mutually exclusive)
-        if to_behavior == "solar_gain":
-            await self.hass.services.async_call("switch", "turn_on",  {"entity_id": solar_gain_id})
-            await self.hass.services.async_call("switch", "turn_on",  {"entity_id": lock_id})
-        else:
-            await self.hass.services.async_call("switch", "turn_off", {"entity_id": solar_gain_id})
+        final_lock = to_lock or to_behavior in ("auto_shade", "solar_gain")
+        await asyncio.gather(
+            self.hass.services.async_call(
+                "switch", "turn_on" if final_lock else "turn_off",
+                {"entity_id": lock_id},
+            ),
+            self.hass.services.async_call(
+                "switch", "turn_on" if to_behavior == "auto_shade" else "turn_off",
+                {"entity_id": shading_id},
+            ),
+            self.hass.services.async_call(
+                "switch", "turn_on" if to_behavior == "solar_gain" else "turn_off",
+                {"entity_id": solar_gain_id},
+            ),
+        )
 
         # 4. Position (skipped when solar_gain active — _apply_solar_gain determines position)
         target_position: int | None = None
@@ -533,10 +531,9 @@ class CoverExtenderCoordinator:
             extra_attrs = build_extra_attrs(cfg, memory=self._get_memory(entity_id))
             state = self.hass.states.get(entity_id)
             if state:
-                current_attrs = dict(state.attributes)
-                if not all(current_attrs.get(k) == v for k, v in extra_attrs.items()):
+                if not all(state.attributes.get(k) == v for k, v in extra_attrs.items()):
                     self.hass.states.async_set(
-                        entity_id, state.state, {**current_attrs, **extra_attrs}
+                        entity_id, state.state, {**state.attributes, **extra_attrs}
                     )
 
         self._inject_sun_facing()
@@ -553,10 +550,9 @@ class CoverExtenderCoordinator:
         if new_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             return
         extra_attrs = build_extra_attrs(profiles[entity_id], memory=self._get_memory(entity_id))
-        current_attrs = dict(new_state.attributes)
-        if all(current_attrs.get(k) == v for k, v in extra_attrs.items()):
+        if all(new_state.attributes.get(k) == v for k, v in extra_attrs.items()):
             return  # Guard against infinite loops
-        self.hass.states.async_set(entity_id, new_state.state, {**current_attrs, **extra_attrs})
+        self.hass.states.async_set(entity_id, new_state.state, {**new_state.attributes, **extra_attrs})
 
     @callback
     def _inject_sun_facing(self, _event: Event | None = None) -> None:
@@ -571,11 +567,10 @@ class CoverExtenderCoordinator:
 
             sun_facing = compute_sun_facing(self.hass, cfg, facades)
             if sun_facing is not None and state:
-                current_attrs = dict(state.attributes)
-                if current_attrs.get(ATTR_SUN_FACING) != sun_facing:
+                if state.attributes.get(ATTR_SUN_FACING) != sun_facing:
                     self.hass.states.async_set(
                         entity_id, state.state,
-                        {**current_attrs, ATTR_SUN_FACING: sun_facing},
+                        {**state.attributes, ATTR_SUN_FACING: sun_facing},
                     )
 
             if cfg.get(CONF_SHADING, {}).get("enable", False):
