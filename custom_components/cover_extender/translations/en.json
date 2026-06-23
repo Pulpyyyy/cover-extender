@@ -89,6 +89,12 @@
       "options": {
         "__add__": "Add cover"
       }
+    },
+    "mode_position_type": {
+      "options": {
+        "auto": "Automatic",
+        "fixed": "Fixed position"
+      }
     }
   },
   "config_subentries": {
@@ -322,9 +328,13 @@
             "selected_modes": "Linked modes"
           }
         },
-        "modes_positions": {
-          "title": "Mode positions",
-          "description": "Optionally set a fixed position per mode. Leave blank to let the automation handle it (~)."
+        "mode_position": {
+          "title": "Mode position — {name}",
+          "description": "Choose whether this mode forces a fixed position or lets the automation handle it (the cover stays in place).",
+          "data": {
+            "position_type": "Position type",
+            "position": "Fixed position"
+          }
         },
         "add": {
           "title": "Add cover — identity",
@@ -364,10 +374,6 @@
             "selected_modes": "Linked modes"
           }
         },
-        "add_modes_positions": {
-          "title": "Add cover — mode positions",
-          "description": "Optionally set a fixed position per mode. Leave blank to let the automation handle it (~)."
-        },
         "edit": {
           "title": "Edit cover — identity",
           "data": {
@@ -405,10 +411,6 @@
           "data": {
             "selected_modes": "Linked modes"
           }
-        },
-        "edit_modes_positions": {
-          "title": "Edit cover — mode positions",
-          "description": "Optionally set a fixed position per mode. Leave blank to let the automation handle it (~)."
         }
       }
     }

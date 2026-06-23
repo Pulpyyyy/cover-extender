@@ -89,6 +89,12 @@
       "options": {
         "__add__": "Ajouter un volet"
       }
+    },
+    "mode_position_type": {
+      "options": {
+        "auto": "Automatique",
+        "fixed": "Position fixe"
+      }
     }
   },
   "config_subentries": {
@@ -322,9 +328,13 @@
             "selected_modes": "Modes liés"
           }
         },
-        "modes_positions": {
-          "title": "Positions par mode",
-          "description": "Définissez optionnellement une position fixe par mode. Laissez vide pour laisser l'automatisation gérer (~)."
+        "mode_position": {
+          "title": "Position du mode — {name}",
+          "description": "Choisissez si ce mode impose une position fixe ou laisse l'automatisation gérer (le volet reste en place).",
+          "data": {
+            "position_type": "Type de position",
+            "position": "Position fixe"
+          }
         },
         "add": {
           "title": "Ajouter un volet — identité",
@@ -364,10 +374,6 @@
             "selected_modes": "Modes liés"
           }
         },
-        "add_modes_positions": {
-          "title": "Ajouter un volet — positions par mode",
-          "description": "Définissez optionnellement une position fixe par mode. Laissez vide pour laisser l'automatisation gérer (~)."
-        },
         "edit": {
           "title": "Modifier le volet — identité",
           "data": {
@@ -405,10 +411,6 @@
           "data": {
             "selected_modes": "Modes liés"
           }
-        },
-        "edit_modes_positions": {
-          "title": "Modifier le volet — positions par mode",
-          "description": "Définissez optionnellement une position fixe par mode. Laissez vide pour laisser l'automatisation gérer (~)."
         }
       }
     }

@@ -867,6 +867,9 @@ class CoverFlowHandler(ConfigSubentryFlow):
     _pending_identity: dict[str, Any]
     _pending_behavior: dict[str, Any]
     _pending_modes_selected: list[str]
+    _pending_modes_result: dict[str, Any]
+    _mode_pos_idx: int
+    _modes_flow_kind: str  # "add" | "edit" | "shortcut"
 
     def _load_items(self) -> None:
         _, sub = _find_singleton(self.hass, SUBENTRY_TYPE_COVER)
@@ -970,13 +973,26 @@ class CoverFlowHandler(ConfigSubentryFlow):
         })
 
     @staticmethod
-    def _modes_positions_schema(selected_modes: list[str]) -> vol.Schema:
-        """Optional position slider for each selected mode."""
+    def _mode_position_schema(default_type: str, default_value: int | None) -> vol.Schema:
+        """Per-mode form: choose Automatic vs Fixed position, plus the fixed value.
+
+        "auto"  → no forced position (mode managed by automation / stays in place).
+        "fixed" → the slider value is applied as a fixed position.
+        """
         return vol.Schema({
-            vol.Optional(name): selector.NumberSelector(
+            vol.Required("position_type", default=default_type): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=["auto", "fixed"],
+                    mode="list",
+                    translation_key="mode_position_type",
+                )
+            ),
+            vol.Optional(
+                "position",
+                default=default_value if default_value is not None else 0,
+            ): selector.NumberSelector(
                 selector.NumberSelectorConfig(min=0, max=100, mode="slider", unit_of_measurement="%")
-            )
-            for name in selected_modes
+            ),
         })
 
     @staticmethod
@@ -996,21 +1012,79 @@ class CoverFlowHandler(ConfigSubentryFlow):
                 result[name] = int(cfg)
         return result
 
-    @staticmethod
-    def _pack_modes(selected: list[str], positions: dict[str, Any]) -> dict[str, Any]:
-        """Convert UI (selected list + positions dict) to stored modes format.
+    # ── Per-mode position loop (shared by add / edit / shortcut) ───────────────
 
-        A mode with no position → {"type": "auto"} (= YAML `~`, managed by automation).
-        A mode with a position  → {"type": "fixed", "value": int}.
+    async def async_step_mode_position(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Ask Automatic-vs-Fixed position for each selected mode, one mode per screen.
+
+        Routed to by async_step_(add|edit)_modes and the modes-only shortcut after
+        the mode multiselect. Drives a loop over self._pending_modes_selected,
+        accumulating into self._pending_modes_result, then finalizes.
         """
-        result: dict[str, Any] = {}
-        for name in selected:
-            val = positions.get(name)
-            if val is not None:
-                result[name] = {"type": "fixed", "value": int(val)}
+        selected = self._pending_modes_selected
+
+        # Record the answer for the mode just shown, then advance.
+        if user_input is not None:
+            name = selected[self._mode_pos_idx]
+            if user_input.get("position_type") == "fixed":
+                self._pending_modes_result[name] = {
+                    "type": "fixed",
+                    "value": int(user_input.get("position", 0)),
+                }
             else:
-                result[name] = {"type": "auto"}
-        return result
+                self._pending_modes_result[name] = {"type": "auto"}
+            self._mode_pos_idx += 1
+
+        # No (more) modes to process → finalize.
+        if self._mode_pos_idx >= len(selected):
+            return await self._finalize_modes()
+
+        # Show the form for the current mode, pre-filled from existing config.
+        name = selected[self._mode_pos_idx]
+        existing_modes = (
+            {} if self._modes_flow_kind == "add"
+            else self._items[self._edit_idx].get("modes", {})
+        )
+        prefill = self._modes_positions_from_data(existing_modes)
+        return self.async_show_form(
+            step_id="mode_position",
+            data_schema=self._mode_position_schema(
+                "fixed" if name in prefill else "auto",
+                prefill.get(name),
+            ),
+            description_placeholders={"name": name},
+        )
+
+    async def _finalize_modes(self) -> config_entries.ConfigFlowResult:
+        """Merge the collected modes into the cover item and persist."""
+        modes = self._pending_modes_result
+        if self._modes_flow_kind == "add":
+            self._items.append({
+                **self._pending_identity, **self._pending_behavior, "modes": modes,
+            })
+        elif self._modes_flow_kind == "edit":
+            self._items[self._edit_idx] = {
+                **self._pending_identity, **self._pending_behavior, "modes": modes,
+            }
+        else:  # "shortcut" — keep identity/behavior untouched
+            self._items[self._edit_idx] = {
+                **self._items[self._edit_idx], "modes": modes,
+            }
+        _LOGGER.debug("config_flow [cover] _finalize_modes (%s): %d mode(s)", self._modes_flow_kind, len(modes))
+        return _singleton_save(
+            self, SUBENTRY_TYPE_COVER,
+            await _subentry_title(self.hass, SUBENTRY_TYPE_COVER),
+            self._items,
+        )
+
+    def _begin_mode_positions(self, selected: list[str], kind: str) -> None:
+        """Initialise the per-mode position loop state."""
+        self._pending_modes_selected = selected
+        self._pending_modes_result = {}
+        self._mode_pos_idx = 0
+        self._modes_flow_kind = kind
 
     # ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -1196,38 +1270,14 @@ class CoverFlowHandler(ConfigSubentryFlow):
         """
         existing = self._items[self._edit_idx]
         if user_input is not None:
-            self._pending_modes_selected = user_input.get("selected_modes", [])
+            self._begin_mode_positions(user_input.get("selected_modes", []), "shortcut")
             _LOGGER.debug("config_flow [cover] async_step_modes: selected=%s", self._pending_modes_selected)
-            return await self.async_step_modes_positions()
+            return await self.async_step_mode_position()
         pre_selected = self._modes_selected_from_data(existing.get("modes", {}))
         return self.async_show_form(
             step_id="modes",
             data_schema=self.add_suggested_values_to_schema(
                 self._modes_select_schema(), {"selected_modes": pre_selected}
-            ),
-        )
-
-    async def async_step_modes_positions(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Set optional fixed position per mode, then merge back into the cover."""
-        existing = self._items[self._edit_idx]
-        if user_input is not None:
-            self._items[self._edit_idx] = {
-                **existing,
-                "modes": self._pack_modes(self._pending_modes_selected, user_input),
-            }
-            _LOGGER.debug("config_flow [cover] async_step_modes_positions: saving '%s'", existing.get("entity_id"))
-            return _singleton_save(
-                self, SUBENTRY_TYPE_COVER,
-                await _subentry_title(self.hass, SUBENTRY_TYPE_COVER),
-                self._items,
-            )
-        positions = self._modes_positions_from_data(existing.get("modes", {}))
-        return self.async_show_form(
-            step_id="modes_positions",
-            data_schema=self.add_suggested_values_to_schema(
-                self._modes_positions_schema(self._pending_modes_selected), positions
             ),
         )
 
@@ -1269,32 +1319,10 @@ class CoverFlowHandler(ConfigSubentryFlow):
     ) -> config_entries.ConfigFlowResult:
         """Step 3a — choose which modes apply to this cover."""
         if user_input is not None:
-            self._pending_modes_selected = user_input.get("selected_modes", [])
+            self._begin_mode_positions(user_input.get("selected_modes", []), "add")
             _LOGGER.debug("config_flow [cover] async_step_add_modes: selected=%s", self._pending_modes_selected)
-            return await self.async_step_add_modes_positions()
+            return await self.async_step_mode_position()
         return self.async_show_form(step_id="add_modes", data_schema=self._modes_select_schema())
-
-    async def async_step_add_modes_positions(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Step 3b — set optional fixed position for each selected mode."""
-        if user_input is not None:
-            item = {
-                **self._pending_identity,
-                **self._pending_behavior,
-                "modes": self._pack_modes(self._pending_modes_selected, user_input),
-            }
-            _LOGGER.debug("config_flow [cover] async_step_add_modes_positions: appending '%s'", item.get("entity_id"))
-            self._items.append(item)
-            return _singleton_save(
-                self, SUBENTRY_TYPE_COVER,
-                await _subentry_title(self.hass, SUBENTRY_TYPE_COVER),
-                self._items,
-            )
-        return self.async_show_form(
-            step_id="add_modes_positions",
-            data_schema=self._modes_positions_schema(self._pending_modes_selected),
-        )
 
     # ── Edit flow (3 steps) ────────────────────────────────────────────────────
 
@@ -1336,41 +1364,15 @@ class CoverFlowHandler(ConfigSubentryFlow):
         """Step 3a (edit) — choose which modes apply to this cover."""
         existing = self._items[self._edit_idx]
         if user_input is not None:
-            self._pending_modes_selected = user_input.get("selected_modes", [])
+            self._begin_mode_positions(user_input.get("selected_modes", []), "edit")
             _LOGGER.debug("config_flow [cover] async_step_edit_modes: selected=%s", self._pending_modes_selected)
-            return await self.async_step_edit_modes_positions()
+            return await self.async_step_mode_position()
         existing_modes = existing.get("modes", {})
         pre_selected = self._modes_selected_from_data(existing_modes)
         return self.async_show_form(
             step_id="edit_modes",
             data_schema=self.add_suggested_values_to_schema(
                 self._modes_select_schema(), {"selected_modes": pre_selected}
-            ),
-        )
-
-    async def async_step_edit_modes_positions(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Step 3b (edit) — set optional fixed position for each selected mode."""
-        existing = self._items[self._edit_idx]
-        if user_input is not None:
-            self._items[self._edit_idx] = {
-                **self._pending_identity,
-                **self._pending_behavior,
-                "modes": self._pack_modes(self._pending_modes_selected, user_input),
-            }
-            _LOGGER.debug("config_flow [cover] async_step_edit_modes_positions: saving '%s'", self._items[self._edit_idx].get("entity_id"))
-            return _singleton_save(
-                self, SUBENTRY_TYPE_COVER,
-                await _subentry_title(self.hass, SUBENTRY_TYPE_COVER),
-                self._items,
-            )
-        existing_modes = existing.get("modes", {})
-        positions = self._modes_positions_from_data(existing_modes)
-        return self.async_show_form(
-            step_id="edit_modes_positions",
-            data_schema=self.add_suggested_values_to_schema(
-                self._modes_positions_schema(self._pending_modes_selected), positions
             ),
         )
 
