@@ -311,8 +311,20 @@
           "title": "Volet — {name}",
           "menu_options": {
             "edit": "Modifier",
+            "modes": "Lier des modes",
             "delete": "Supprimer"
           }
+        },
+        "modes": {
+          "title": "Lier des modes au volet",
+          "description": "Sélectionnez les modes à lier à ce volet : seuls les modes liés pourront lui être appliqués.",
+          "data": {
+            "selected_modes": "Modes liés"
+          }
+        },
+        "modes_positions": {
+          "title": "Positions par mode",
+          "description": "Définissez optionnellement une position fixe par mode. Laissez vide pour laisser l'automatisation gérer (~)."
         },
         "add": {
           "title": "Ajouter un volet — identité",
@@ -346,10 +358,10 @@
           }
         },
         "add_modes": {
-          "title": "Ajouter un volet — modes applicables",
-          "description": "Sélectionnez les modes qui peuvent être appliqués à ce volet.",
+          "title": "Ajouter un volet — lier des modes",
+          "description": "Sélectionnez les modes à lier à ce volet : seuls les modes liés pourront lui être appliqués.",
           "data": {
-            "selected_modes": "Modes"
+            "selected_modes": "Modes liés"
           }
         },
         "add_modes_positions": {
@@ -388,10 +400,10 @@
           }
         },
         "edit_modes": {
-          "title": "Modifier le volet — modes applicables",
-          "description": "Sélectionnez les modes qui peuvent être appliqués à ce volet.",
+          "title": "Modifier le volet — lier des modes",
+          "description": "Sélectionnez les modes à lier à ce volet : seuls les modes liés pourront lui être appliqués.",
           "data": {
-            "selected_modes": "Modes"
+            "selected_modes": "Modes liés"
           }
         },
         "edit_modes_positions": {

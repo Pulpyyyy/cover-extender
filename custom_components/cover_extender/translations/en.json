@@ -311,8 +311,20 @@
           "title": "Cover — {name}",
           "menu_options": {
             "edit": "Edit",
+            "modes": "Link modes",
             "delete": "Delete"
           }
+        },
+        "modes": {
+          "title": "Link modes to cover",
+          "description": "Select the modes to link to this cover: only linked modes can be applied to it.",
+          "data": {
+            "selected_modes": "Linked modes"
+          }
+        },
+        "modes_positions": {
+          "title": "Mode positions",
+          "description": "Optionally set a fixed position per mode. Leave blank to let the automation handle it (~)."
         },
         "add": {
           "title": "Add cover — identity",
@@ -346,10 +358,10 @@
           }
         },
         "add_modes": {
-          "title": "Add cover — applicable modes",
-          "description": "Select the modes that can be applied to this cover.",
+          "title": "Add cover — link modes",
+          "description": "Select the modes to link to this cover: only linked modes can be applied to it.",
           "data": {
-            "selected_modes": "Modes"
+            "selected_modes": "Linked modes"
           }
         },
         "add_modes_positions": {
@@ -388,10 +400,10 @@
           }
         },
         "edit_modes": {
-          "title": "Edit cover — applicable modes",
-          "description": "Select the modes that can be applied to this cover.",
+          "title": "Edit cover — link modes",
+          "description": "Select the modes to link to this cover: only linked modes can be applied to it.",
           "data": {
-            "selected_modes": "Modes"
+            "selected_modes": "Linked modes"
           }
         },
         "edit_modes_positions": {

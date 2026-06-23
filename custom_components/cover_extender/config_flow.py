@@ -1180,8 +1180,55 @@ class CoverFlowHandler(ConfigSubentryFlow):
         _LOGGER.debug("config_flow [cover] async_step_item: showing menu for '%s'", item.get("entity_id"))
         return self.async_show_menu(
             step_id="item",
-            menu_options=["edit", "delete"],
+            menu_options=["edit", "modes", "delete"],
             description_placeholders={"name": self._cover_label(item)},
+        )
+
+    # ── Modes-only shortcut (skip identity/behavior) ───────────────────────────
+
+    async def async_step_modes(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Shortcut from the item menu: edit ONLY the modes of an existing cover.
+
+        Unlike the full edit wizard, identity and behavior are left untouched —
+        the existing item dict is preserved and only its "modes" key is replaced.
+        """
+        existing = self._items[self._edit_idx]
+        if user_input is not None:
+            self._pending_modes_selected = user_input.get("selected_modes", [])
+            _LOGGER.debug("config_flow [cover] async_step_modes: selected=%s", self._pending_modes_selected)
+            return await self.async_step_modes_positions()
+        pre_selected = self._modes_selected_from_data(existing.get("modes", {}))
+        return self.async_show_form(
+            step_id="modes",
+            data_schema=self.add_suggested_values_to_schema(
+                self._modes_select_schema(), {"selected_modes": pre_selected}
+            ),
+        )
+
+    async def async_step_modes_positions(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Set optional fixed position per mode, then merge back into the cover."""
+        existing = self._items[self._edit_idx]
+        if user_input is not None:
+            self._items[self._edit_idx] = {
+                **existing,
+                "modes": self._pack_modes(self._pending_modes_selected, user_input),
+            }
+            _LOGGER.debug("config_flow [cover] async_step_modes_positions: saving '%s'", existing.get("entity_id"))
+            return _singleton_save(
+                self, SUBENTRY_TYPE_COVER,
+                await _subentry_title(self.hass, SUBENTRY_TYPE_COVER),
+                self._items,
+            )
+        positions = self._modes_positions_from_data(existing.get("modes", {}))
+        return self.async_show_form(
+            step_id="modes_positions",
+            data_schema=self.add_suggested_values_to_schema(
+                self._modes_positions_schema(self._pending_modes_selected), positions
+            ),
         )
 
     async def async_step_delete(
