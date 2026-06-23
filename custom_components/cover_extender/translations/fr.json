@@ -65,9 +65,8 @@
   "selector": {
     "mode_behavior": {
       "options": {
-        "auto": "Automatique",
-        "manual": "Manuel (Verrouillé)",
-        "ignore": "Ignorer"
+        "auto_shade": "Ombrage automatique",
+        "solar_gain": "Gain solaire"
       }
     },
     "facade_manage": {
@@ -92,8 +91,8 @@
     },
     "mode_position_type": {
       "options": {
-        "auto": "Automatique",
-        "fixed": "Position fixe"
+        "fixed": "Position fixe",
+        "none": "Aucune (rester en place)"
       }
     }
   },
@@ -330,11 +329,15 @@
         },
         "mode_position": {
           "title": "Position du mode — {name}",
-          "description": "Choisissez si ce mode impose une position fixe ou laisse l'automatisation gérer (le volet reste en place).",
+          "description": "Choisissez si ce mode impose une position fixe pour ce volet, ou aucune (le volet reste en place).",
           "data": {
             "position_type": "Type de position",
             "position": "Position fixe"
           }
+        },
+        "mode_position_auto": {
+          "title": "Position du mode — {name}",
+          "description": "La position de ce mode est gérée automatiquement par son comportement (ombrage ou gain solaire). Rien à définir ici."
         },
         "add": {
           "title": "Ajouter un volet — identité",

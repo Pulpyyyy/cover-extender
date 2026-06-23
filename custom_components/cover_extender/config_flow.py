@@ -444,7 +444,7 @@ class ModeFlowHandler(ConfigSubentryFlow):
             vol.Optional("lock",     default=False):         selector.BooleanSelector(),
             vol.Optional("behavior"): selector.SelectSelector(
                 selector.SelectSelectorConfig(
-                    options=["auto", "manual", "ignore"],
+                    options=["auto_shade", "solar_gain"],
                     mode="dropdown",
                     translation_key="mode_behavior",
                 )
@@ -974,15 +974,18 @@ class CoverFlowHandler(ConfigSubentryFlow):
 
     @staticmethod
     def _mode_position_schema(default_type: str, default_value: int | None) -> vol.Schema:
-        """Per-mode form: choose Automatic vs Fixed position, plus the fixed value.
+        """Per-cover form for a NON-automation mode: Fixed position vs None.
 
-        "auto"  → no forced position (mode managed by automation / stays in place).
         "fixed" → the slider value is applied as a fixed position.
+        "none"  → no forced position; the cover stays in place (and locks if the
+                  mode is a lock mode).
+        Automation modes (auto_shade / solar_gain) never reach this form — their
+        position is handled by the mode's behavior (see async_step_mode_position).
         """
         return vol.Schema({
             vol.Required("position_type", default=default_type): selector.SelectSelector(
                 selector.SelectSelectorConfig(
-                    options=["auto", "fixed"],
+                    options=["fixed", "none"],
                     mode="list",
                     translation_key="mode_position_type",
                 )
@@ -994,6 +997,21 @@ class CoverFlowHandler(ConfigSubentryFlow):
                 selector.NumberSelectorConfig(min=0, max=100, mode="slider", unit_of_measurement="%")
             ),
         })
+
+    def _mode_behavior(self, mode_name: str) -> str | None:
+        """Return the behavior (auto_shade / solar_gain / None) of a mode by name.
+
+        Behavior lives on the mode (shared across covers); the per-cover position
+        only matters for modes that have no behavior.
+        """
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            for s in entry.subentries.values():
+                if s.subentry_type != SUBENTRY_TYPE_MODE or "items" not in s.data:
+                    continue
+                for item in s.data["items"]:
+                    if item.get("name") == mode_name:
+                        return item.get("behavior") or None
+        return None
 
     @staticmethod
     def _modes_selected_from_data(stored_modes: dict[str, Any]) -> list[str]:
@@ -1028,12 +1046,15 @@ class CoverFlowHandler(ConfigSubentryFlow):
         # Record the answer for the mode just shown, then advance.
         if user_input is not None:
             name = selected[self._mode_pos_idx]
-            if user_input.get("position_type") == "fixed":
+            # Automation modes: position handled by the mode's behavior → always "auto".
+            if self._mode_behavior(name) in ("auto_shade", "solar_gain"):
+                self._pending_modes_result[name] = {"type": "auto"}
+            elif user_input.get("position_type") == "fixed":
                 self._pending_modes_result[name] = {
                     "type": "fixed",
                     "value": int(user_input.get("position", 0)),
                 }
-            else:
+            else:  # "none"
                 self._pending_modes_result[name] = {"type": "auto"}
             self._mode_pos_idx += 1
 
@@ -1041,8 +1062,17 @@ class CoverFlowHandler(ConfigSubentryFlow):
         if self._mode_pos_idx >= len(selected):
             return await self._finalize_modes()
 
-        # Show the form for the current mode, pre-filled from existing config.
         name = selected[self._mode_pos_idx]
+
+        # Automation mode → read-only info screen (no position to set).
+        if self._mode_behavior(name) in ("auto_shade", "solar_gain"):
+            return self.async_show_form(
+                step_id="mode_position_auto",
+                data_schema=vol.Schema({}),
+                description_placeholders={"name": name},
+            )
+
+        # Plain mode → editable Fixed/None form, pre-filled from existing config.
         existing_modes = (
             {} if self._modes_flow_kind == "add"
             else self._items[self._edit_idx].get("modes", {})
@@ -1051,7 +1081,7 @@ class CoverFlowHandler(ConfigSubentryFlow):
         return self.async_show_form(
             step_id="mode_position",
             data_schema=self._mode_position_schema(
-                "fixed" if name in prefill else "auto",
+                "fixed" if name in prefill else "none",
                 prefill.get(name),
             ),
             description_placeholders={"name": name},

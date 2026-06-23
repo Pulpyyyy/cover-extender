@@ -39,9 +39,8 @@
   "selector": {
     "mode_behavior": {
       "options": {
-        "auto": "Automatic",
-        "manual": "Manual (Lock)",
-        "ignore": "Ignore"
+        "auto_shade": "Auto-shade (solar shading)",
+        "solar_gain": "Solar gain"
       }
     },
     "facade_manage": {
@@ -61,8 +60,8 @@
     },
     "mode_position_type": {
       "options": {
-        "auto": "Automatic",
-        "fixed": "Fixed position"
+        "fixed": "Fixed position",
+        "none": "None (stay in place)"
       }
     }
   },
@@ -253,11 +252,15 @@
         },
         "mode_position": {
           "title": "Mode position — {name}",
-          "description": "Choose whether this mode forces a fixed position or lets the automation handle it (the cover stays in place).",
+          "description": "Choose whether this mode sets a fixed position for this cover, or none (the cover stays in place).",
           "data": {
             "position_type": "Position type",
             "position": "Fixed position"
           }
+        },
+        "mode_position_auto": {
+          "title": "Mode position — {name}",
+          "description": "This mode's position is handled automatically by its behavior (auto-shade or solar gain). Nothing to set here."
         },
         "add": {
           "title": "Add cover — identity",
