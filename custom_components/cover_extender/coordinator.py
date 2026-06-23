@@ -423,15 +423,18 @@ class CoverExtenderCoordinator:
         if to_behavior == "solar_gain":
             self._apply_solar_gain(entity_id, cfg)
 
-        # 5b. Shading: compute initial position a few seconds after mode entry
-        #     (the auto_shade switch state needs time to settle before _apply_shade
-        #     can confirm it is "on"; without this delay the check fails and no
-        #     position is sent until the next sun.sun event)
+        # 5b. Shading: compute and apply shade position immediately on mode entry.
+        #     Bypass the switch-state check in _apply_shade (the switch was just
+        #     turned on above so its HA state hasn't settled yet).
         if to_behavior == "auto_shade":
-            async def _delayed_shade_init() -> None:
-                await asyncio.sleep(3)
-                self._apply_shade(entity_id, cfg)
-            self.hass.async_create_task(_delayed_shade_init())
+            shade_pos, shade_should_update = compute_shade_sync(self.hass, entity_id, cfg)
+            if shade_should_update:
+                self._enqueue_cover(
+                    "set_cover_position", {"entity_id": entity_id, "position": shade_pos}
+                )
+                self.hass.bus.async_fire(
+                    EVENT_SHADE_APPLIED, {"entity_id": entity_id, "position": shade_pos}
+                )
 
         self.hass.bus.async_fire(
             EVENT_MODE_CHANGED,
