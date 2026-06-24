@@ -2,7 +2,7 @@
   "domain": "cover_extender",
   "name": "Cover Extender",
   "version": "2.0.0",
-  "homeassistant": "2025.4.0",
+  "homeassistant": "2026.1.0",
   "documentation": "https://github.com/Pulpyyyy/cover_extender",
   "dependencies": ["sun"],
   "codeowners": ["@pulpyyyy"],

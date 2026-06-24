@@ -14,6 +14,7 @@ _LOGGER = logging.getLogger(__name__)
 
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigSubentryFlow, ConfigEntry
+from homeassistant.data_entry_flow import section
 from homeassistant.helpers import selector, translation as ha_translation
 from homeassistant.core import HomeAssistant, callback
 
@@ -54,6 +55,92 @@ _TITLE_FALLBACKS: dict[str, str] = {
     "cover_template": "Templates",
     "cover":          "Covers",
 }
+
+
+# ── Behavior form: collapsible sections ─────────────────────────────────────────
+# The cover behavior and template automation forms group ~16 fields into
+# collapsible sections (HA `section`). Internally the rest of the code keeps a
+# FLAT data model: _flatten_sections() unwraps the nested user_input on submit,
+# and _build_section_schema(values=...) pre-fills field defaults on display.
+
+def _num(lo: float, hi: float, unit: str, step: float | None = None) -> selector.NumberSelector:
+    cfg = dict(min=lo, max=hi, mode="slider", unit_of_measurement=unit)
+    if step is not None:
+        cfg["step"] = step
+    return selector.NumberSelector(selector.NumberSelectorConfig(**cfg))
+
+
+# field -> (default, selector)
+_BEHAVIOR_FIELDS: dict[str, tuple[Any, Any]] = {
+    "angle_left":                (85,    _num(0, 90, "°")),
+    "angle_right":               (85,    _num(0, 90, "°")),
+    "shade_distance":            (0.4,   _num(0, 3, "m", 0.1)),
+    "shade_max_height":          (1.8,   _num(0, 3, "m", 0.1)),
+    "shade_min_height":          (0.0,   _num(0, 3, "m", 0.1)),
+    "shade_degrees":             (90,    _num(0, 180, "°")),
+    "shade_min_elevation":       (5,     _num(0, 90, "°")),
+    "shade_max_elevation":       (90,    _num(0, 90, "°")),
+    "shade_minimum_position":    (15,    _num(0, 100, "%")),
+    "shade_default_position":    (100,   _num(0, 100, "%")),
+    "shade_change_threshold":    (5,     _num(0, 50, "%")),
+    "shade_time_out":            (2,     _num(0, 60, "min")),
+    "solar_gain_position_solar": (100,   _num(0, 100, "%")),
+    "solar_gain_position_cold":  (0,     _num(0, 100, "%")),
+    "shade_enable":              (False, selector.BooleanSelector()),
+    "solar_gain_enable":         (False, selector.BooleanSelector()),
+}
+
+# (section_key, (fields...)) — order matters for display.
+# Themes: geometry = physical dimensions; detection = sun orientation/elevation;
+# shading = autonomous shading behaviour; solar_gain = temperature positioning.
+_COVER_SECTIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("geometry",   ("shade_distance", "shade_max_height", "shade_min_height")),
+    ("detection",  ("angle_left", "angle_right", "shade_degrees", "shade_min_elevation", "shade_max_elevation")),
+    ("shading",    ("shade_enable", "shade_minimum_position", "shade_default_position", "shade_change_threshold", "shade_time_out")),
+    ("solar_gain", ("solar_gain_enable", "solar_gain_position_solar", "solar_gain_position_cold")),
+)
+_TEMPLATE_SECTIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("geometry",   ("shade_distance", "shade_max_height", "shade_min_height")),
+    ("detection",  ("shade_degrees", "shade_min_elevation", "shade_max_elevation")),
+    ("shading",    ("shade_minimum_position", "shade_default_position", "shade_change_threshold", "shade_time_out")),
+    ("solar_gain", ("solar_gain_position_solar", "solar_gain_position_cold")),
+)
+# All behavior sections start collapsed to keep the form compact.
+_COLLAPSED_SECTIONS = {"geometry", "detection", "shading", "solar_gain"}
+
+
+def _build_section_schema(
+    sections: tuple[tuple[str, tuple[str, ...]], ...],
+    values: dict[str, Any] | None = None,
+) -> vol.Schema:
+    """Build a sectioned schema. *values* (flat) pre-fills field defaults.
+
+    Pre-filling via per-field defaults (rather than add_suggested_values_to_schema)
+    keeps it robust: every field here is a slider or toggle that always carries a
+    value, so the default is exactly what the form shows.
+    """
+    values = values or {}
+    fields: dict[Any, Any] = {}
+    for key, names in sections:
+        inner: dict[Any, Any] = {}
+        for name in names:
+            default, sel = _BEHAVIOR_FIELDS[name]
+            inner[vol.Optional(name, default=values.get(name, default))] = sel
+        fields[vol.Required(key)] = section(
+            vol.Schema(inner), {"collapsed": key in _COLLAPSED_SECTIONS}
+        )
+    return vol.Schema(fields)
+
+
+def _flatten_sections(user_input: dict[str, Any]) -> dict[str, Any]:
+    """Unwrap nested section dicts from user_input into one flat dict."""
+    flat: dict[str, Any] = {}
+    for key, val in user_input.items():
+        if isinstance(val, dict):
+            flat.update(val)
+        else:
+            flat[key] = val
+    return flat
 
 async def _subentry_title(hass: HomeAssistant, subentry_type: str) -> str:
     """Return the translated entry_title for a singleton subentry."""
@@ -421,6 +508,7 @@ class FacadeFlowHandler(ConfigSubentryFlow):
                     selector.SelectSelectorConfig(options=options, mode="list", translation_key="facade_manage")
                 )
             }),
+            description_placeholders={"count": str(len(self._items))},
         )
 
     async def async_step_item(
@@ -478,20 +566,42 @@ class ModeFlowHandler(ConfigSubentryFlow):
     _edit_idx: int
 
     @staticmethod
-    def _item_schema() -> vol.Schema:
+    def _item_schema(values: dict[str, Any] | None = None) -> vol.Schema:
+        """Mode form: name + collapsed "appearance" and "options" sections.
+
+        *values* (flat, color as an RGB list) pre-fills field defaults, keeping
+        only the name visible by default. Avoids the heavy full-width color row
+        being shown up-front.
+        """
+        v = values or {}
+        name_key = vol.Required("name", default=v["name"]) if v.get("name") else vol.Required("name")
+        behavior_key = (
+            vol.Optional("behavior", default=v["behavior"]) if v.get("behavior")
+            else vol.Optional("behavior")
+        )
         return vol.Schema({
-            vol.Required("name"): selector.TextSelector(),
-            vol.Optional("icon",     default="mdi:help-circle"):  selector.IconSelector(),
-            vol.Optional("color",    default=_DEFAULT_COLOR_RGB): selector.ColorRGBSelector(),
-            vol.Optional("lock",     default=False):         selector.BooleanSelector(),
-            vol.Optional("behavior"): selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    options=["auto_shade", "solar_gain"],
-                    mode="dropdown",
-                    translation_key="mode_behavior",
-                )
+            name_key: selector.TextSelector(),
+            vol.Required("appearance"): section(
+                vol.Schema({
+                    vol.Optional("icon",  default=v.get("icon",  "mdi:help-circle")): selector.IconSelector(),
+                    vol.Optional("color", default=v.get("color", _DEFAULT_COLOR_RGB)): selector.ColorRGBSelector(),
+                }),
+                {"collapsed": True},
             ),
-            vol.Optional("hidden", default=False): selector.BooleanSelector(),
+            vol.Required("options"): section(
+                vol.Schema({
+                    vol.Optional("lock", default=v.get("lock", False)): selector.BooleanSelector(),
+                    behavior_key: selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=["auto_shade", "solar_gain"],
+                            mode="dropdown",
+                            translation_key="mode_behavior",
+                        )
+                    ),
+                    vol.Optional("hidden", default=v.get("hidden", False)): selector.BooleanSelector(),
+                }),
+                {"collapsed": True},
+            ),
         })
 
     def _load_items(self) -> None:
@@ -542,6 +652,7 @@ class ModeFlowHandler(ConfigSubentryFlow):
                     selector.SelectSelectorConfig(options=options, mode="list", translation_key="mode_manage")
                 )
             }),
+            description_placeholders={"count": str(len(self._items))},
         )
 
     async def async_step_item(
@@ -587,7 +698,7 @@ class ModeFlowHandler(ConfigSubentryFlow):
     ) -> config_entries.ConfigFlowResult:
         if user_input is not None:
             _LOGGER.debug("config_flow [mode] async_step_add: adding '%s'", user_input.get("name"))
-            self._items.append(self._ui_to_item(user_input))
+            self._items.append(self._ui_to_item(_flatten_sections(user_input)))
             return _singleton_save(self, SUBENTRY_TYPE_MODE, await _subentry_title(self.hass, SUBENTRY_TYPE_MODE), self._items)
         return self.async_show_form(step_id="add", data_schema=self._item_schema())
 
@@ -597,14 +708,12 @@ class ModeFlowHandler(ConfigSubentryFlow):
         if user_input is not None:
             old_name = self._items[self._edit_idx].get("name")
             _LOGGER.debug("config_flow [mode] async_step_edit: updating index %d -> '%s'", self._edit_idx, user_input.get("name"))
-            self._items[self._edit_idx] = self._ui_to_item(user_input)
+            self._items[self._edit_idx] = self._ui_to_item(_flatten_sections(user_input))
             _propagate_rename(self.hass, SUBENTRY_TYPE_MODE, old_name, self._items[self._edit_idx].get("name"))
             return _singleton_save(self, SUBENTRY_TYPE_MODE, await _subentry_title(self.hass, SUBENTRY_TYPE_MODE), self._items)
         return self.async_show_form(
             step_id="edit",
-            data_schema=self.add_suggested_values_to_schema(
-                self._item_schema(), self._item_to_ui(self._items[self._edit_idx])
-            ),
+            data_schema=self._item_schema(self._item_to_ui(self._items[self._edit_idx])),
         )
 
 
@@ -630,49 +739,9 @@ class TemplateFlowHandler(ConfigSubentryFlow):
         })
 
     @staticmethod
-    def _automation_schema() -> vol.Schema:
-        return vol.Schema({
-            # ── Geometry ──────────────────────────────────────────────────────
-            vol.Optional("shade_distance",          default=0.4):  selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=3,   step=0.1, mode="slider", unit_of_measurement="m")
-            ),
-            vol.Optional("shade_max_height",        default=1.8):  selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=3,   step=0.1, mode="slider", unit_of_measurement="m")
-            ),
-            vol.Optional("shade_min_height",        default=0.0):  selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=3,   step=0.1, mode="slider", unit_of_measurement="m")
-            ),
-            # ── Sun detection ─────────────────────────────────────────────────
-            vol.Optional("shade_degrees",           default=90):   selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=180, mode="slider", unit_of_measurement="°")
-            ),
-            vol.Optional("shade_min_elevation",     default=5):    selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=90,  mode="slider", unit_of_measurement="°")
-            ),
-            vol.Optional("shade_max_elevation",     default=90):   selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=90,  mode="slider", unit_of_measurement="°")
-            ),
-            # ── Behavior ──────────────────────────────────────────────────────
-            vol.Optional("shade_minimum_position",  default=15):   selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=100, mode="slider", unit_of_measurement="%")
-            ),
-            vol.Optional("shade_default_position",  default=100):  selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=100, mode="slider", unit_of_measurement="%")
-            ),
-            vol.Optional("shade_change_threshold",  default=5):    selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=50,  mode="slider", unit_of_measurement="%")
-            ),
-            vol.Optional("shade_time_out",          default=2):    selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=60,  mode="slider", unit_of_measurement="min")
-            ),
-            # ── Solar gain ────────────────────────────────────────────────────
-            vol.Optional("solar_gain_position_solar", default=100): selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=100, mode="slider", unit_of_measurement="%")
-            ),
-            vol.Optional("solar_gain_position_cold",  default=0):   selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=100, mode="slider", unit_of_measurement="%")
-            ),
-        })
+    def _automation_schema(values: dict[str, Any] | None = None) -> vol.Schema:
+        """Template automation form, grouped into collapsible sections."""
+        return _build_section_schema(_TEMPLATE_SECTIONS, values)
 
     @staticmethod
     def _pack_automation(ui: dict[str, Any]) -> dict[str, Any]:
@@ -762,6 +831,7 @@ class TemplateFlowHandler(ConfigSubentryFlow):
                     selector.SelectSelectorConfig(options=options, mode="list", translation_key="template_manage")
                 )
             }),
+            description_placeholders={"count": str(len(self._items))},
         )
 
     async def async_step_item(
@@ -790,13 +860,13 @@ class TemplateFlowHandler(ConfigSubentryFlow):
             _LOGGER.debug("config_flow [template] async_step_add: identity '%s'", user_input.get("name"))
             self._pending_identity = user_input
             return await self.async_step_add_automation()
-        return self.async_show_form(step_id="add", data_schema=self._identity_schema())
+        return self.async_show_form(step_id="add", data_schema=self._identity_schema(), last_step=False)
 
     async def async_step_add_automation(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         if user_input is not None:
-            self._items.append({**self._pending_identity, **self._pack_automation(user_input)})
+            self._items.append({**self._pending_identity, **self._pack_automation(_flatten_sections(user_input))})
             _LOGGER.debug("config_flow [template] async_step_add_automation: saving %d item(s)", len(self._items))
             return _singleton_save(self, SUBENTRY_TYPE_TEMPLATE, await _subentry_title(self.hass, SUBENTRY_TYPE_TEMPLATE), self._items)
         return self.async_show_form(step_id="add_automation", data_schema=self._automation_schema())
@@ -813,6 +883,7 @@ class TemplateFlowHandler(ConfigSubentryFlow):
         return self.async_show_form(
             step_id="edit",
             data_schema=self.add_suggested_values_to_schema(self._identity_schema(), identity),
+            last_step=False,
         )
 
     async def async_step_edit_automation(
@@ -821,15 +892,13 @@ class TemplateFlowHandler(ConfigSubentryFlow):
         existing = self._items[self._edit_idx]
         if user_input is not None:
             old_name = existing.get("name")
-            self._items[self._edit_idx] = {**self._pending_identity, **self._pack_automation(user_input)}
+            self._items[self._edit_idx] = {**self._pending_identity, **self._pack_automation(_flatten_sections(user_input))}
             _propagate_rename(self.hass, SUBENTRY_TYPE_TEMPLATE, old_name, self._pending_identity.get("name"))
             _LOGGER.debug("config_flow [template] async_step_edit_automation: saving %d item(s)", len(self._items))
             return _singleton_save(self, SUBENTRY_TYPE_TEMPLATE, await _subentry_title(self.hass, SUBENTRY_TYPE_TEMPLATE), self._items)
         return self.async_show_form(
             step_id="edit_automation",
-            data_schema=self.add_suggested_values_to_schema(
-                self._automation_schema(), self._flatten_automation(existing)
-            ),
+            data_schema=self._automation_schema(self._flatten_automation(existing)),
         )
 
 
@@ -838,26 +907,57 @@ class TemplateFlowHandler(ConfigSubentryFlow):
 class GlobalFlowHandler(ConfigSubentryFlow):
     """Manage global Cover Extender settings as a singleton subentry."""
 
-    @staticmethod
-    def _schema() -> vol.Schema:
+    def _schema(self, values: dict[str, Any] | None = None) -> vol.Schema:
+        """Global settings.
+
+        command_interval is top-level; display toggles and solar-gain settings are
+        grouped into collapsed sections. The solar-gain temperature threshold is an
+        input_number/number entity (no fixed value) — a plain EntitySelector, so it
+        lives inside the section and pre-fills reliably (unlike a `choose`). When
+        unset, the coordinator falls back to 19 °C.
+        """
+        v = values or {}
+
+        def opt(key: str, default: Any = None):
+            return vol.Optional(key, default=default) if default is not None else vol.Optional(key)
+
+        def _is_num(x: Any) -> bool:
+            try:
+                float(x)
+                return True
+            except (TypeError, ValueError):
+                return False
+
+        # Threshold is an input_number/number entity. Only pre-fill the picker when
+        # the stored value actually looks like an entity id (ignore legacy numbers).
+        raw_thr = v.get("sg_temperature_threshold")
+        thr_ent = raw_thr if (isinstance(raw_thr, str) and not _is_num(raw_thr)) else None
+
+        display = {
+            vol.Optional("show_sun_facing", default=v.get("show_sun_facing", True)):  selector.BooleanSelector(),
+            vol.Optional("show_auto_shade", default=v.get("show_auto_shade", True)):  selector.BooleanSelector(),
+            vol.Optional("show_solar_gain", default=v.get("show_solar_gain", False)): selector.BooleanSelector(),
+        }
+        solar_gain = {
+            opt("sg_temperature_entity", v.get("sg_temperature_entity")):
+                selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="temperature")),
+            opt("sg_temperature_threshold", thr_ent):
+                selector.EntitySelector(selector.EntitySelectorConfig(domain=["input_number", "number"])),
+            opt("sg_weather_entity", v.get("sg_weather_entity")):
+                selector.EntitySelector(selector.EntitySelectorConfig(domain="weather")),
+            vol.Optional("sg_good_conditions", default=v.get("sg_good_conditions", ["sunny", "partlycloudy"])):
+                selector.SelectSelector(selector.SelectSelectorConfig(options=_WEATHER_CONDITIONS, multiple=True, mode="dropdown")),
+        }
         return vol.Schema({
-            vol.Required("command_interval", default=DEFAULT_COMMAND_INTERVAL_MS): selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=5000, step=100, mode="box", unit_of_measurement="ms")
-            ),
-            vol.Optional("show_sun_facing", default=True):  selector.BooleanSelector(),
-            vol.Optional("show_auto_shade", default=True):  selector.BooleanSelector(),
-            vol.Optional("show_solar_gain", default=False): selector.BooleanSelector(),
-            vol.Optional("sg_temperature_entity"): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
-            ),
-            vol.Optional("sg_temperature_threshold", default="19"): selector.TextSelector(),
-            vol.Optional("sg_weather_entity"): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="weather")
-            ),
-            vol.Optional("sg_good_conditions", default=["sunny", "partlycloudy"]): selector.SelectSelector(
-                selector.SelectSelectorConfig(options=_WEATHER_CONDITIONS, multiple=True, mode="dropdown")
-            ),
+            vol.Required("command_interval", default=v.get("command_interval", DEFAULT_COMMAND_INTERVAL_MS)):
+                selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=5000, step=100, mode="box", unit_of_measurement="ms")),
+            vol.Required("display"):    section(vol.Schema(display), {"collapsed": True}),
+            vol.Required("solar_gain"): section(vol.Schema(solar_gain), {"collapsed": True}),
         })
+
+    def _store_data(self, user_input: dict[str, Any]) -> dict[str, Any]:
+        """Flatten the sectioned form into the flat storage shape."""
+        return _flatten_sections(user_input)
 
     def _find_existing(self) -> tuple | tuple[None, None]:
         for entry in self.hass.config_entries.async_entries(DOMAIN):
@@ -875,7 +975,7 @@ class GlobalFlowHandler(ConfigSubentryFlow):
         if user_input is not None:
             return self.async_create_entry(
                 title=await _subentry_title(self.hass, SUBENTRY_TYPE_GLOBAL),
-                data=user_input,
+                data=self._store_data(user_input),
             )
         return self.async_show_form(step_id="user", data_schema=self._schema())
 
@@ -886,14 +986,14 @@ class GlobalFlowHandler(ConfigSubentryFlow):
             existing_entry, existing = self._find_existing()
             if existing_entry and existing:
                 self.hass.config_entries.async_update_subentry(
-                    existing_entry, existing, data=user_input
+                    existing_entry, existing, data=self._store_data(user_input)
                 )
             return self.async_abort(reason="reconfigure_successful")
         existing_entry, existing = self._find_existing()
         current = dict(existing.data) if existing else {}
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=self.add_suggested_values_to_schema(self._schema(), current),
+            data_schema=self._schema(current),
         )
 
 
@@ -955,58 +1055,9 @@ class CoverFlowHandler(ConfigSubentryFlow):
     # ── Step-2 schema ──────────────────────────────────────────────────────────
 
     @staticmethod
-    def _behavior_schema() -> vol.Schema:
-        return vol.Schema({
-            # ── Cover geometry ────────────────────────────────────────────────
-            vol.Optional("angle_left",                default=85):   selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=90,  mode="slider", unit_of_measurement="°")
-            ),
-            vol.Optional("angle_right",               default=85):   selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=90,  mode="slider", unit_of_measurement="°")
-            ),
-            vol.Optional("shade_distance",            default=0.4):  selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=3,   step=0.1, mode="slider", unit_of_measurement="m")
-            ),
-            vol.Optional("shade_max_height",          default=1.8):  selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=3,   step=0.1, mode="slider", unit_of_measurement="m")
-            ),
-            vol.Optional("shade_min_height",          default=0.0):  selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=3,   step=0.1, mode="slider", unit_of_measurement="m")
-            ),
-            # ── Sun detection ─────────────────────────────────────────────────
-            vol.Optional("shade_degrees",             default=90):   selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=180, mode="slider", unit_of_measurement="°")
-            ),
-            vol.Optional("shade_min_elevation",       default=5):    selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=90,  mode="slider", unit_of_measurement="°")
-            ),
-            vol.Optional("shade_max_elevation",       default=90):   selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=90,  mode="slider", unit_of_measurement="°")
-            ),
-            # ── Behavior ──────────────────────────────────────────────────────
-            vol.Optional("shade_minimum_position",    default=15):   selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=100, mode="slider", unit_of_measurement="%")
-            ),
-            vol.Optional("shade_default_position",    default=100):  selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=100, mode="slider", unit_of_measurement="%")
-            ),
-            vol.Optional("shade_change_threshold",    default=5):    selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=50,  mode="slider", unit_of_measurement="%")
-            ),
-            vol.Optional("shade_time_out",            default=2):    selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=60,  mode="slider", unit_of_measurement="min")
-            ),
-            # ── Solar gain ────────────────────────────────────────────────────
-            vol.Optional("solar_gain_position_solar", default=100):  selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=100, mode="slider", unit_of_measurement="%")
-            ),
-            vol.Optional("solar_gain_position_cold",  default=0):    selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=100, mode="slider", unit_of_measurement="%")
-            ),
-            # ── Activation ───────────────────────────────────────────────────
-            vol.Optional("shade_enable",              default=False): selector.BooleanSelector(),
-            vol.Optional("solar_gain_enable",         default=False): selector.BooleanSelector(),
-        })
+    def _behavior_schema(values: dict[str, Any] | None = None) -> vol.Schema:
+        """Cover behavior form, grouped into collapsible sections."""
+        return _build_section_schema(_COVER_SECTIONS, values)
 
     # ── Step-3 helpers (modes) ────────────────────────────────────────────────
 
@@ -1024,29 +1075,27 @@ class CoverFlowHandler(ConfigSubentryFlow):
         })
 
     @staticmethod
-    def _mode_position_schema(default_type: str, default_value: int | None) -> vol.Schema:
-        """Per-cover form for a NON-automation mode: Fixed position vs None.
+    def _mode_position_schema() -> vol.Schema:
+        """Per-cover form for a NON-automation mode: Fixed / Entity / None.
 
-        "fixed" → the slider value is applied as a fixed position.
-        "none"  → no forced position; the cover stays in place (and locks if the
-                  mode is a lock mode).
-        Automation modes (auto_shade / solar_gain) never reach this form — their
-        position is handled by the mode's behavior (see async_step_mode_position).
+        A `choose` selector shows the right input per choice:
+          - Fixed  -> a % slider applied as the position,
+          - Entity -> an input_number/number whose value drives the position live
+                      (the coordinator tracks it via _handle_mode_entity_change),
+          - None   -> no forced position (the cover stays in place; locks if a lock mode).
+        Automation modes never reach this form (their position comes from the behavior).
         """
         return vol.Schema({
-            vol.Required("position_type", default=default_type): selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    options=["fixed", "none"],
-                    mode="list",
-                    translation_key="mode_position_type",
-                )
-            ),
-            vol.Optional(
-                "position",
-                default=default_value if default_value is not None else 0,
-            ): selector.NumberSelector(
-                selector.NumberSelectorConfig(min=0, max=100, mode="slider", unit_of_measurement="%")
-            ),
+            vol.Required("position"): selector.selector({
+                "choose": {
+                    "translation_key": "mode_position_choice",
+                    "choices": {
+                        "fixed":  {"selector": {"number": {"min": 0, "max": 100, "mode": "slider", "unit_of_measurement": "%"}}},
+                        "entity": {"selector": {"entity": {"domain": ["input_number", "number"]}}},
+                        "none":   {"selector": {"constant": {"value": True}}},
+                    },
+                }
+            }),
         })
 
     def _mode_behavior(self, mode_name: str) -> str | None:
@@ -1087,12 +1136,19 @@ class CoverFlowHandler(ConfigSubentryFlow):
         # Record the answer for the mode just shown, then advance.
         if user_input is not None:
             name = to_prompt[self._mode_pos_idx]
-            if user_input.get("position_type") == "fixed":
+            choice = user_input.get("position") or {}
+            active = choice.get("active_choice")
+            if active == "fixed":
                 self._pending_modes_result[name] = {
                     "type": "fixed",
-                    "value": int(user_input.get("position", 0)),
+                    "value": int(choice.get("fixed", 0)),
                 }
-            else:  # "none"
+            elif active == "entity" and choice.get("entity"):
+                self._pending_modes_result[name] = {
+                    "type": "entity",
+                    "value": str(choice.get("entity")).strip(),
+                }
+            else:  # "none" (or "entity" with nothing picked)
                 self._pending_modes_result[name] = {"type": "auto"}
             self._mode_pos_idx += 1
 
@@ -1104,8 +1160,14 @@ class CoverFlowHandler(ConfigSubentryFlow):
         name = to_prompt[self._mode_pos_idx]
         return self.async_show_form(
             step_id="mode_position",
-            data_schema=self._mode_position_schema("none", None),
-            description_placeholders={"name": name, "cover": self._current_cover_label()},
+            data_schema=self._mode_position_schema(),
+            description_placeholders={
+                "name": name,
+                "cover": self._current_cover_label(),
+                "index": str(self._mode_pos_idx + 1),
+                "total": str(len(to_prompt)),
+            },
+            last_step=(self._mode_pos_idx >= len(to_prompt) - 1),
         )
 
     async def _finalize_modes(self) -> config_entries.ConfigFlowResult:
@@ -1344,6 +1406,7 @@ class CoverFlowHandler(ConfigSubentryFlow):
                     selector.SelectSelectorConfig(options=options, mode="list", translation_key="cover_manage")
                 )
             }),
+            description_placeholders={"count": str(len(self._items))},
         )
 
     async def async_step_item(
@@ -1379,6 +1442,7 @@ class CoverFlowHandler(ConfigSubentryFlow):
                 self._modes_select_schema(), {"selected_modes": pre_selected}
             ),
             description_placeholders={"cover": self._current_cover_label()},
+            last_step=False,
         )
 
     async def async_step_delete(
@@ -1398,7 +1462,7 @@ class CoverFlowHandler(ConfigSubentryFlow):
             _LOGGER.debug("config_flow [cover] async_step_add: identity '%s'", user_input.get("entity_id"))
             self._pending_identity = user_input
             return await self.async_step_add_behavior()
-        return self.async_show_form(step_id="add", data_schema=self._identity_schema())
+        return self.async_show_form(step_id="add", data_schema=self._identity_schema(), last_step=False)
 
     async def async_step_add_behavior(
         self, user_input: dict[str, Any] | None = None
@@ -1406,13 +1470,14 @@ class CoverFlowHandler(ConfigSubentryFlow):
         tpl = self._get_template_item(self._pending_identity.get("template", ""))
         if user_input is not None:
             _LOGGER.debug("config_flow [cover] async_step_add_behavior: behavior saved, going to modes")
-            self._pending_behavior = self._strip_template_defaults(user_input, tpl)
+            self._pending_behavior = self._strip_template_defaults(_flatten_sections(user_input), tpl)
             return await self.async_step_add_modes()
-        defaults = self._behavior_defaults_from_template(tpl) if tpl else {}
+        defaults = self._behavior_defaults_from_template(tpl) if tpl else None
         return self.async_show_form(
             step_id="add_behavior",
-            data_schema=self.add_suggested_values_to_schema(self._behavior_schema(), defaults),
+            data_schema=self._behavior_schema(defaults),
             description_placeholders={"cover": self._current_cover_label()},
+            last_step=False,
         )
 
     async def async_step_add_modes(
@@ -1427,6 +1492,7 @@ class CoverFlowHandler(ConfigSubentryFlow):
             step_id="add_modes",
             data_schema=self._modes_select_schema(),
             description_placeholders={"cover": self._current_cover_label()},
+            last_step=False,
         )
 
     # ── Edit flow (3 steps) ────────────────────────────────────────────────────
@@ -1445,6 +1511,7 @@ class CoverFlowHandler(ConfigSubentryFlow):
             step_id="edit",
             data_schema=self.add_suggested_values_to_schema(self._identity_schema(), identity),
             description_placeholders={"cover": self._current_cover_label()},
+            last_step=False,
         )
 
     async def async_step_edit_behavior(
@@ -1454,7 +1521,7 @@ class CoverFlowHandler(ConfigSubentryFlow):
         # Template from the NEW identity (user may have changed it in step 1)
         tpl = self._get_template_item(self._pending_identity.get("template", ""))
         if user_input is not None:
-            self._pending_behavior = self._strip_template_defaults(user_input, tpl)
+            self._pending_behavior = self._strip_template_defaults(_flatten_sections(user_input), tpl)
             # Modes are managed by the dedicated "link modes" action, not re-walked
             # here (that would duplicate it). Preserve the existing modes untouched.
             self._items[self._edit_idx] = {
@@ -1472,7 +1539,7 @@ class CoverFlowHandler(ConfigSubentryFlow):
         defaults = self._behavior_prefill(existing)
         return self.async_show_form(
             step_id="edit_behavior",
-            data_schema=self.add_suggested_values_to_schema(self._behavior_schema(), defaults),
+            data_schema=self._behavior_schema(defaults),
             description_placeholders={"cover": self._current_cover_label()},
         )
 

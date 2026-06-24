@@ -94,6 +94,13 @@
         "fixed": "Fixed position",
         "none": "None (stay in place)"
       }
+    },
+    "mode_position_choice": {
+      "options": {
+        "fixed": "Fixed position",
+        "entity": "Entity (input_number / number)",
+        "none": "None (stay in place)"
+      }
     }
   },
   "config_subentries": {
@@ -110,27 +117,83 @@
         "user": {
           "title": "General settings",
           "data": {
-            "command_interval": "Command interval",
-            "show_sun_facing": "Show sun-facing sensors",
-            "show_auto_shade": "Show auto-shade sensors",
-            "show_solar_gain": "Show solar-gain sensors",
-            "sg_temperature_entity": "Temperature entity",
-            "sg_temperature_threshold": "Temperature threshold (value or input_number entity)",
-            "sg_weather_entity": "Weather entity",
-            "sg_good_conditions": "Good weather conditions"
+            "command_interval": "Command interval"
+          },
+          "data_description": {
+            "command_interval": "Delay between successive cover commands, to avoid flooding the bus."
+          },
+          "sections": {
+            "display": {
+              "name": "Entities shown",
+              "description": "Optional binary sensors mirroring sun-facing, auto-shade and solar-gain.",
+              "data": {
+                "show_sun_facing": "Show sun-facing sensors",
+                "show_auto_shade": "Show auto-shade sensors",
+                "show_solar_gain": "Show solar-gain sensors"
+              },
+              "data_description": {
+                "show_sun_facing": "Create a sun_facing binary sensor for each cover that has a facade.",
+                "show_auto_shade": "Create an auto_shade binary sensor mirroring the auto-shade switch.",
+                "show_solar_gain": "Create a solar_gain binary sensor mirroring the solar-gain switch."
+              }
+            },
+            "solar_gain": {
+              "name": "Solar gain",
+              "description": "Temperature, weather and threshold driving solar gain.",
+              "data": {
+                "sg_temperature_entity": "Temperature entity",
+                "sg_temperature_threshold": "Temperature threshold (entity)",
+                "sg_weather_entity": "Weather entity",
+                "sg_good_conditions": "Good weather conditions"
+              },
+              "data_description": {
+                "sg_temperature_entity": "Reference temperature sensor that gates solar gain.",
+                "sg_temperature_threshold": "input_number/number entity whose value (°C) is the threshold. Above it, solar gain stops. If empty: 19 °C.",
+                "sg_weather_entity": "Weather entity checked against the good-conditions list.",
+                "sg_good_conditions": "Weather states considered good for solar gain."
+              }
+            }
           }
         },
         "reconfigure": {
           "title": "Edit general settings",
           "data": {
-            "command_interval": "Command interval",
-            "show_sun_facing": "Show sun-facing sensors",
-            "show_auto_shade": "Show auto-shade sensors",
-            "show_solar_gain": "Show solar-gain sensors",
-            "sg_temperature_entity": "Temperature entity",
-            "sg_temperature_threshold": "Temperature threshold (value or input_number entity)",
-            "sg_weather_entity": "Weather entity",
-            "sg_good_conditions": "Good weather conditions"
+            "command_interval": "Command interval"
+          },
+          "data_description": {
+            "command_interval": "Delay between successive cover commands, to avoid flooding the bus."
+          },
+          "sections": {
+            "display": {
+              "name": "Entities shown",
+              "description": "Optional binary sensors mirroring sun-facing, auto-shade and solar-gain.",
+              "data": {
+                "show_sun_facing": "Show sun-facing sensors",
+                "show_auto_shade": "Show auto-shade sensors",
+                "show_solar_gain": "Show solar-gain sensors"
+              },
+              "data_description": {
+                "show_sun_facing": "Create a sun_facing binary sensor for each cover that has a facade.",
+                "show_auto_shade": "Create an auto_shade binary sensor mirroring the auto-shade switch.",
+                "show_solar_gain": "Create a solar_gain binary sensor mirroring the solar-gain switch."
+              }
+            },
+            "solar_gain": {
+              "name": "Solar gain",
+              "description": "Temperature, weather and threshold driving solar gain.",
+              "data": {
+                "sg_temperature_entity": "Temperature entity",
+                "sg_temperature_threshold": "Temperature threshold (entity)",
+                "sg_weather_entity": "Weather entity",
+                "sg_good_conditions": "Good weather conditions"
+              },
+              "data_description": {
+                "sg_temperature_entity": "Reference temperature sensor that gates solar gain.",
+                "sg_temperature_threshold": "input_number/number entity whose value (°C) is the threshold. Above it, solar gain stops. If empty: 19 °C.",
+                "sg_weather_entity": "Weather entity checked against the good-conditions list.",
+                "sg_good_conditions": "Weather states considered good for solar gain."
+              }
+            }
           }
         }
       }
@@ -146,16 +209,21 @@
       },
       "step": {
         "manage": {
-          "title": "Manage facades",
+          "title": "Facades ({count})",
           "data": {
             "action": "Action"
-          }
+          },
+          "description": "Pick an item to edit, or add a new one."
         },
         "add": {
           "title": "Add facade",
           "data": {
             "name": "Name",
             "azimuth": "Azimuth"
+          },
+          "data_description": {
+            "azimuth": "Compass orientation of the facade (0=N, 90=E, 180=S, 270=W).",
+            "name": "Facade name. Renaming it updates the covers that use it."
           }
         },
         "item": {
@@ -170,6 +238,10 @@
           "data": {
             "name": "Name",
             "azimuth": "Azimuth"
+          },
+          "data_description": {
+            "azimuth": "Compass orientation of the facade (0=N, 90=E, 180=S, 270=W).",
+            "name": "Facade name. Renaming it updates the covers that use it."
           }
         }
       }
@@ -185,20 +257,47 @@
       },
       "step": {
         "manage": {
-          "title": "Manage modes",
+          "title": "Modes ({count})",
           "data": {
             "action": "Action"
-          }
+          },
+          "description": "Pick an item to edit, or add a new one."
         },
         "add": {
           "title": "Add mode",
           "data": {
-            "name": "Name",
-            "icon": "Icon",
-            "color": "Color",
-            "lock": "Lock covers",
-            "behavior": "Automation behavior",
-            "hidden": "Hidden"
+            "name": "Name"
+          },
+          "sections": {
+            "appearance": {
+              "name": "Appearance",
+              "description": "Icon and colour shown for this mode.",
+              "data": {
+                "icon": "Icon",
+                "color": "Color"
+              },
+              "data_description": {
+                "icon": "Icon shown for this mode.",
+                "color": "Colour shown for this mode (used by custom cards)."
+              }
+            },
+            "options": {
+              "name": "Options",
+              "description": "Locking, automation behaviour and visibility.",
+              "data": {
+                "lock": "Lock covers",
+                "behavior": "Automation behavior",
+                "hidden": "Hidden"
+              },
+              "data_description": {
+                "lock": "When active, this mode locks the cover against other automations.",
+                "behavior": "Optional automation attached to this mode (auto-shade or solar gain).",
+                "hidden": "Hide this mode from the global modes selector."
+              }
+            }
+          },
+          "data_description": {
+            "name": "Mode name. Renaming it updates the covers that use it."
           }
         },
         "item": {
@@ -211,12 +310,38 @@
         "edit": {
           "title": "Edit mode",
           "data": {
-            "name": "Name",
-            "icon": "Icon",
-            "color": "Color",
-            "lock": "Lock covers",
-            "behavior": "Automation behavior",
-            "hidden": "Hidden"
+            "name": "Name"
+          },
+          "sections": {
+            "appearance": {
+              "name": "Appearance",
+              "description": "Icon and colour shown for this mode.",
+              "data": {
+                "icon": "Icon",
+                "color": "Color"
+              },
+              "data_description": {
+                "icon": "Icon shown for this mode.",
+                "color": "Colour shown for this mode (used by custom cards)."
+              }
+            },
+            "options": {
+              "name": "Options",
+              "description": "Locking, automation behaviour and visibility.",
+              "data": {
+                "lock": "Lock covers",
+                "behavior": "Automation behavior",
+                "hidden": "Hidden"
+              },
+              "data_description": {
+                "lock": "When active, this mode locks the cover against other automations.",
+                "behavior": "Optional automation attached to this mode (auto-shade or solar gain).",
+                "hidden": "Hide this mode from the global modes selector."
+              }
+            }
+          },
+          "data_description": {
+            "name": "Mode name. Renaming it updates the covers that use it."
           }
         }
       }
@@ -232,10 +357,11 @@
       },
       "step": {
         "manage": {
-          "title": "Manage templates",
+          "title": "Templates ({count})",
           "data": {
             "action": "Action"
-          }
+          },
+          "description": "Pick an item to edit, or add a new one."
         },
         "item": {
           "title": "Template - {name}",
@@ -250,23 +376,72 @@
             "name": "Name",
             "angle_left": "Left angle",
             "angle_right": "Right angle"
+          },
+          "data_description": {
+            "name": "Template name. Renaming it updates the covers that use it.",
+            "angle_left": "How far left of the facade the sun still counts as facing it.",
+            "angle_right": "How far right of the facade the sun still counts as facing it."
           }
         },
         "add_automation": {
           "title": "Add template - automation",
-          "data": {
-            "shade_distance": "Obstacle distance",
-            "shade_max_height": "Max cover height",
-            "shade_min_height": "Min cover height",
-            "shade_degrees": "Sun detection angle",
-            "shade_min_elevation": "Min sun elevation",
-            "shade_max_elevation": "Max sun elevation",
-            "shade_minimum_position": "Minimum position",
-            "shade_default_position": "Default position",
-            "shade_change_threshold": "Change threshold",
-            "shade_time_out": "Stability timeout",
-            "solar_gain_position_solar": "Position (sunny)",
-            "solar_gain_position_cold": "Position (cold)"
+          "sections": {
+            "geometry": {
+              "name": "Geometry",
+              "description": "Physical window and cover dimensions.",
+              "data": {
+                "shade_distance": "Obstacle distance",
+                "shade_max_height": "Max cover height",
+                "shade_min_height": "Min cover height"
+              },
+              "data_description": {
+                "shade_distance": "Horizontal depth to keep shaded from direct sun.",
+                "shade_max_height": "Window/cover height mapped to 100%.",
+                "shade_min_height": "Window/cover height mapped to 0%."
+              }
+            },
+            "detection": {
+              "name": "Sun detection",
+              "description": "Orientation and elevation at which the sun hits this cover.",
+              "data": {
+                "shade_degrees": "Sun detection angle",
+                "shade_min_elevation": "Min sun elevation",
+                "shade_max_elevation": "Max sun elevation"
+              },
+              "data_description": {
+                "shade_degrees": "Azimuth half-width of the sun-detection cone.",
+                "shade_min_elevation": "Below this sun elevation, shading is not applied.",
+                "shade_max_elevation": "Above this sun elevation, shading is not applied."
+              }
+            },
+            "shading": {
+              "name": "Solar shading",
+              "description": "Autonomous shading behaviour.",
+              "data": {
+                "shade_minimum_position": "Minimum position",
+                "shade_default_position": "Default position",
+                "shade_change_threshold": "Change threshold",
+                "shade_time_out": "Stability timeout"
+              },
+              "data_description": {
+                "shade_minimum_position": "Lowest position the shading will set.",
+                "shade_default_position": "Position when the sun is outside the detection zone.",
+                "shade_change_threshold": "Minimum position change before moving the cover.",
+                "shade_time_out": "Minimum delay between two shading movements."
+              }
+            },
+            "solar_gain": {
+              "name": "Solar gain",
+              "description": "Temperature-driven positioning.",
+              "data": {
+                "solar_gain_position_solar": "Position (sunny)",
+                "solar_gain_position_cold": "Position (cold)"
+              },
+              "data_description": {
+                "solar_gain_position_solar": "Position when sunny and warm conditions favour solar gain.",
+                "solar_gain_position_cold": "Position otherwise."
+              }
+            }
           }
         },
         "edit": {
@@ -275,23 +450,72 @@
             "name": "Name",
             "angle_left": "Left angle",
             "angle_right": "Right angle"
+          },
+          "data_description": {
+            "name": "Template name. Renaming it updates the covers that use it.",
+            "angle_left": "How far left of the facade the sun still counts as facing it.",
+            "angle_right": "How far right of the facade the sun still counts as facing it."
           }
         },
         "edit_automation": {
           "title": "Edit template - automation",
-          "data": {
-            "shade_distance": "Obstacle distance",
-            "shade_max_height": "Max cover height",
-            "shade_min_height": "Min cover height",
-            "shade_degrees": "Sun detection angle",
-            "shade_min_elevation": "Min sun elevation",
-            "shade_max_elevation": "Max sun elevation",
-            "shade_minimum_position": "Minimum position",
-            "shade_default_position": "Default position",
-            "shade_change_threshold": "Change threshold",
-            "shade_time_out": "Stability timeout",
-            "solar_gain_position_solar": "Position (sunny)",
-            "solar_gain_position_cold": "Position (cold)"
+          "sections": {
+            "geometry": {
+              "name": "Geometry",
+              "description": "Physical window and cover dimensions.",
+              "data": {
+                "shade_distance": "Obstacle distance",
+                "shade_max_height": "Max cover height",
+                "shade_min_height": "Min cover height"
+              },
+              "data_description": {
+                "shade_distance": "Horizontal depth to keep shaded from direct sun.",
+                "shade_max_height": "Window/cover height mapped to 100%.",
+                "shade_min_height": "Window/cover height mapped to 0%."
+              }
+            },
+            "detection": {
+              "name": "Sun detection",
+              "description": "Orientation and elevation at which the sun hits this cover.",
+              "data": {
+                "shade_degrees": "Sun detection angle",
+                "shade_min_elevation": "Min sun elevation",
+                "shade_max_elevation": "Max sun elevation"
+              },
+              "data_description": {
+                "shade_degrees": "Azimuth half-width of the sun-detection cone.",
+                "shade_min_elevation": "Below this sun elevation, shading is not applied.",
+                "shade_max_elevation": "Above this sun elevation, shading is not applied."
+              }
+            },
+            "shading": {
+              "name": "Solar shading",
+              "description": "Autonomous shading behaviour.",
+              "data": {
+                "shade_minimum_position": "Minimum position",
+                "shade_default_position": "Default position",
+                "shade_change_threshold": "Change threshold",
+                "shade_time_out": "Stability timeout"
+              },
+              "data_description": {
+                "shade_minimum_position": "Lowest position the shading will set.",
+                "shade_default_position": "Position when the sun is outside the detection zone.",
+                "shade_change_threshold": "Minimum position change before moving the cover.",
+                "shade_time_out": "Minimum delay between two shading movements."
+              }
+            },
+            "solar_gain": {
+              "name": "Solar gain",
+              "description": "Temperature-driven positioning.",
+              "data": {
+                "solar_gain_position_solar": "Position (sunny)",
+                "solar_gain_position_cold": "Position (cold)"
+              },
+              "data_description": {
+                "solar_gain_position_solar": "Position when sunny and warm conditions favour solar gain.",
+                "solar_gain_position_cold": "Position otherwise."
+              }
+            }
           }
         }
       }
@@ -307,10 +531,11 @@
       },
       "step": {
         "manage": {
-          "title": "Manage covers",
+          "title": "Covers ({count})",
           "data": {
             "action": "Action"
-          }
+          },
+          "description": "Pick an item to edit, or add a new one."
         },
         "item": {
           "title": "Cover - {name}",
@@ -322,17 +547,19 @@
         },
         "modes": {
           "title": "Link modes to cover ({cover})",
-          "description": "Select the modes to link to this cover: only linked modes can be applied to it.",
+          "description": "Select the modes to link to this cover: only linked modes can be applied to it. Modes are created in the Modes section.",
           "data": {
             "selected_modes": "Linked modes"
           }
         },
         "mode_position": {
           "title": "Mode position - {name} ({cover})",
-          "description": "Choose whether this mode sets a fixed position for this cover, or none (the cover stays in place).",
+          "description": "Mode {index}/{total}. Position for this mode: a fixed %, an entity, or none (the cover stays in place).",
           "data": {
-            "position_type": "Position type",
             "position": "Fixed position"
+          },
+          "data_description": {
+            "position": "Pick a fixed %, an entity driving it live, or none (the cover stays in place)."
           }
         },
         "mode_position_auto": {
@@ -347,32 +574,88 @@
             "facade": "Facade",
             "template": "Template (optional)",
             "exclusion": "Exclusion entities"
-          }
+          },
+          "data_description": {
+            "facade": "Facade the cover belongs to (defines its orientation).",
+            "template": "Optional template providing default behavior values.",
+            "exclusion": "While any of these entities is on, automatic moves are stored as memory instead of applied.",
+            "entity_picture": "Optional picture URL injected as the cover's entity_picture.",
+            "entity_id": "The cover entity to enrich."
+          },
+          "description": "Pick the cover entity and its facade. Facades and templates are created first in their own sections."
         },
         "add_behavior": {
           "title": "Add cover - behavior ({cover})",
-          "data": {
-            "angle_left": "Left angle",
-            "angle_right": "Right angle",
-            "shade_distance": "Obstacle distance",
-            "shade_max_height": "Max cover height",
-            "shade_min_height": "Min cover height",
-            "shade_degrees": "Sun detection angle",
-            "shade_min_elevation": "Min sun elevation",
-            "shade_max_elevation": "Max sun elevation",
-            "shade_minimum_position": "Minimum position",
-            "shade_default_position": "Default position",
-            "shade_change_threshold": "Change threshold",
-            "shade_time_out": "Stability timeout",
-            "solar_gain_position_solar": "Position (sunny)",
-            "solar_gain_position_cold": "Position (cold)",
-            "shade_enable": "Enable auto-shade",
-            "solar_gain_enable": "Enable solar gain"
+          "sections": {
+            "geometry": {
+              "name": "Geometry",
+              "description": "Physical window and cover dimensions.",
+              "data": {
+                "shade_distance": "Obstacle distance",
+                "shade_max_height": "Max cover height",
+                "shade_min_height": "Min cover height"
+              },
+              "data_description": {
+                "shade_distance": "Horizontal depth to keep shaded from direct sun.",
+                "shade_max_height": "Window/cover height mapped to 100%.",
+                "shade_min_height": "Window/cover height mapped to 0%."
+              }
+            },
+            "detection": {
+              "name": "Sun detection",
+              "description": "Orientation and elevation at which the sun hits this cover.",
+              "data": {
+                "angle_left": "Left angle",
+                "angle_right": "Right angle",
+                "shade_degrees": "Sun detection angle",
+                "shade_min_elevation": "Min sun elevation",
+                "shade_max_elevation": "Max sun elevation"
+              },
+              "data_description": {
+                "angle_left": "How far left of the facade the sun still counts as facing it.",
+                "angle_right": "How far right of the facade the sun still counts as facing it.",
+                "shade_degrees": "Azimuth half-width of the sun-detection cone.",
+                "shade_min_elevation": "Below this sun elevation, shading is not applied.",
+                "shade_max_elevation": "Above this sun elevation, shading is not applied."
+              }
+            },
+            "shading": {
+              "name": "Solar shading",
+              "description": "Autonomous shading behaviour.",
+              "data": {
+                "shade_enable": "Enable auto-shade",
+                "shade_minimum_position": "Minimum position",
+                "shade_default_position": "Default position",
+                "shade_change_threshold": "Change threshold",
+                "shade_time_out": "Stability timeout"
+              },
+              "data_description": {
+                "shade_enable": "Create the auto-shade switch and compute shading for this cover.",
+                "shade_minimum_position": "Lowest position the shading will set.",
+                "shade_default_position": "Position when the sun is outside the detection zone.",
+                "shade_change_threshold": "Minimum position change before moving the cover.",
+                "shade_time_out": "Minimum delay between two shading movements."
+              }
+            },
+            "solar_gain": {
+              "name": "Solar gain",
+              "description": "Temperature-driven positioning.",
+              "data": {
+                "solar_gain_enable": "Enable solar gain",
+                "solar_gain_position_solar": "Position (sunny)",
+                "solar_gain_position_cold": "Position (cold)"
+              },
+              "data_description": {
+                "solar_gain_enable": "Create the solar-gain switch for this cover.",
+                "solar_gain_position_solar": "Position when sunny and warm conditions favour solar gain.",
+                "solar_gain_position_cold": "Position otherwise."
+              }
+            }
           }
         },
         "add_modes": {
           "title": "Add cover - link modes ({cover})",
-          "description": "Select the modes to link to this cover: only linked modes can be applied to it.",
+          "description": "Select the modes to link to this cover: only linked modes can be applied to it. Modes are created in the Modes section.",
           "data": {
             "selected_modes": "Linked modes"
           }
@@ -385,32 +668,87 @@
             "facade": "Facade",
             "template": "Template (optional)",
             "exclusion": "Exclusion entities"
+          },
+          "data_description": {
+            "facade": "Facade the cover belongs to (defines its orientation).",
+            "template": "Optional template providing default behavior values.",
+            "exclusion": "While any of these entities is on, automatic moves are stored as memory instead of applied.",
+            "entity_picture": "Optional picture URL injected as the cover's entity_picture.",
+            "entity_id": "The cover entity to enrich."
           }
         },
         "edit_behavior": {
           "title": "Edit cover - behavior ({cover})",
-          "data": {
-            "angle_left": "Left angle",
-            "angle_right": "Right angle",
-            "shade_distance": "Obstacle distance",
-            "shade_max_height": "Max cover height",
-            "shade_min_height": "Min cover height",
-            "shade_degrees": "Sun detection angle",
-            "shade_min_elevation": "Min sun elevation",
-            "shade_max_elevation": "Max sun elevation",
-            "shade_minimum_position": "Minimum position",
-            "shade_default_position": "Default position",
-            "shade_change_threshold": "Change threshold",
-            "shade_time_out": "Stability timeout",
-            "solar_gain_position_solar": "Position (sunny)",
-            "solar_gain_position_cold": "Position (cold)",
-            "shade_enable": "Enable auto-shade",
-            "solar_gain_enable": "Enable solar gain"
+          "sections": {
+            "geometry": {
+              "name": "Geometry",
+              "description": "Physical window and cover dimensions.",
+              "data": {
+                "shade_distance": "Obstacle distance",
+                "shade_max_height": "Max cover height",
+                "shade_min_height": "Min cover height"
+              },
+              "data_description": {
+                "shade_distance": "Horizontal depth to keep shaded from direct sun.",
+                "shade_max_height": "Window/cover height mapped to 100%.",
+                "shade_min_height": "Window/cover height mapped to 0%."
+              }
+            },
+            "detection": {
+              "name": "Sun detection",
+              "description": "Orientation and elevation at which the sun hits this cover.",
+              "data": {
+                "angle_left": "Left angle",
+                "angle_right": "Right angle",
+                "shade_degrees": "Sun detection angle",
+                "shade_min_elevation": "Min sun elevation",
+                "shade_max_elevation": "Max sun elevation"
+              },
+              "data_description": {
+                "angle_left": "How far left of the facade the sun still counts as facing it.",
+                "angle_right": "How far right of the facade the sun still counts as facing it.",
+                "shade_degrees": "Azimuth half-width of the sun-detection cone.",
+                "shade_min_elevation": "Below this sun elevation, shading is not applied.",
+                "shade_max_elevation": "Above this sun elevation, shading is not applied."
+              }
+            },
+            "shading": {
+              "name": "Solar shading",
+              "description": "Autonomous shading behaviour.",
+              "data": {
+                "shade_enable": "Enable auto-shade",
+                "shade_minimum_position": "Minimum position",
+                "shade_default_position": "Default position",
+                "shade_change_threshold": "Change threshold",
+                "shade_time_out": "Stability timeout"
+              },
+              "data_description": {
+                "shade_enable": "Create the auto-shade switch and compute shading for this cover.",
+                "shade_minimum_position": "Lowest position the shading will set.",
+                "shade_default_position": "Position when the sun is outside the detection zone.",
+                "shade_change_threshold": "Minimum position change before moving the cover.",
+                "shade_time_out": "Minimum delay between two shading movements."
+              }
+            },
+            "solar_gain": {
+              "name": "Solar gain",
+              "description": "Temperature-driven positioning.",
+              "data": {
+                "solar_gain_enable": "Enable solar gain",
+                "solar_gain_position_solar": "Position (sunny)",
+                "solar_gain_position_cold": "Position (cold)"
+              },
+              "data_description": {
+                "solar_gain_enable": "Create the solar-gain switch for this cover.",
+                "solar_gain_position_solar": "Position when sunny and warm conditions favour solar gain.",
+                "solar_gain_position_cold": "Position otherwise."
+              }
+            }
           }
         },
         "edit_modes": {
           "title": "Edit cover - link modes ({cover})",
-          "description": "Select the modes to link to this cover: only linked modes can be applied to it.",
+          "description": "Select the modes to link to this cover: only linked modes can be applied to it. Modes are created in the Modes section.",
           "data": {
             "selected_modes": "Linked modes"
           }
