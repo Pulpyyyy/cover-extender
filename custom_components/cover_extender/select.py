@@ -26,7 +26,7 @@ async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
-) -> bool:
+) -> None:
     """Set up select entities from a config entry."""
     modes_list: dict = hass.data.get(DOMAIN, {}).get(DATA_MODES, {})
     profiles: dict = hass.data.get(DOMAIN, {}).get(DATA_COVER_PROFILES, {})
@@ -69,7 +69,6 @@ async def async_setup_entry(
             _LOGGER.info("cover_extender select: %d entity/entities removed", len(removed))
 
     async_dispatcher_connect(hass, SIGNAL_COVER_RELOAD, _handle_platform_reload)
-    return True
 
 
 class CoverModeSelect(SelectEntity, RestoreEntity):
@@ -164,6 +163,13 @@ class CoverModeSelect(SelectEntity, RestoreEntity):
                     "switch", "turn_on", {"entity_id": lock_id}, blocking=True
                 )
             elif not should_lock and current_on:
+                # Mode-driven unlock: let the coordinator's _apply_mode_core own the
+                # memory/position decision instead of its _handle_lock_off listener
+                # (which can't see the target mode's fixed position). Cleared by
+                # _apply_mode_core, and consumed one-shot by _handle_lock_off.
+                coordinator = self.hass.data.get(DOMAIN, {}).get("coordinator")
+                if coordinator is not None:
+                    coordinator._suspend_lock_off.add(self._cover_entity_id)
                 await self.hass.services.async_call(
                     "switch", "turn_off", {"entity_id": lock_id}, blocking=True
                 )

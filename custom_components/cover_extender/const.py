@@ -3,13 +3,11 @@
 DOMAIN = "cover_extender"
 
 # Configuration keys
-CONF_SOURCE = "source"
 CONF_FACADE = "facade"
 CONF_MODES = "modes"
 CONF_ENTITY_PICTURE = "entity_picture"
 CONF_ANGLE_LEFT = "angle_left"
 CONF_ANGLE_RIGHT = "angle_right"
-CONF_FACADES = "facades"
 CONF_AZIMUTH = "azimuth"
 
 # State attributes injected into cover entities
@@ -36,9 +34,6 @@ SERVICE_OPEN_COVER         = "open_cover"
 SERVICE_CLOSE_COVER        = "close_cover"
 SERVICE_APPLY_MEMORY       = "apply_memory"
 
-# Configuration key for show_entities section
-CONF_SHOW_ENTITIES = "show_entities"
-
 # hass.data keys
 DATA_COVER_PROFILES      = "cover_profiles"
 DATA_MODES               = "cover_extender_modes"
@@ -55,9 +50,6 @@ DATA_MEMORY                = "memory"
 
 STORAGE_KEY     = f"{DOMAIN}.memory"
 STORAGE_VERSION = 1
-
-# Config key for global mode display definitions
-CONF_MODES_SECTION = "cover_extender_modes"
 
 # Dispatcher signal fired after a reload so select entities can refresh their options
 SIGNAL_COVER_RELOAD = f"{DOMAIN}_reload"

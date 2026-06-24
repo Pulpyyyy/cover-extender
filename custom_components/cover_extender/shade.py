@@ -157,7 +157,11 @@ def compute_shade_sync(
             )
             return current, False
 
-        time_ok = dt_util.utcnow() - timedelta(minutes=time_out) >= cover_st.last_updated
+        # Use last_changed (not last_updated): the coordinator re-injects custom
+        # attributes (sun_facing, memory, modes) very frequently, which bumps
+        # last_updated on every write and would falsely reset the time_out throttle.
+        # last_changed only moves when the cover's state actually changes.
+        time_ok = dt_util.utcnow() - timedelta(minutes=time_out) >= cover_st.last_changed
         if not time_ok:
             _LOGGER.debug(
                 "shade %s: time_out %.1f min not elapsed → no move",

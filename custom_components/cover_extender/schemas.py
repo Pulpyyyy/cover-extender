@@ -1,33 +1,24 @@
-"""Voluptuous schemas and YAML loader for cover_extender."""
+"""Voluptuous schemas and subentry → profiles builder for cover_extender."""
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any
 
 import voluptuous as vol
-import yaml
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
     DOMAIN,
-    CONF_SOURCE,
     CONF_FACADE,
     CONF_MODES,
-    CONF_MODES_SECTION,
     CONF_ENTITY_PICTURE,
     CONF_SHADING,
     CONF_SOLAR_GAIN,
-    CONF_SHOW_ENTITIES,
     CONF_ANGLE_LEFT,
     CONF_ANGLE_RIGHT,
     CONF_EXCLUSION,
-    CONF_FACADES,
-    CONF_AZIMUTH,
-    CONF_COMMAND_INTERVAL,
-    DEFAULT_COMMAND_INTERVAL,
     DEFAULT_COMMAND_INTERVAL_MS,
     SUBENTRY_TYPE_FACADE,
     SUBENTRY_TYPE_GLOBAL,
@@ -37,33 +28,6 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-CONFIG_SCHEMA = vol.Schema(
-    {
-        DOMAIN: vol.Schema(
-            {
-                vol.Required(CONF_SOURCE): cv.string,
-            }
-        )
-    },
-    extra=vol.ALLOW_EXTRA,
-)
-
-_FACADE_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_AZIMUTH): vol.Coerce(float),
-    }
-)
-
-_MODE_DISPLAY_SCHEMA = vol.Schema(
-    {
-        vol.Optional("icon",       default="mdi:help-circle"): cv.string,
-        vol.Optional("color",      default="#FFFFFF"):          cv.string,
-        vol.Optional("lock",       default=False):             cv.boolean,
-        vol.Optional("behavior",   default=None):              vol.Any(None, vol.In(["auto_shade", "solar_gain"])),
-        vol.Optional("hidden",     default=False):             cv.boolean,
-    }
-)
 
 SHADE_DEFAULTS: dict[str, Any] = {
     "enable":           False,
@@ -112,103 +76,6 @@ _SOLAR_GAIN_GLOBAL_SCHEMA = vol.Schema(
         vol.Optional("good_conditions",       default=["sunny", "partlycloudy"]): vol.All(cv.ensure_list, [cv.string]),
     }
 )
-
-_COVER_PROFILE_SCHEMA = vol.Schema(
-    {
-        vol.Optional(CONF_FACADE):                       cv.string,
-        vol.Optional(CONF_ENTITY_PICTURE):               cv.string,
-        vol.Optional(CONF_ANGLE_LEFT,  default=85.0):   vol.Coerce(float),
-        vol.Optional(CONF_ANGLE_RIGHT, default=85.0):   vol.Coerce(float),
-        vol.Optional(CONF_MODES,       default={}):
-            vol.Schema({cv.string: vol.Any(None, vol.Coerce(int), cv.entity_id)}),
-        vol.Optional(CONF_SHADING,     default={}):     _SHADING_SCHEMA,
-        vol.Optional(CONF_SOLAR_GAIN,  default={}):     _SOLAR_GAIN_COVER_SCHEMA,
-        vol.Optional(CONF_EXCLUSION,   default=[]):     vol.All(cv.ensure_list, [cv.entity_id]),
-    }
-)
-
-
-def load_covers_config(
-    hass: HomeAssistant, source: str
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], float]:
-    """Load and validate cover configuration from a YAML file.
-
-    Returns (profiles, modes_list, facades, show_entities, solar_gain_global, command_interval).
-    All dicts are empty and command_interval defaults to DEFAULT_COMMAND_INTERVAL on parse error.
-    """
-    if not os.path.isabs(source):
-        source = hass.config.path(source)
-
-    try:
-        with open(source, encoding="utf-8") as f:
-            raw: dict[str, Any] = yaml.safe_load(f) or {}
-    except FileNotFoundError:
-        _LOGGER.error("Cover config file not found: %s", source)
-        return {}, {}, {}, {}, {}, DEFAULT_COMMAND_INTERVAL
-    except yaml.YAMLError as err:
-        _LOGGER.error("YAML error in %s: %s", source, err)
-        return {}, {}, {}, {}, {}, DEFAULT_COMMAND_INTERVAL
-
-    # ── Facades ───────────────────────────────────────────────────────────────
-    facades: dict[str, Any] = {}
-    for name, fcfg in raw.get(CONF_FACADES, {}).items():
-        try:
-            facades[name] = _FACADE_SCHEMA(fcfg or {})
-        except vol.Invalid as err:
-            _LOGGER.warning("Cover config: invalid facade '%s': %s", name, err)
-
-    # ── Global mode display definitions ───────────────────────────────────────
-    modes_list: dict[str, Any] = {}
-    for mode_name, mcfg in raw.get(CONF_MODES_SECTION, {}).items():
-        try:
-            modes_list[mode_name] = _MODE_DISPLAY_SCHEMA(mcfg or {})
-        except vol.Invalid as err:
-            _LOGGER.warning("Cover config: invalid mode_display '%s': %s", mode_name, err)
-
-    # ── Cover profiles ────────────────────────────────────────────────────────
-    profiles: dict[str, Any] = {}
-    for entity_id, cfg in raw.items():
-        if not (isinstance(entity_id, str) and entity_id.startswith("cover.")):
-            continue
-        try:
-            profiles[entity_id] = _COVER_PROFILE_SCHEMA(cfg or {})
-        except vol.Invalid as err:
-            _LOGGER.error("Cover config: invalid profile '%s': %s — skipped", entity_id, err)
-            continue
-        for mode_name in profiles[entity_id].get(CONF_MODES, {}):
-            if mode_name not in modes_list:
-                _LOGGER.warning(
-                    "%s: mode '%s' not found in cover_extender_modes — lock/icon undefined",
-                    entity_id, mode_name,
-                )
-
-    # ── show_entities ─────────────────────────────────────────────────────────
-    raw_vas: dict = raw.get(CONF_SHOW_ENTITIES, {})
-    show_entities = {
-        "sun_facing": bool(raw_vas.get("sun_facing", False)),
-        "auto_shade":  bool(raw_vas.get("auto_shade",  False)),
-        "solar_gain":  bool(raw_vas.get("solar_gain",  False)),
-    }
-
-    # ── Solar gain global config ──────────────────────────────────────────────
-    try:
-        solar_gain_global = _SOLAR_GAIN_GLOBAL_SCHEMA(raw.get(CONF_SOLAR_GAIN, {}))
-    except vol.Invalid as err:
-        _LOGGER.warning("Cover config: invalid solar_gain config: %s", err)
-        solar_gain_global = _SOLAR_GAIN_GLOBAL_SCHEMA({})
-
-    # ── command_interval ──────────────────────────────────────────────────────
-    try:
-        command_interval = float(raw.get(CONF_COMMAND_INTERVAL, DEFAULT_COMMAND_INTERVAL))
-        if command_interval < 0:
-            raise ValueError("command_interval must be >= 0")
-    except (ValueError, TypeError) as err:
-        _LOGGER.warning("Cover config: invalid command_interval: %s — using default", err)
-        command_interval = DEFAULT_COMMAND_INTERVAL
-
-    _LOGGER.info("Loaded %d cover profiles from %s", len(profiles), source)
-    return profiles, modes_list, facades, show_entities, solar_gain_global, command_interval
-
 
 def _add_cover_profile(
     d: dict[str, Any],
@@ -307,11 +174,10 @@ def build_profiles_from_subentries(
     entry: Any,
     hass: HomeAssistant | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], float]:
-    """Convert UI subentries into the same 6-tuple that load_covers_config returns.
+    """Convert UI subentries into the runtime configuration 6-tuple.
 
     When *hass* is provided every config entry for the domain is scanned so
-    that subentries created under a different entry (e.g. after a YAML→UI
-    migration that left behind a stale entry) are also picked up.
+    that subentries spread across more than one entry are also picked up.
 
     Returns (profiles, modes_list, facades, show_entities, solar_gain_global, command_interval).
     """

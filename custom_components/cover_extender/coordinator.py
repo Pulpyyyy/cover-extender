@@ -25,14 +25,13 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
-from homeassistant.core import HomeAssistant, ServiceCall, Event, callback
+from homeassistant.core import CoreState, HomeAssistant, ServiceCall, Event, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
 
 from .const import (
     DOMAIN,
-    CONF_SOURCE,
     CONF_MODES,
     CONF_SHADING,
     CONF_SOLAR_GAIN,
@@ -55,7 +54,7 @@ from .const import (
 )
 from .helpers import build_extra_attrs, resolve_mode_position
 from .shade import compute_sun_facing, compute_shade_sync
-from .schemas import load_covers_config, build_profiles_from_subentries
+from .schemas import build_profiles_from_subentries
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -69,11 +68,10 @@ class CoverExtenderCoordinator:
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
         self._entry = entry
-        self._source: str = entry.data.get(CONF_SOURCE, "")
         self._store: Store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._cover_queue: asyncio.Queue[tuple[str, dict]] = asyncio.Queue()
         self._worker_task: asyncio.Task | None = None
-        # Configurable interval between cover commands (loaded from YAML)
+        # Configurable interval between cover commands (from the global subentry)
         self._command_interval: float = DEFAULT_COMMAND_INTERVAL
         # Reverse maps rebuilt on every _setup_profiles call
         self._select_to_cover: dict[str, str] = {}
@@ -81,25 +79,21 @@ class CoverExtenderCoordinator:
         self._entity_mode_map: dict[str, list[tuple[str, str]]] = {}
         # Listener unsubscribe callbacks (rebuilt on every _setup_profiles call)
         self._unsubs: list[Callable[[], None]] = []
+        # Covers whose lock is being toggled off by a mode change (not a manual
+        # toggle). _handle_lock_off must skip these — _apply_mode_core is the
+        # single authority for memory restoration on a mode-driven unlock, since
+        # it (unlike _handle_lock_off) knows the target mode's fixed position.
+        self._suspend_lock_off: set[str] = set()
 
-    # ── Source detection ──────────────────────────────────────────────────────
-
-    @property
-    def _is_ui_mode(self) -> bool:
-        """Return True when the integration is configured via UI subentries."""
-        return not self._source
+    # ── Data loading ──────────────────────────────────────────────────────────
 
     async def _load_data(
         self,
     ) -> tuple[dict, dict, dict, dict, dict, float]:
-        """Load configuration from the active source (UI subentries or YAML file)."""
-        if self._is_ui_mode:
-            return build_profiles_from_subentries(self._entry, self.hass)
-        return await self.hass.async_add_executor_job(
-            load_covers_config, self.hass, self._source
-        )
+        """Load configuration from the UI subentries."""
+        return build_profiles_from_subentries(self._entry, self.hass)
 
-    # ── Subentry update listener (UI mode) ────────────────────────────────────
+    # ── Subentry update listener ──────────────────────────────────────────────
 
     async def _on_entry_updated(
         self, hass: HomeAssistant, entry: ConfigEntry
@@ -343,112 +337,119 @@ class CoverExtenderCoordinator:
 
         Does NOT update the select entity; it is already up-to-date at call time.
         """
-        cfg = self._profiles.get(entity_id)
-        if not cfg or mode not in cfg.get(CONF_MODES, {}):
-            _LOGGER.debug("_apply_mode_core: mode '%s' not configured for %s", mode, entity_id)
-            return
+        try:
+            # Own the lock-off decision for this cover: suppress _handle_lock_off
+            # for any on→off transition triggered below (gather). Cleared in finally.
+            self._suspend_lock_off.add(entity_id)
+            cfg = self._profiles.get(entity_id)
+            if not cfg or mode not in cfg.get(CONF_MODES, {}):
+                _LOGGER.debug("_apply_mode_core: mode '%s' not configured for %s", mode, entity_id)
+                return
 
-        cover_name = entity_id.split(".")[1]
-        lock_id    = f"switch.{cover_name}_lock"
-        shading_id = f"switch.{cover_name}_auto_shade"
+            cover_name = entity_id.split(".")[1]
+            lock_id    = f"switch.{cover_name}_lock"
+            shading_id = f"switch.{cover_name}_auto_shade"
 
-        from_mode_cfg = self._modes_list.get(from_mode, {}) if from_mode else {}
-        to_mode_cfg   = self._modes_list.get(mode, {})
+            from_mode_cfg = self._modes_list.get(from_mode, {}) if from_mode else {}
+            to_mode_cfg   = self._modes_list.get(mode, {})
 
-        cover_state = self.hass.states.get(entity_id)
-        current_pos = cover_state.attributes.get("current_position") if cover_state else None
-        old_memory  = self._get_memory(entity_id)
+            cover_state = self.hass.states.get(entity_id)
+            current_pos = cover_state.attributes.get("current_position") if cover_state else None
+            old_memory  = self._get_memory(entity_id)
 
-        from_lock    = from_mode_cfg.get("lock", False)
-        to_lock      = to_mode_cfg.get("lock", False)
-        to_behavior = to_mode_cfg.get("behavior")  # "auto_shade", "solar_gain", or None
+            from_lock    = from_mode_cfg.get("lock", False)
+            to_lock      = to_mode_cfg.get("lock", False)
+            to_behavior = to_mode_cfg.get("behavior")  # "auto_shade", "solar_gain", or None
 
-        # 1. unlock → lock: save current position to memory
-        if not from_lock and to_lock and current_pos is not None:
-            await self._set_memory(entity_id, int(current_pos))
+            # 1. unlock → lock: save current position to memory
+            if not from_lock and to_lock and current_pos is not None:
+                await self._set_memory(entity_id, int(current_pos))
 
-        # 2+3+3b. Apply lock, auto_shade, and auto_solar_gain in parallel.
-        # Behaviors auto_shade and solar_gain force the lock on (mutually exclusive).
-        solar_gain_id = f"switch.{cover_name}_auto_solar_gain"
-        final_lock = to_lock or to_behavior in ("auto_shade", "solar_gain")
-        await asyncio.gather(
-            self.hass.services.async_call(
-                "switch", "turn_on" if final_lock else "turn_off",
-                {"entity_id": lock_id},
-            ),
-            self.hass.services.async_call(
-                "switch", "turn_on" if to_behavior == "auto_shade" else "turn_off",
-                {"entity_id": shading_id},
-            ),
-            self.hass.services.async_call(
-                "switch", "turn_on" if to_behavior == "solar_gain" else "turn_off",
-                {"entity_id": solar_gain_id},
-            ),
-        )
+            # 2+3+3b. Apply lock, auto_shade, and auto_solar_gain in parallel.
+            # Behaviors auto_shade and solar_gain force the lock on (mutually exclusive).
+            solar_gain_id = f"switch.{cover_name}_auto_solar_gain"
+            final_lock = to_lock or to_behavior in ("auto_shade", "solar_gain")
+            await asyncio.gather(
+                self.hass.services.async_call(
+                    "switch", "turn_on" if final_lock else "turn_off",
+                    {"entity_id": lock_id},
+                ),
+                self.hass.services.async_call(
+                    "switch", "turn_on" if to_behavior == "auto_shade" else "turn_off",
+                    {"entity_id": shading_id},
+                ),
+                self.hass.services.async_call(
+                    "switch", "turn_on" if to_behavior == "solar_gain" else "turn_off",
+                    {"entity_id": solar_gain_id},
+                ),
+            )
 
-        # 4. Position (skipped when solar_gain active — _apply_solar_gain determines position)
-        target_position: int | None = None
-        if to_behavior != "solar_gain":
-            fixed_position = cfg.get(CONF_MODES, {}).get(mode)
-            if fixed_position is not None:
-                target_position = resolve_mode_position(self.hass, fixed_position)
-                consume_memory  = False
-            elif from_lock and not to_lock and old_memory is not None:
-                target_position = old_memory
-                consume_memory  = True
-            else:
-                _LOGGER.debug(
-                    "_apply_mode_core '%s' → %s: no fixed position and no stored memory → no move",
-                    mode, entity_id,
-                )
-                consume_memory = False
-
-            if target_position is not None:
-                exclusion: list[str] = cfg.get(CONF_EXCLUSION, [])
-                if any(self.hass.states.is_state(e, "on") for e in exclusion):
-                    _LOGGER.debug(
-                        "_apply_mode_core '%s' → %s: exclusion active, memory ← %d%%",
-                        mode, entity_id, target_position,
-                    )
-                    await self._set_memory(entity_id, target_position)
+            # 4. Position (skipped when solar_gain active — _apply_solar_gain determines position)
+            target_position: int | None = None
+            if to_behavior != "solar_gain":
+                fixed_position = cfg.get(CONF_MODES, {}).get(mode)
+                if fixed_position is not None:
+                    target_position = resolve_mode_position(self.hass, fixed_position)
+                    consume_memory  = False
+                elif from_lock and not to_lock and old_memory is not None:
+                    target_position = old_memory
+                    consume_memory  = True
                 else:
-                    self._enqueue_cover(
-                        "set_cover_position",
-                        {"entity_id": entity_id, "position": target_position},
+                    _LOGGER.debug(
+                        "_apply_mode_core '%s' → %s: no fixed position and no stored memory → no move",
+                        mode, entity_id,
                     )
-                    if consume_memory:
-                        await self._set_memory(entity_id, None)
+                    consume_memory = False
 
-        # 5. Solar gain: compute initial position on mode entry
-        if to_behavior == "solar_gain":
-            self._apply_solar_gain(entity_id, cfg)
+                if target_position is not None:
+                    exclusion: list[str] = cfg.get(CONF_EXCLUSION, [])
+                    if any(self.hass.states.is_state(e, "on") for e in exclusion):
+                        _LOGGER.debug(
+                            "_apply_mode_core '%s' → %s: exclusion active, memory ← %d%%",
+                            mode, entity_id, target_position,
+                        )
+                        await self._set_memory(entity_id, target_position)
+                    else:
+                        self._enqueue_cover(
+                            "set_cover_position",
+                            {"entity_id": entity_id, "position": target_position},
+                        )
+                        if consume_memory:
+                            await self._set_memory(entity_id, None)
 
-        # 5b. Shading: compute and apply shade position immediately on mode entry.
-        #     Bypass the switch-state check in _apply_shade (the switch was just
-        #     turned on above so its HA state hasn't settled yet).
-        if to_behavior == "auto_shade":
-            shade_pos, shade_should_update = compute_shade_sync(self.hass, entity_id, cfg)
-            if shade_should_update:
-                self._enqueue_cover(
-                    "set_cover_position", {"entity_id": entity_id, "position": shade_pos}
-                )
-                self.hass.bus.async_fire(
-                    EVENT_SHADE_APPLIED, {"entity_id": entity_id, "position": shade_pos}
-                )
+            # 5. Solar gain: compute initial position on mode entry
+            if to_behavior == "solar_gain":
+                self._apply_solar_gain(entity_id, cfg)
 
-        self.hass.bus.async_fire(
-            EVENT_MODE_CHANGED,
-            {
-                "entity_id": entity_id,
-                "mode": mode,
-                "from_mode": from_mode,
-                "position": target_position,
-            },
-        )
-        _LOGGER.debug(
-            "_apply_mode_core '%s' → %s (from=%s, lock=%s, position=%s)",
-            mode, entity_id, from_mode, to_lock, target_position,
-        )
+            # 5b. Shading: compute and apply shade position immediately on mode entry.
+            #     Bypass the switch-state check in _apply_shade (the switch was just
+            #     turned on above so its HA state hasn't settled yet).
+            if to_behavior == "auto_shade":
+                shade_pos, shade_should_update = compute_shade_sync(self.hass, entity_id, cfg)
+                if shade_should_update:
+                    self._enqueue_cover(
+                        "set_cover_position", {"entity_id": entity_id, "position": shade_pos}
+                    )
+                    self.hass.bus.async_fire(
+                        EVENT_SHADE_APPLIED, {"entity_id": entity_id, "position": shade_pos}
+                    )
+
+            self.hass.bus.async_fire(
+                EVENT_MODE_CHANGED,
+                {
+                    "entity_id": entity_id,
+                    "mode": mode,
+                    "from_mode": from_mode,
+                    "position": target_position,
+                },
+            )
+            _LOGGER.debug(
+                "_apply_mode_core '%s' → %s (from=%s, lock=%s, position=%s)",
+                mode, entity_id, from_mode, to_lock, target_position,
+            )
+        finally:
+            # Re-enable manual lock-off handling for this cover.
+            self._suspend_lock_off.discard(entity_id)
 
     # ── Listeners ──────────────────────────────────────────────────────────────
 
@@ -617,6 +618,14 @@ class CoverExtenderCoordinator:
             return
         cover_id = self._lock_to_cover.get(event.data.get("entity_id"))
         if not cover_id:
+            return
+        # Mode-driven unlock: _apply_mode_core handles the position (fixed or
+        # memory). Skip here to avoid a double application / spurious move.
+        # One-shot consume so a later *manual* unlock still works even if
+        # _apply_mode_core's cleanup is skipped for any reason.
+        if cover_id in self._suspend_lock_off:
+            self._suspend_lock_off.discard(cover_id)
+            _LOGGER.debug("lock released %s → suspended (mode-driven), handled by _apply_mode_core", cover_id)
             return
         cfg: dict = self._profiles.get(cover_id, {})
         exclusion: list[str] = cfg.get(CONF_EXCLUSION, [])
@@ -812,16 +821,21 @@ class CoverExtenderCoordinator:
         self.hass.data[DOMAIN][CONF_COMMAND_INTERVAL]    = command_interval
         self._command_interval                           = command_interval
 
-        # In UI mode, react to subentry changes automatically
-        if self._is_ui_mode:
-            self._entry.async_on_unload(
-                self._entry.add_update_listener(self._on_entry_updated)
-            )
-
-        # _setup_profiles requires cover entities to already be in the state machine
-        self.hass.bus.async_listen_once(
-            "homeassistant_started", lambda _: self._setup_profiles()
+        # React to subentry changes automatically
+        self._entry.async_on_unload(
+            self._entry.add_update_listener(self._on_entry_updated)
         )
+
+        # _setup_profiles requires cover entities to already be in the state machine.
+        # At boot, defer until HA has started; if the entry is set up/reloaded while
+        # HA is already running (manual reload), run it immediately — otherwise
+        # homeassistant_started never fires again and the integration stays inert.
+        if self.hass.state is CoreState.running:
+            self._setup_profiles()
+        else:
+            self.hass.bus.async_listen_once(
+                "homeassistant_started", lambda _: self._setup_profiles()
+            )
 
     async def async_stop(self, _event: Event | None = None) -> None:
         """Cancel the worker and unsubscribe all listeners."""

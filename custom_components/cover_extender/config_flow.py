@@ -1026,7 +1026,7 @@ class CoverFlowHandler(ConfigSubentryFlow):
             if isinstance(cfg, dict):
                 if cfg.get("type") == "fixed" and cfg.get("value") is not None:
                     result[name] = int(cfg["value"])
-            elif isinstance(cfg, (int, float)) and cfg is not None:
+            elif isinstance(cfg, (int, float)):
                 result[name] = int(cfg)
         return result
 
@@ -1433,10 +1433,3 @@ class CoverExtenderConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if self._async_current_entries():
             return self.async_abort(reason="already_configured")
         return self.async_create_entry(title="Cover Extender", data={})
-
-    async def async_step_import(
-        self, import_data: dict[str, Any]
-    ) -> config_entries.ConfigFlowResult:
-        if self._async_current_entries():
-            return self.async_abort(reason="already_configured")
-        return self.async_create_entry(title="Cover Extender", data=import_data)
