@@ -34,7 +34,7 @@
     },
     "compute_shade_position": {
       "name": "Calculer la position d'ombrage",
-      "description": "Calcule la position d'ombrage solaire d'un volet en fonction de sa configuration et de la position actuelle du soleil. Retourne la position (0–100 %) et should_update.",
+      "description": "Calcule la position d'ombrage solaire d'un volet en fonction de sa configuration et de la position actuelle du soleil. Retourne la position (0-100 %) et should_update.",
       "fields": {
         "entity_id": {
           "name": "Volet",
@@ -159,7 +159,7 @@
           }
         },
         "item": {
-          "title": "Façade — {name}",
+          "title": "Façade - {name}",
           "menu_options": {
             "edit": "Modifier",
             "delete": "Supprimer"
@@ -202,7 +202,7 @@
           }
         },
         "item": {
-          "title": "Mode — {name}",
+          "title": "Mode - {name}",
           "menu_options": {
             "edit": "Modifier",
             "delete": "Supprimer"
@@ -238,14 +238,14 @@
           }
         },
         "item": {
-          "title": "Gabarit — {name}",
+          "title": "Gabarit - {name}",
           "menu_options": {
             "edit": "Modifier",
             "delete": "Supprimer"
           }
         },
         "add": {
-          "title": "Ajouter un gabarit — identité",
+          "title": "Ajouter un gabarit - identité",
           "data": {
             "name": "Nom",
             "angle_left": "Angle gauche",
@@ -253,12 +253,12 @@
           }
         },
         "add_automation": {
-          "title": "Ajouter un gabarit — automatisation",
+          "title": "Ajouter un gabarit - automatisation",
           "data": {
             "shade_distance": "Distance de l'obstacle",
             "shade_max_height": "Hauteur max du volet",
             "shade_min_height": "Hauteur min du volet",
-            "shade_degrees": "Angle d'ouverture",
+            "shade_degrees": "Angle de détection solaire",
             "shade_min_elevation": "Élévation solaire min",
             "shade_max_elevation": "Élévation solaire max",
             "shade_minimum_position": "Position minimale",
@@ -270,7 +270,7 @@
           }
         },
         "edit": {
-          "title": "Modifier un gabarit — identité",
+          "title": "Modifier un gabarit - identité",
           "data": {
             "name": "Nom",
             "angle_left": "Angle gauche",
@@ -278,12 +278,12 @@
           }
         },
         "edit_automation": {
-          "title": "Modifier un gabarit — automatisation",
+          "title": "Modifier un gabarit - automatisation",
           "data": {
             "shade_distance": "Distance de l'obstacle",
             "shade_max_height": "Hauteur max du volet",
             "shade_min_height": "Hauteur min du volet",
-            "shade_degrees": "Angle d'ouverture",
+            "shade_degrees": "Angle de détection solaire",
             "shade_min_elevation": "Élévation solaire min",
             "shade_max_elevation": "Élévation solaire max",
             "shade_minimum_position": "Position minimale",
@@ -313,7 +313,7 @@
           }
         },
         "item": {
-          "title": "Volet — {name}",
+          "title": "Volet - {name}",
           "menu_options": {
             "edit": "Modifier",
             "modes": "Lier des modes",
@@ -321,14 +321,14 @@
           }
         },
         "modes": {
-          "title": "Lier des modes au volet",
+          "title": "Lier des modes au volet ({cover})",
           "description": "Sélectionnez les modes à lier à ce volet : seuls les modes liés pourront lui être appliqués.",
           "data": {
             "selected_modes": "Modes liés"
           }
         },
         "mode_position": {
-          "title": "Position du mode — {name}",
+          "title": "Position du mode - {name} ({cover})",
           "description": "Choisissez si ce mode impose une position fixe pour ce volet, ou aucune (le volet reste en place).",
           "data": {
             "position_type": "Type de position",
@@ -336,11 +336,11 @@
           }
         },
         "mode_position_auto": {
-          "title": "Position du mode — {name}",
+          "title": "Position du mode - {name} ({cover})",
           "description": "La position de ce mode est gérée automatiquement par son comportement (ombrage ou gain solaire). Rien à définir ici."
         },
         "add": {
-          "title": "Ajouter un volet — identité",
+          "title": "Ajouter un volet - identité",
           "data": {
             "entity_id": "Entité volet",
             "entity_picture": "URL de l'image",
@@ -350,14 +350,14 @@
           }
         },
         "add_behavior": {
-          "title": "Ajouter un volet — comportement",
+          "title": "Ajouter un volet - comportement ({cover})",
           "data": {
             "angle_left": "Angle gauche",
             "angle_right": "Angle droit",
             "shade_distance": "Distance de l'obstacle",
             "shade_max_height": "Hauteur max du volet",
             "shade_min_height": "Hauteur min du volet",
-            "shade_degrees": "Angle d'ouverture",
+            "shade_degrees": "Angle de détection solaire",
             "shade_min_elevation": "Élévation solaire min",
             "shade_max_elevation": "Élévation solaire max",
             "shade_minimum_position": "Position minimale",
@@ -371,14 +371,14 @@
           }
         },
         "add_modes": {
-          "title": "Ajouter un volet — lier des modes",
+          "title": "Ajouter un volet - lier des modes ({cover})",
           "description": "Sélectionnez les modes à lier à ce volet : seuls les modes liés pourront lui être appliqués.",
           "data": {
             "selected_modes": "Modes liés"
           }
         },
         "edit": {
-          "title": "Modifier le volet — identité",
+          "title": "Modifier le volet - identité ({cover})",
           "data": {
             "entity_id": "Entité volet",
             "entity_picture": "URL de l'image",
@@ -388,14 +388,14 @@
           }
         },
         "edit_behavior": {
-          "title": "Modifier le volet — comportement",
+          "title": "Modifier le volet - comportement ({cover})",
           "data": {
             "angle_left": "Angle gauche",
             "angle_right": "Angle droit",
             "shade_distance": "Distance de l'obstacle",
             "shade_max_height": "Hauteur max du volet",
             "shade_min_height": "Hauteur min du volet",
-            "shade_degrees": "Angle d'ouverture",
+            "shade_degrees": "Angle de détection solaire",
             "shade_min_elevation": "Élévation solaire min",
             "shade_max_elevation": "Élévation solaire max",
             "shade_minimum_position": "Position minimale",
@@ -409,7 +409,7 @@
           }
         },
         "edit_modes": {
-          "title": "Modifier le volet — lier des modes",
+          "title": "Modifier le volet - lier des modes ({cover})",
           "description": "Sélectionnez les modes à lier à ce volet : seuls les modes liés pourront lui être appliqués.",
           "data": {
             "selected_modes": "Modes liés"
