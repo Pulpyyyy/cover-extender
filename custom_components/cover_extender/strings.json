@@ -116,7 +116,7 @@
   },
   "config_subentries": {
     "global": {
-      "entry_title": "General settings",
+      "entry_type": "General settings",
       "initiate_flow": {
         "user": "Configure general settings"
       },
@@ -210,7 +210,7 @@
       }
     },
     "facade": {
-      "entry_title": "Facades",
+      "entry_type": "Facades",
       "initiate_flow": {
         "user": "Manage facades"
       },
@@ -269,7 +269,7 @@
       }
     },
     "mode": {
-      "entry_title": "Modes",
+      "entry_type": "Modes",
       "initiate_flow": {
         "user": "Manage modes"
       },
@@ -380,7 +380,7 @@
       }
     },
     "cover_template": {
-      "entry_title": "Templates",
+      "entry_type": "Templates",
       "initiate_flow": {
         "user": "Manage cover templates"
       },
@@ -567,7 +567,7 @@
       }
     },
     "cover": {
-      "entry_title": "Covers",
+      "entry_type": "Covers",
       "initiate_flow": {
         "user": "Manage covers"
       },

@@ -30,12 +30,12 @@ _TITLE_FALLBACKS: dict[str, str] = {
 
 
 async def _subentry_title(hass: HomeAssistant, subentry_type: str) -> str:
-    """Return the translated entry_title for a singleton subentry."""
+    """Return the translated entry_type label for a singleton subentry."""
     try:
         translations = await ha_translation.async_get_translations(
             hass, hass.config.language, "config_subentries", {DOMAIN}
         )
-        key = f"component.{DOMAIN}.config_subentries.{subentry_type}.entry_title"
+        key = f"component.{DOMAIN}.config_subentries.{subentry_type}.entry_type"
         title = translations.get(key)
         if title:
             return title

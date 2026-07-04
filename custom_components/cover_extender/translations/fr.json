@@ -116,7 +116,7 @@
   },
   "config_subentries": {
     "global": {
-      "entry_title": "Paramètres généraux",
+      "entry_type": "Paramètres généraux",
       "initiate_flow": {
         "user": "Configurer les paramètres généraux"
       },
@@ -210,7 +210,7 @@
       }
     },
     "facade": {
-      "entry_title": "Façades",
+      "entry_type": "Façades",
       "initiate_flow": {
         "user": "Gérer les façades"
       },
@@ -269,7 +269,7 @@
       }
     },
     "mode": {
-      "entry_title": "Modes",
+      "entry_type": "Modes",
       "initiate_flow": {
         "user": "Gérer les modes"
       },
@@ -380,7 +380,7 @@
       }
     },
     "cover_template": {
-      "entry_title": "Gabarits",
+      "entry_type": "Gabarits",
       "initiate_flow": {
         "user": "Gérer les gabarits de volet"
       },
@@ -567,7 +567,7 @@
       }
     },
     "cover": {
-      "entry_title": "Volets",
+      "entry_type": "Volets",
       "initiate_flow": {
         "user": "Gérer les volets"
       },
