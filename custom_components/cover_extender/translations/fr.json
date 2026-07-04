@@ -69,6 +69,17 @@
         "solar_gain": "Gain solaire"
       }
     },
+    "item_labels": {
+      "options": {
+        "covers": "volet(s)",
+        "modes": "mode(s)",
+        "lock": "verrouillage",
+        "hidden": "masqué",
+        "no_facade": "(aucune façade créée)",
+        "no_template": "(aucun gabarit créé)",
+        "no_mode": "(aucun mode créé)"
+      }
+    },
     "facade_manage": {
       "options": {
         "__add__": "Ajouter une façade"
@@ -207,6 +218,10 @@
         "reconfigure_successful": "Façades mises à jour avec succès.",
         "already_configured": "Les façades sont déjà configurées. Utilisez le bouton ✏ sur l'entrée Façades pour les gérer."
       },
+      "error": {
+        "name_required": "Le nom est obligatoire.",
+        "name_exists": "Une façade porte déjà ce nom."
+      },
       "step": {
         "manage": {
           "title": "Façades ({count})",
@@ -233,6 +248,13 @@
             "delete": "Supprimer"
           }
         },
+        "delete_blocked": {
+          "title": "Suppression impossible",
+          "description": "La façade « {name} » est utilisée par {count} volet(s) : {covers}. Modifiez d'abord ces volets.",
+          "menu_options": {
+            "manage": "Retour à la liste"
+          }
+        },
         "edit": {
           "title": "Modifier une façade",
           "data": {
@@ -254,6 +276,10 @@
       "abort": {
         "reconfigure_successful": "Modes mis à jour avec succès.",
         "already_configured": "Les modes sont déjà configurés. Utilisez le bouton ✏ sur l'entrée Modes pour les gérer."
+      },
+      "error": {
+        "name_required": "Le nom est obligatoire.",
+        "name_exists": "Un mode porte déjà ce nom."
       },
       "step": {
         "manage": {
@@ -307,6 +333,13 @@
             "delete": "Supprimer"
           }
         },
+        "delete_blocked": {
+          "title": "Suppression impossible",
+          "description": "Le mode « {name} » est lié à {count} volet(s) : {covers}. Déliez-le d'abord de ces volets.",
+          "menu_options": {
+            "manage": "Retour à la liste"
+          }
+        },
         "edit": {
           "title": "Modifier un mode",
           "data": {
@@ -355,6 +388,12 @@
         "reconfigure_successful": "Gabarits mis à jour avec succès.",
         "already_configured": "Les gabarits sont déjà configurés. Utilisez le bouton ✏ sur l'entrée Gabarits pour les gérer."
       },
+      "error": {
+        "name_required": "Le nom est obligatoire.",
+        "name_exists": "Un gabarit porte déjà ce nom.",
+        "min_height_above_max": "La hauteur minimale dépasse la hauteur maximale.",
+        "min_elevation_above_max": "L'élévation solaire minimale dépasse l'élévation maximale."
+      },
       "step": {
         "manage": {
           "title": "Modèles ({count})",
@@ -368,6 +407,13 @@
           "menu_options": {
             "edit": "Modifier",
             "delete": "Supprimer"
+          }
+        },
+        "delete_blocked": {
+          "title": "Suppression impossible",
+          "description": "Le gabarit « {name} » est utilisé par {count} volet(s) : {covers}. Modifiez d'abord ces volets.",
+          "menu_options": {
+            "manage": "Retour à la liste"
           }
         },
         "add": {
@@ -527,7 +573,14 @@
       },
       "abort": {
         "reconfigure_successful": "Volets mis à jour avec succès.",
-        "already_configured": "Les volets sont déjà configurés. Utilisez le bouton ✏ sur l'entrée Volets pour les gérer."
+        "already_configured": "Les volets sont déjà configurés. Utilisez le bouton ✏ sur l'entrée Volets pour les gérer.",
+        "no_facades": "Aucune façade n'a encore été créée. Créez d'abord une façade, puis ajoutez vos volets."
+      },
+      "error": {
+        "cover_exists": "Ce volet est déjà configuré.",
+        "facade_required": "Choisissez une façade.",
+        "min_height_above_max": "La hauteur minimale dépasse la hauteur maximale.",
+        "min_elevation_above_max": "L'élévation solaire minimale dépasse l'élévation maximale."
       },
       "step": {
         "manage": {

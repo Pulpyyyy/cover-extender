@@ -69,6 +69,17 @@
         "solar_gain": "Solar gain"
       }
     },
+    "item_labels": {
+      "options": {
+        "covers": "cover(s)",
+        "modes": "mode(s)",
+        "lock": "lock",
+        "hidden": "hidden",
+        "no_facade": "(no facade created yet)",
+        "no_template": "(no template created yet)",
+        "no_mode": "(no mode created yet)"
+      }
+    },
     "facade_manage": {
       "options": {
         "__add__": "Add facade"
@@ -207,6 +218,10 @@
         "reconfigure_successful": "Facades updated successfully.",
         "already_configured": "Facades are already configured. Use the ✏ button on the Facades entry to manage them."
       },
+      "error": {
+        "name_required": "Name is required.",
+        "name_exists": "A facade with this name already exists."
+      },
       "step": {
         "manage": {
           "title": "Facades ({count})",
@@ -233,6 +248,13 @@
             "delete": "Delete"
           }
         },
+        "delete_blocked": {
+          "title": "Deletion blocked",
+          "description": "Facade \"{name}\" is used by {count} cover(s): {covers}. Edit those covers first.",
+          "menu_options": {
+            "manage": "Back to the list"
+          }
+        },
         "edit": {
           "title": "Edit facade",
           "data": {
@@ -254,6 +276,10 @@
       "abort": {
         "reconfigure_successful": "Modes updated successfully.",
         "already_configured": "Modes are already configured. Use the ✏ button on the Modes entry to manage them."
+      },
+      "error": {
+        "name_required": "Name is required.",
+        "name_exists": "A mode with this name already exists."
       },
       "step": {
         "manage": {
@@ -307,6 +333,13 @@
             "delete": "Delete"
           }
         },
+        "delete_blocked": {
+          "title": "Deletion blocked",
+          "description": "Mode \"{name}\" is linked to {count} cover(s): {covers}. Unlink it from those covers first.",
+          "menu_options": {
+            "manage": "Back to the list"
+          }
+        },
         "edit": {
           "title": "Edit mode",
           "data": {
@@ -355,6 +388,12 @@
         "reconfigure_successful": "Templates updated successfully.",
         "already_configured": "Templates are already configured. Use the ✏ button on the Templates entry to manage them."
       },
+      "error": {
+        "name_required": "Name is required.",
+        "name_exists": "A template with this name already exists.",
+        "min_height_above_max": "Minimum height is above maximum height.",
+        "min_elevation_above_max": "Minimum sun elevation is above maximum elevation."
+      },
       "step": {
         "manage": {
           "title": "Templates ({count})",
@@ -368,6 +407,13 @@
           "menu_options": {
             "edit": "Edit",
             "delete": "Delete"
+          }
+        },
+        "delete_blocked": {
+          "title": "Deletion blocked",
+          "description": "Template \"{name}\" is used by {count} cover(s): {covers}. Edit those covers first.",
+          "menu_options": {
+            "manage": "Back to the list"
           }
         },
         "add": {
@@ -527,7 +573,14 @@
       },
       "abort": {
         "reconfigure_successful": "Covers updated successfully.",
-        "already_configured": "Covers are already configured. Use the ✏ button on the Covers entry to manage them."
+        "already_configured": "Covers are already configured. Use the ✏ button on the Covers entry to manage them.",
+        "no_facades": "No facade has been created yet. Create a facade first, then add covers."
+      },
+      "error": {
+        "cover_exists": "This cover is already configured.",
+        "facade_required": "Pick a facade.",
+        "min_height_above_max": "Minimum height is above maximum height.",
+        "min_elevation_above_max": "Minimum sun elevation is above maximum elevation."
       },
       "step": {
         "manage": {

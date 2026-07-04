@@ -15,7 +15,11 @@ _LOGGER = logging.getLogger(__name__)
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigSubentryFlow, ConfigEntry
 from homeassistant.data_entry_flow import section
-from homeassistant.helpers import entity_registry as er, selector
+from homeassistant.helpers import (
+    entity_registry as er,
+    selector,
+    translation as ha_translation,
+)
 from homeassistant.core import HomeAssistant, callback
 
 from .const import (
@@ -306,6 +310,136 @@ def _names_from_hass(hass: HomeAssistant, subentry_type: str) -> list[str]:
     return names
 
 
+def _items_from_hass(hass: HomeAssistant, subentry_type: str) -> list[dict[str, Any]]:
+    """Return item dicts for *subentry_type* across ALL domain config entries.
+
+    Same lookup strategy as _names_from_hass (singleton format first, legacy
+    individual subentries as fallback), de-duplicated by name.
+    """
+    items: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    found_singleton = False
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        for s in entry.subentries.values():
+            if s.subentry_type != subentry_type:
+                continue
+            if "items" in s.data:
+                found_singleton = True
+                for item in s.data.get("items", []):
+                    if (name := item.get("name")) and name not in seen:
+                        seen.add(name)
+                        items.append(item)
+    if found_singleton:
+        return items
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        for s in entry.subentries.values():
+            if s.subentry_type == subentry_type and (name := s.data.get("name")):
+                if name not in seen:
+                    seen.add(name)
+                    items.append(dict(s.data))
+    return items
+
+
+# ── Dynamic option labels ──────────────────────────────────────────────────────
+# Manage lists and identity dropdowns build their option labels in code
+# (usage counts, azimuth, mode markers), so they cannot go through a selector
+# translation_key. The text fragments are fetched from the loaded translations
+# instead (same approach as helpers._subentry_title) with English fallbacks.
+
+_LABEL_FALLBACKS: dict[str, str] = {
+    "covers":      "cover(s)",
+    "modes":       "mode(s)",
+    "lock":        "lock",
+    "hidden":      "hidden",
+    "auto_shade":  "auto shade",
+    "solar_gain":  "solar gain",
+    "no_facade":   "(no facade yet)",
+    "no_template": "(no template yet)",
+    "no_mode":     "(no mode yet)",
+}
+
+
+async def _ui_labels(hass: HomeAssistant) -> dict[str, str]:
+    """Return translated label fragments for dynamically built options."""
+    labels = dict(_LABEL_FALLBACKS)
+    try:
+        translations = await ha_translation.async_get_translations(
+            hass, hass.config.language, "selector", {DOMAIN}
+        )
+    except Exception:
+        return labels
+    for group in ("item_labels", "mode_behavior"):
+        prefix = f"component.{DOMAIN}.selector.{group}.options."
+        for key, value in translations.items():
+            if key.startswith(prefix):
+                labels[key[len(prefix):]] = value
+    return labels
+
+
+def _usage_counts(hass: HomeAssistant) -> dict[str, dict[str, int]]:
+    """Count how many covers reference each facade / template / mode (by name)."""
+    counts: dict[str, dict[str, int]] = {"facade": {}, "template": {}, "mode": {}}
+    _, sub = _find_singleton(hass, SUBENTRY_TYPE_COVER)
+    for item in (sub.data.get("items", []) if sub else []):
+        if facade := item.get("facade"):
+            counts["facade"][facade] = counts["facade"].get(facade, 0) + 1
+        if template := item.get("template"):
+            counts["template"][template] = counts["template"].get(template, 0) + 1
+        for mode in (item.get("modes") or {}):
+            counts["mode"][mode] = counts["mode"].get(mode, 0) + 1
+    return counts
+
+
+def _with_usage(label: str, count: int, labels: dict[str, str], noun: str = "covers") -> str:
+    """Append a usage-count suffix ("· 3 cover(s)") to *label* when count > 0."""
+    return f"{label} · {count} {labels[noun]}" if count else label
+
+
+def _cover_display(hass: HomeAssistant, item: dict[str, Any]) -> str:
+    """Human-facing name of a cover item (friendly name, else entity_id)."""
+    entity_id = item.get("entity_id", "")
+    state = hass.states.get(entity_id)
+    friendly = state.attributes.get("friendly_name") if state else None
+    return friendly or entity_id
+
+
+def _referencing_covers(hass: HomeAssistant, kind: str, name: str) -> list[str]:
+    """Display names of the covers referencing facade / template / mode *name*."""
+    _, sub = _find_singleton(hass, SUBENTRY_TYPE_COVER)
+    out: list[str] = []
+    for item in (sub.data.get("items", []) if sub else []):
+        if kind == SUBENTRY_TYPE_FACADE:
+            referenced = item.get("facade") == name
+        elif kind == SUBENTRY_TYPE_TEMPLATE:
+            referenced = item.get("template") == name
+        else:
+            referenced = name in (item.get("modes") or {})
+        if referenced:
+            out.append(_cover_display(hass, item))
+    return out
+
+
+def _validate_item_name(
+    name: str, items: list[dict[str, Any]], skip_idx: int | None = None
+) -> dict[str, str]:
+    """Validate a facade / mode / template name: non-empty and unique."""
+    if not name:
+        return {"name": "name_required"}
+    for i, item in enumerate(items):
+        if i != skip_idx and item.get("name") == name:
+            return {"name": "name_exists"}
+    return {}
+
+
+def _behavior_errors(flat: dict[str, Any]) -> dict[str, str]:
+    """Cross-field checks on a flattened behavior / automation form."""
+    if flat.get("shade_min_height", 0) > flat.get("shade_max_height", 3):
+        return {"base": "min_height_above_max"}
+    if flat.get("shade_min_elevation", 0) > flat.get("shade_max_elevation", 90):
+        return {"base": "min_elevation_above_max"}
+    return {}
+
+
 # ── Singleton save helper ──────────────────────────────────────────────────────
 
 def _singleton_save(
@@ -426,6 +560,7 @@ class FacadeFlowHandler(ConfigSubentryFlow):
 
     _items: list[dict[str, Any]]
     _edit_idx: int
+    _blocked: tuple[str, list[str]]
 
     @staticmethod
     def _item_schema() -> vol.Schema:
@@ -475,9 +610,15 @@ class FacadeFlowHandler(ConfigSubentryFlow):
                 return await self.async_step_item()
 
         _LOGGER.debug("config_flow [facade] async_step_manage: showing form with %d item(s)", len(self._items))
+        labels = await _ui_labels(self.hass)
+        used = _usage_counts(self.hass)["facade"]
         options: list[dict[str, str]] = [{"value": _ACTION_ADD, "label": "Add facade"}]
         for i, item in enumerate(self._items):
-            options.append({"value": f"select:{i}", "label": item["name"]})
+            label = f"{item['name']} ({float(item.get('azimuth', 180)):g}°)"
+            options.append({
+                "value": f"select:{i}",
+                "label": _with_usage(label, used.get(item["name"], 0), labels),
+            })
 
         return self.async_show_form(
             step_id="manage",
@@ -503,35 +644,66 @@ class FacadeFlowHandler(ConfigSubentryFlow):
     async def async_step_delete(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
+        name = self._items[self._edit_idx].get("name", "")
+        if users := _referencing_covers(self.hass, SUBENTRY_TYPE_FACADE, name):
+            self._blocked = (name, users)
+            return await self.async_step_delete_blocked()
         removed = self._items.pop(self._edit_idx)
         _LOGGER.debug("config_flow [facade] delete: removed '%s', %d item(s) remaining", removed.get("name"), len(self._items))
         _update_singleton_in_place(self, SUBENTRY_TYPE_FACADE, self._items)
         return await self.async_step_manage()
 
+    async def async_step_delete_blocked(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        name, users = self._blocked
+        return self.async_show_menu(
+            step_id="delete_blocked",
+            menu_options=["manage"],
+            description_placeholders={
+                "name": name, "count": str(len(users)), "covers": ", ".join(users),
+            },
+        )
+
     async def async_step_add(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
+        errors: dict[str, str] = {}
         if user_input is not None:
-            _LOGGER.debug("config_flow [facade] async_step_add: adding '%s'", user_input.get("name"))
-            self._items.append(user_input)
-            _LOGGER.debug("config_flow [facade] async_step_add: saving %d item(s)", len(self._items))
-            return _singleton_save(self, SUBENTRY_TYPE_FACADE, await _subentry_title(self.hass, SUBENTRY_TYPE_FACADE), self._items)
-        return self.async_show_form(step_id="add", data_schema=self._item_schema())
+            name = (user_input.get("name") or "").strip()
+            errors = _validate_item_name(name, self._items)
+            if not errors:
+                _LOGGER.debug("config_flow [facade] async_step_add: adding '%s'", name)
+                self._items.append({**user_input, "name": name})
+                _LOGGER.debug("config_flow [facade] async_step_add: saving %d item(s)", len(self._items))
+                return _singleton_save(self, SUBENTRY_TYPE_FACADE, await _subentry_title(self.hass, SUBENTRY_TYPE_FACADE), self._items)
+        return self.async_show_form(
+            step_id="add",
+            data_schema=self.add_suggested_values_to_schema(
+                self._item_schema(), user_input or {}
+            ),
+            errors=errors,
+        )
 
     async def async_step_edit(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
+        errors: dict[str, str] = {}
         if user_input is not None:
-            old_name = self._items[self._edit_idx].get("name")
-            _LOGGER.debug("config_flow [facade] async_step_edit: updating index %d -> '%s'", self._edit_idx, user_input.get("name"))
-            self._items[self._edit_idx] = user_input
-            _propagate_rename(self.hass, SUBENTRY_TYPE_FACADE, old_name, user_input.get("name"))
-            return _singleton_save(self, SUBENTRY_TYPE_FACADE, await _subentry_title(self.hass, SUBENTRY_TYPE_FACADE), self._items)
+            name = (user_input.get("name") or "").strip()
+            errors = _validate_item_name(name, self._items, skip_idx=self._edit_idx)
+            if not errors:
+                old_name = self._items[self._edit_idx].get("name")
+                _LOGGER.debug("config_flow [facade] async_step_edit: updating index %d -> '%s'", self._edit_idx, name)
+                self._items[self._edit_idx] = {**user_input, "name": name}
+                _propagate_rename(self.hass, SUBENTRY_TYPE_FACADE, old_name, name)
+                return _singleton_save(self, SUBENTRY_TYPE_FACADE, await _subentry_title(self.hass, SUBENTRY_TYPE_FACADE), self._items)
         return self.async_show_form(
             step_id="edit",
             data_schema=self.add_suggested_values_to_schema(
-                self._item_schema(), self._items[self._edit_idx]
+                self._item_schema(), user_input or self._items[self._edit_idx]
             ),
+            errors=errors,
         )
 
 
@@ -542,6 +714,7 @@ class ModeFlowHandler(ConfigSubentryFlow):
 
     _items: list[dict[str, Any]]
     _edit_idx: int
+    _blocked: tuple[str, list[str]]
 
     @staticmethod
     def _item_schema(values: dict[str, Any] | None = None) -> vol.Schema:
@@ -619,9 +792,24 @@ class ModeFlowHandler(ConfigSubentryFlow):
                 return await self.async_step_item()
 
         _LOGGER.debug("config_flow [mode] async_step_manage: showing form with %d item(s)", len(self._items))
+        labels = await _ui_labels(self.hass)
+        used = _usage_counts(self.hass)["mode"]
         options: list[dict[str, str]] = [{"value": _ACTION_ADD, "label": "Add mode"}]
         for i, item in enumerate(self._items):
-            options.append({"value": f"select:{i}", "label": item["name"]})
+            markers: list[str] = []
+            if item.get("lock"):
+                markers.append(labels["lock"])
+            if behavior := item.get("behavior"):
+                markers.append(labels.get(behavior, behavior))
+            if item.get("hidden"):
+                markers.append(labels["hidden"])
+            label = item["name"]
+            if markers:
+                label += f" ({', '.join(markers)})"
+            options.append({
+                "value": f"select:{i}",
+                "label": _with_usage(label, used.get(item["name"], 0), labels),
+            })
 
         return self.async_show_form(
             step_id="manage",
@@ -647,10 +835,26 @@ class ModeFlowHandler(ConfigSubentryFlow):
     async def async_step_delete(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
+        name = self._items[self._edit_idx].get("name", "")
+        if users := _referencing_covers(self.hass, SUBENTRY_TYPE_MODE, name):
+            self._blocked = (name, users)
+            return await self.async_step_delete_blocked()
         removed = self._items.pop(self._edit_idx)
         _LOGGER.debug("config_flow [mode] delete: removed '%s', %d item(s) remaining", removed.get("name"), len(self._items))
         _update_singleton_in_place(self, SUBENTRY_TYPE_MODE, self._items)
         return await self.async_step_manage()
+
+    async def async_step_delete_blocked(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        name, users = self._blocked
+        return self.async_show_menu(
+            step_id="delete_blocked",
+            menu_options=["manage"],
+            description_placeholders={
+                "name": name, "count": str(len(users)), "covers": ", ".join(users),
+            },
+        )
 
     @staticmethod
     def _ui_to_item(user_input: dict[str, Any]) -> dict[str, Any]:
@@ -674,24 +878,37 @@ class ModeFlowHandler(ConfigSubentryFlow):
     async def async_step_add(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
+        errors: dict[str, str] = {}
+        flat: dict[str, Any] | None = None
         if user_input is not None:
-            _LOGGER.debug("config_flow [mode] async_step_add: adding '%s'", user_input.get("name"))
-            self._items.append(self._ui_to_item(_flatten_sections(user_input)))
-            return _singleton_save(self, SUBENTRY_TYPE_MODE, await _subentry_title(self.hass, SUBENTRY_TYPE_MODE), self._items)
-        return self.async_show_form(step_id="add", data_schema=self._item_schema())
+            flat = _flatten_sections(user_input)
+            flat["name"] = (flat.get("name") or "").strip()
+            errors = _validate_item_name(flat["name"], self._items)
+            if not errors:
+                _LOGGER.debug("config_flow [mode] async_step_add: adding '%s'", flat["name"])
+                self._items.append(self._ui_to_item(flat))
+                return _singleton_save(self, SUBENTRY_TYPE_MODE, await _subentry_title(self.hass, SUBENTRY_TYPE_MODE), self._items)
+        return self.async_show_form(step_id="add", data_schema=self._item_schema(flat), errors=errors)
 
     async def async_step_edit(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
+        errors: dict[str, str] = {}
+        flat: dict[str, Any] | None = None
         if user_input is not None:
-            old_name = self._items[self._edit_idx].get("name")
-            _LOGGER.debug("config_flow [mode] async_step_edit: updating index %d -> '%s'", self._edit_idx, user_input.get("name"))
-            self._items[self._edit_idx] = self._ui_to_item(_flatten_sections(user_input))
-            _propagate_rename(self.hass, SUBENTRY_TYPE_MODE, old_name, self._items[self._edit_idx].get("name"))
-            return _singleton_save(self, SUBENTRY_TYPE_MODE, await _subentry_title(self.hass, SUBENTRY_TYPE_MODE), self._items)
+            flat = _flatten_sections(user_input)
+            flat["name"] = (flat.get("name") or "").strip()
+            errors = _validate_item_name(flat["name"], self._items, skip_idx=self._edit_idx)
+            if not errors:
+                old_name = self._items[self._edit_idx].get("name")
+                _LOGGER.debug("config_flow [mode] async_step_edit: updating index %d -> '%s'", self._edit_idx, flat["name"])
+                self._items[self._edit_idx] = self._ui_to_item(flat)
+                _propagate_rename(self.hass, SUBENTRY_TYPE_MODE, old_name, flat["name"])
+                return _singleton_save(self, SUBENTRY_TYPE_MODE, await _subentry_title(self.hass, SUBENTRY_TYPE_MODE), self._items)
         return self.async_show_form(
             step_id="edit",
-            data_schema=self._item_schema(self._item_to_ui(self._items[self._edit_idx])),
+            data_schema=self._item_schema(flat or self._item_to_ui(self._items[self._edit_idx])),
+            errors=errors,
         )
 
 
@@ -702,6 +919,7 @@ class TemplateFlowHandler(ConfigSubentryFlow):
 
     _items: list[dict[str, Any]]
     _edit_idx: int
+    _blocked: tuple[str, list[str]]
     _pending_identity: dict[str, Any]
 
     @staticmethod
@@ -798,9 +1016,18 @@ class TemplateFlowHandler(ConfigSubentryFlow):
                 return await self.async_step_item()
 
         _LOGGER.debug("config_flow [template] async_step_manage: showing form with %d item(s)", len(self._items))
+        labels = await _ui_labels(self.hass)
+        used = _usage_counts(self.hass)["template"]
         options: list[dict[str, str]] = [{"value": _ACTION_ADD, "label": "Add template"}]
         for i, item in enumerate(self._items):
-            options.append({"value": f"select:{i}", "label": item["name"]})
+            label = (
+                f"{item['name']} "
+                f"({float(item.get('angle_left', 85)):g}°/{float(item.get('angle_right', 85)):g}°)"
+            )
+            options.append({
+                "value": f"select:{i}",
+                "label": _with_usage(label, used.get(item["name"], 0), labels),
+            })
 
         return self.async_show_form(
             step_id="manage",
@@ -826,41 +1053,82 @@ class TemplateFlowHandler(ConfigSubentryFlow):
     async def async_step_delete(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
+        name = self._items[self._edit_idx].get("name", "")
+        if users := _referencing_covers(self.hass, SUBENTRY_TYPE_TEMPLATE, name):
+            self._blocked = (name, users)
+            return await self.async_step_delete_blocked()
         removed = self._items.pop(self._edit_idx)
         _LOGGER.debug("config_flow [template] delete: removed '%s', %d item(s) remaining", removed.get("name"), len(self._items))
         _update_singleton_in_place(self, SUBENTRY_TYPE_TEMPLATE, self._items)
         return await self.async_step_manage()
 
+    async def async_step_delete_blocked(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        name, users = self._blocked
+        return self.async_show_menu(
+            step_id="delete_blocked",
+            menu_options=["manage"],
+            description_placeholders={
+                "name": name, "count": str(len(users)), "covers": ", ".join(users),
+            },
+        )
+
     async def async_step_add(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
+        errors: dict[str, str] = {}
         if user_input is not None:
-            _LOGGER.debug("config_flow [template] async_step_add: identity '%s'", user_input.get("name"))
-            self._pending_identity = user_input
-            return await self.async_step_add_automation()
-        return self.async_show_form(step_id="add", data_schema=self._identity_schema(), last_step=False)
+            name = (user_input.get("name") or "").strip()
+            errors = _validate_item_name(name, self._items)
+            if not errors:
+                _LOGGER.debug("config_flow [template] async_step_add: identity '%s'", name)
+                self._pending_identity = {**user_input, "name": name}
+                return await self.async_step_add_automation()
+        return self.async_show_form(
+            step_id="add",
+            data_schema=self.add_suggested_values_to_schema(
+                self._identity_schema(), user_input or {}
+            ),
+            errors=errors,
+            last_step=False,
+        )
 
     async def async_step_add_automation(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
+        errors: dict[str, str] = {}
+        flat: dict[str, Any] | None = None
         if user_input is not None:
-            self._items.append({**self._pending_identity, **self._pack_automation(_flatten_sections(user_input))})
-            _LOGGER.debug("config_flow [template] async_step_add_automation: saving %d item(s)", len(self._items))
-            return _singleton_save(self, SUBENTRY_TYPE_TEMPLATE, await _subentry_title(self.hass, SUBENTRY_TYPE_TEMPLATE), self._items)
-        return self.async_show_form(step_id="add_automation", data_schema=self._automation_schema())
+            flat = _flatten_sections(user_input)
+            errors = _behavior_errors(flat)
+            if not errors:
+                self._items.append({**self._pending_identity, **self._pack_automation(flat)})
+                _LOGGER.debug("config_flow [template] async_step_add_automation: saving %d item(s)", len(self._items))
+                return _singleton_save(self, SUBENTRY_TYPE_TEMPLATE, await _subentry_title(self.hass, SUBENTRY_TYPE_TEMPLATE), self._items)
+        return self.async_show_form(
+            step_id="add_automation", data_schema=self._automation_schema(flat), errors=errors
+        )
 
     async def async_step_edit(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         existing = self._items[self._edit_idx]
+        errors: dict[str, str] = {}
         if user_input is not None:
-            _LOGGER.debug("config_flow [template] async_step_edit: identity '%s' at index %d", user_input.get("name"), self._edit_idx)
-            self._pending_identity = user_input
-            return await self.async_step_edit_automation()
-        identity = {k: existing[k] for k in ("name", "angle_left", "angle_right") if k in existing}
+            name = (user_input.get("name") or "").strip()
+            errors = _validate_item_name(name, self._items, skip_idx=self._edit_idx)
+            if not errors:
+                _LOGGER.debug("config_flow [template] async_step_edit: identity '%s' at index %d", name, self._edit_idx)
+                self._pending_identity = {**user_input, "name": name}
+                return await self.async_step_edit_automation()
+        identity = user_input or {
+            k: existing[k] for k in ("name", "angle_left", "angle_right") if k in existing
+        }
         return self.async_show_form(
             step_id="edit",
             data_schema=self.add_suggested_values_to_schema(self._identity_schema(), identity),
+            errors=errors,
             last_step=False,
         )
 
@@ -868,15 +1136,21 @@ class TemplateFlowHandler(ConfigSubentryFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         existing = self._items[self._edit_idx]
+        errors: dict[str, str] = {}
+        flat: dict[str, Any] | None = None
         if user_input is not None:
-            old_name = existing.get("name")
-            self._items[self._edit_idx] = {**self._pending_identity, **self._pack_automation(_flatten_sections(user_input))}
-            _propagate_rename(self.hass, SUBENTRY_TYPE_TEMPLATE, old_name, self._pending_identity.get("name"))
-            _LOGGER.debug("config_flow [template] async_step_edit_automation: saving %d item(s)", len(self._items))
-            return _singleton_save(self, SUBENTRY_TYPE_TEMPLATE, await _subentry_title(self.hass, SUBENTRY_TYPE_TEMPLATE), self._items)
+            flat = _flatten_sections(user_input)
+            errors = _behavior_errors(flat)
+            if not errors:
+                old_name = existing.get("name")
+                self._items[self._edit_idx] = {**self._pending_identity, **self._pack_automation(flat)}
+                _propagate_rename(self.hass, SUBENTRY_TYPE_TEMPLATE, old_name, self._pending_identity.get("name"))
+                _LOGGER.debug("config_flow [template] async_step_edit_automation: saving %d item(s)", len(self._items))
+                return _singleton_save(self, SUBENTRY_TYPE_TEMPLATE, await _subentry_title(self.hass, SUBENTRY_TYPE_TEMPLATE), self._items)
         return self.async_show_form(
             step_id="edit_automation",
-            data_schema=self._automation_schema(self._flatten_automation(existing)),
+            data_schema=self._automation_schema(flat or self._flatten_automation(existing)),
+            errors=errors,
         )
 
 
@@ -1011,19 +1285,34 @@ class CoverFlowHandler(ConfigSubentryFlow):
 
     # ── Step-1 schema ──────────────────────────────────────────────────────────
 
-    def _identity_schema(self) -> vol.Schema:
-        facades   = _names_from_hass(self.hass, SUBENTRY_TYPE_FACADE)
-        templates = _names_from_hass(self.hass, SUBENTRY_TYPE_TEMPLATE)
+    def _identity_schema(self, labels: dict[str, str]) -> vol.Schema:
+        facades = sorted(
+            _items_from_hass(self.hass, SUBENTRY_TYPE_FACADE),
+            key=lambda item: str(item.get("name", "")).casefold(),
+        )
+        facade_options: list[dict[str, str]] = [
+            {
+                "value": item["name"],
+                "label": f"{item['name']} ({float(item.get('azimuth', 180)):g}°)",
+            }
+            for item in facades
+        ] or [{"value": "", "label": labels["no_facade"]}]
+        templates = sorted(
+            _names_from_hass(self.hass, SUBENTRY_TYPE_TEMPLATE), key=str.casefold
+        )
+        template_options: list[dict[str, str]] = [
+            {"value": name, "label": name} for name in templates
+        ] or [{"value": "", "label": labels["no_template"]}]
         return vol.Schema({
             vol.Required("entity_id"): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="cover")
             ),
             vol.Optional("entity_picture"): selector.TextSelector(),
             vol.Required("facade"): selector.SelectSelector(
-                selector.SelectSelectorConfig(options=facades or [""], mode="dropdown")
+                selector.SelectSelectorConfig(options=facade_options, mode="dropdown")
             ),
             vol.Optional("template"): selector.SelectSelector(
-                selector.SelectSelectorConfig(options=templates or [""], mode="dropdown")
+                selector.SelectSelectorConfig(options=template_options, mode="dropdown")
             ),
             vol.Optional("exclusion"): selector.EntitySelector(
                 selector.EntitySelectorConfig(multiple=True)
@@ -1039,13 +1328,28 @@ class CoverFlowHandler(ConfigSubentryFlow):
 
     # ── Step-3 helpers (modes) ────────────────────────────────────────────────
 
-    def _modes_select_schema(self) -> vol.Schema:
-        """Multiselect: choose which modes apply to this cover."""
-        mode_names = _names_from_hass(self.hass, SUBENTRY_TYPE_MODE)
+    def _modes_select_schema(self, labels: dict[str, str]) -> vol.Schema:
+        """Multiselect: choose which modes apply to this cover.
+
+        Labels carry the mode's lock / automation-behavior markers so the
+        choice is informed without opening each mode. Definition order is kept
+        (it drives the mode selector entity's option order).
+        """
+        mode_options: list[dict[str, str]] = []
+        for item in _items_from_hass(self.hass, SUBENTRY_TYPE_MODE):
+            markers: list[str] = []
+            if item.get("lock"):
+                markers.append(labels["lock"])
+            if behavior := item.get("behavior"):
+                markers.append(labels.get(behavior, behavior))
+            label = item["name"]
+            if markers:
+                label += f" ({', '.join(markers)})"
+            mode_options.append({"value": item["name"], "label": label})
         return vol.Schema({
             vol.Optional("selected_modes", default=[]): selector.SelectSelector(
                 selector.SelectSelectorConfig(
-                    options=mode_names or [""],
+                    options=mode_options or [{"value": "", "label": labels["no_mode"]}],
                     multiple=True,
                     mode="list",
                 )
@@ -1373,9 +1677,20 @@ class CoverFlowHandler(ConfigSubentryFlow):
                 return await self.async_step_item()
 
         _LOGGER.debug("config_flow [cover] async_step_manage: showing form with %d item(s)", len(self._items))
+        labels = await _ui_labels(self.hass)
         options: list[dict[str, str]] = [{"value": _ACTION_ADD, "label": "Add cover"}]
         for i, item in enumerate(self._items):
-            options.append({"value": f"select:{i}", "label": self._cover_label(item)})
+            extras: list[str] = []
+            if facade := item.get("facade"):
+                extras.append(facade)
+            if template := item.get("template"):
+                extras.append(template)
+            if mode_count := len(item.get("modes") or {}):
+                extras.append(f"{mode_count} {labels['modes']}")
+            label = self._cover_label(item)
+            if extras:
+                label += " · " + " · ".join(extras)
+            options.append({"value": f"select:{i}", "label": label})
 
         return self.async_show_form(
             step_id="manage",
@@ -1417,7 +1732,8 @@ class CoverFlowHandler(ConfigSubentryFlow):
         return self.async_show_form(
             step_id="modes",
             data_schema=self.add_suggested_values_to_schema(
-                self._modes_select_schema(), {"selected_modes": pre_selected}
+                self._modes_select_schema(await _ui_labels(self.hass)),
+                {"selected_modes": pre_selected},
             ),
             description_placeholders={"cover": self._current_cover_label()},
             last_step=False,
@@ -1448,28 +1764,60 @@ class CoverFlowHandler(ConfigSubentryFlow):
             identity.pop("entity_registry_id", None)
         return identity
 
+    def _identity_errors(
+        self, user_input: dict[str, Any], skip_idx: int | None = None
+    ) -> dict[str, str]:
+        """Validate a cover identity form: unique entity, facade selected."""
+        errors: dict[str, str] = {}
+        entity_id = user_input.get("entity_id")
+        for i, item in enumerate(self._items):
+            if i != skip_idx and item.get("entity_id") == entity_id:
+                errors["entity_id"] = "cover_exists"
+                break
+        if not user_input.get("facade"):
+            errors["facade"] = "facade_required"
+        return errors
+
     async def async_step_add(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
+        errors: dict[str, str] = {}
         if user_input is not None:
-            _LOGGER.debug("config_flow [cover] async_step_add: identity '%s'", user_input.get("entity_id"))
-            self._pending_identity = self._stamp_registry_id(user_input)
-            return await self.async_step_add_behavior()
-        return self.async_show_form(step_id="add", data_schema=self._identity_schema(), last_step=False)
+            errors = self._identity_errors(user_input)
+            if not errors:
+                _LOGGER.debug("config_flow [cover] async_step_add: identity '%s'", user_input.get("entity_id"))
+                self._pending_identity = self._stamp_registry_id(user_input)
+                return await self.async_step_add_behavior()
+        elif not _names_from_hass(self.hass, SUBENTRY_TYPE_FACADE):
+            return self.async_abort(reason="no_facades")
+        return self.async_show_form(
+            step_id="add",
+            data_schema=self.add_suggested_values_to_schema(
+                self._identity_schema(await _ui_labels(self.hass)), user_input or {}
+            ),
+            errors=errors,
+            last_step=False,
+        )
 
     async def async_step_add_behavior(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         tpl = self._get_template_item(self._pending_identity.get("template", ""))
+        errors: dict[str, str] = {}
+        flat: dict[str, Any] | None = None
         if user_input is not None:
-            _LOGGER.debug("config_flow [cover] async_step_add_behavior: behavior saved, going to modes")
-            self._pending_behavior = self._strip_template_defaults(_flatten_sections(user_input), tpl)
-            return await self.async_step_add_modes()
-        defaults = self._behavior_defaults_from_template(tpl) if tpl else None
+            flat = _flatten_sections(user_input)
+            errors = _behavior_errors(flat)
+            if not errors:
+                _LOGGER.debug("config_flow [cover] async_step_add_behavior: behavior saved, going to modes")
+                self._pending_behavior = self._strip_template_defaults(flat, tpl)
+                return await self.async_step_add_modes()
+        defaults = flat or (self._behavior_defaults_from_template(tpl) if tpl else None)
         return self.async_show_form(
             step_id="add_behavior",
             data_schema=self._behavior_schema(defaults),
             description_placeholders={"cover": self._current_cover_label()},
+            errors=errors,
             last_step=False,
         )
 
@@ -1483,7 +1831,7 @@ class CoverFlowHandler(ConfigSubentryFlow):
             return await self.async_step_mode_position()
         return self.async_show_form(
             step_id="add_modes",
-            data_schema=self._modes_select_schema(),
+            data_schema=self._modes_select_schema(await _ui_labels(self.hass)),
             description_placeholders={"cover": self._current_cover_label()},
             last_step=False,
         )
@@ -1494,16 +1842,22 @@ class CoverFlowHandler(ConfigSubentryFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         existing = self._items[self._edit_idx]
+        errors: dict[str, str] = {}
         if user_input is not None:
-            _LOGGER.debug("config_flow [cover] async_step_edit: identity '%s'", user_input.get("entity_id"))
-            self._pending_identity = self._stamp_registry_id(user_input)
-            return await self.async_step_edit_behavior()
+            errors = self._identity_errors(user_input, skip_idx=self._edit_idx)
+            if not errors:
+                _LOGGER.debug("config_flow [cover] async_step_edit: identity '%s'", user_input.get("entity_id"))
+                self._pending_identity = self._stamp_registry_id(user_input)
+                return await self.async_step_edit_behavior()
         identity_keys = ("entity_id", "entity_picture", "facade", "template", "exclusion")
-        identity = {k: existing[k] for k in identity_keys if k in existing}
+        identity = user_input or {k: existing[k] for k in identity_keys if k in existing}
         return self.async_show_form(
             step_id="edit",
-            data_schema=self.add_suggested_values_to_schema(self._identity_schema(), identity),
+            data_schema=self.add_suggested_values_to_schema(
+                self._identity_schema(await _ui_labels(self.hass)), identity
+            ),
             description_placeholders={"cover": self._current_cover_label()},
+            errors=errors,
             last_step=False,
         )
 
@@ -1513,27 +1867,33 @@ class CoverFlowHandler(ConfigSubentryFlow):
         existing = self._items[self._edit_idx]
         # Template from the NEW identity (user may have changed it in step 1)
         tpl = self._get_template_item(self._pending_identity.get("template", ""))
+        errors: dict[str, str] = {}
+        flat: dict[str, Any] | None = None
         if user_input is not None:
-            self._pending_behavior = self._strip_template_defaults(_flatten_sections(user_input), tpl)
-            # Modes are managed by the dedicated "link modes" action, not re-walked
-            # here (that would duplicate it). Preserve the existing modes untouched.
-            self._items[self._edit_idx] = {
-                **self._pending_identity,
-                **self._pending_behavior,
-                "modes": existing.get("modes", {}),
-            }
-            _LOGGER.debug("config_flow [cover] async_step_edit_behavior: identity+behavior saved, modes untouched")
-            return _singleton_save(
-                self, SUBENTRY_TYPE_COVER,
-                await _subentry_title(self.hass, SUBENTRY_TYPE_COVER),
-                self._items,
-            )
+            flat = _flatten_sections(user_input)
+            errors = _behavior_errors(flat)
+            if not errors:
+                self._pending_behavior = self._strip_template_defaults(flat, tpl)
+                # Modes are managed by the dedicated "link modes" action, not re-walked
+                # here (that would duplicate it). Preserve the existing modes untouched.
+                self._items[self._edit_idx] = {
+                    **self._pending_identity,
+                    **self._pending_behavior,
+                    "modes": existing.get("modes", {}),
+                }
+                _LOGGER.debug("config_flow [cover] async_step_edit_behavior: identity+behavior saved, modes untouched")
+                return _singleton_save(
+                    self, SUBENTRY_TYPE_COVER,
+                    await _subentry_title(self.hass, SUBENTRY_TYPE_COVER),
+                    self._items,
+                )
         # Pre-fill: template defaults + stored cover overrides
-        defaults = self._behavior_prefill(existing)
+        defaults = flat or self._behavior_prefill(existing)
         return self.async_show_form(
             step_id="edit_behavior",
             data_schema=self._behavior_schema(defaults),
             description_placeholders={"cover": self._current_cover_label()},
+            errors=errors,
         )
 
 
