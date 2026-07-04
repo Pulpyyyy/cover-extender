@@ -193,6 +193,9 @@ It aims to feel like:
 - **HA bus events**  
   `cover_extender_mode_changed`, `cover_extender_memory_saved`, and `cover_extender_shade_applied` are fired automatically, enabling external automations to react to Cover Extender state changes.
 
+- **Rename-proof**  
+  Covers are tracked by their immutable entity registry id: renaming a cover (or any helper entity) in HA breaks nothing — configuration, memory and automations follow automatically.
+
 ---
 
 ## 📦 Installation
@@ -205,7 +208,7 @@ It aims to feel like:
 
 4. The setup wizard opens. Configure your facades, modes, cover templates and covers directly from the UI.
 
-> Requires Home Assistant 2024.11 or later.
+> Requires Home Assistant 2026.1 or later.
 
 ---
 
@@ -288,16 +291,16 @@ All shade and solar-gain parameters for this cover:
 | Parameter | Default | Description |
 |---|---|---|
 | `enable` | `false` | Activate autonomous shading. |
-| `distance` | `0.3` m | Horizontal distance to the obstacle (e.g. balcony depth). |
-| `max_height` | `1.5` m | Maximum shadow height to cast on the window. |
+| `distance` | `0.4` m | Horizontal distance to the obstacle (e.g. balcony depth). |
+| `max_height` | `1.8` m | Maximum shadow height to cast on the window. |
 | `min_height` | `0.0` m | Minimum shadow height; below this, the cover opens. |
 | `degrees` | `90` ° | Azimuth window within which the sun triggers shading. |
 | `max_elevation` | `90` ° | Above this elevation the cover is not moved. |
 | `min_elevation` | `5` ° | Below this elevation the cover is not moved. |
-| `minimum_position` | `10` % | Floor position during shading. |
+| `minimum_position` | `15` % | Floor position during shading. |
 | `default_position` | `100` % | Position used when sun is outside the window. |
 | `change_threshold` | `5` % | Minimum position delta before issuing a new command. |
-| `time_out` | `1` min | Stability delay before applying a new shading position. |
+| `time_out` | `2` min | Minimum delay since the last cover movement (from **any** source: Cover Extender, remote control, HA UI) before a new shading position is applied. Entering a shade mode bypasses it. |
 
 **Solar gain (`solar_gain`):**
 
@@ -313,7 +316,7 @@ All shade and solar-gain parameters for this cover:
 
 | Field | Description |
 |---|---|
-| `command_interval` | Delay (s) between consecutive cover commands. Default `0.15`. |
+| `command_interval` | Delay (ms) between consecutive cover commands. Default `150`. |
 | `show_sun_facing` | Create `binary_sensor.<cover>_sun_facing` for each cover. |
 | `show_auto_shade` | Create `binary_sensor.<cover>_auto_shade`. |
 | `show_solar_gain` | Create `binary_sensor.<cover>_solar_gain`. |

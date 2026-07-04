@@ -1,0 +1,25 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # With homeassistant installed, tests/conftest.py skips its stubs and the
+      # component modules import the real HA packages — same tests, stronger
+      # validation than the stubbed local run.
+      - name: Install dependencies
+        run: pip install homeassistant pytest voluptuous
+
+      - name: Run tests
+        run: python -m pytest tests -q
