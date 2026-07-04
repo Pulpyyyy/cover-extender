@@ -140,6 +140,8 @@ class CoverExtenderCoordinator:
 
         Returns the number of profiles loaded.
         """
+        if self._stopping:
+            return 0
         config = build_profiles_from_subentries(self._entry, self.hass)
         self._store_config(config)
         self._setup_profiles()
@@ -537,6 +539,12 @@ class CoverExtenderCoordinator:
         instance attributes are replaced in one synchronous block — there is
         never a window where the maps are empty while listeners are live.
         """
+        # A stopped coordinator must never re-register listeners (a pending
+        # update-listener task could still call this after async_stop during
+        # the full entry reload triggered by a rename) — they would never be
+        # cancelled and would duplicate commands alongside the new coordinator.
+        if self._stopping:
+            return
         profiles = self._profiles
 
         # ── Build new reverse-maps (local variables) ──────────────────────────
