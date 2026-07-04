@@ -40,7 +40,7 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, SupportsResponse
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import config_validation as cv, entity_registry as er
 
 from .const import (
     DOMAIN,
@@ -59,7 +59,7 @@ from .const import (
     SUBENTRY_TYPE_TEMPLATE,
 )
 from .coordinator import CoverExtenderCoordinator
-from .helpers import _subentry_title
+from .helpers import _subentry_title, HELPER_UNIQUE_ID_TEMPLATES, cover_object_id
 
 import logging
 _LOGGER = logging.getLogger(__name__)
@@ -117,6 +117,76 @@ def _cleanup_empty_singletons(hass: HomeAssistant) -> None:
                     )
 
 
+def _migrate_helper_unique_ids(
+    registry: er.EntityRegistry, legacy_keys: set[str], registry_id: str
+) -> None:
+    """Migrate helper entities from name-based to registry-id based unique_ids.
+
+    Idempotent: does nothing when the helper is already on the new scheme.
+    The helpers keep their entity_id, name, area and history — only the
+    internal unique_id changes.
+    """
+    for domain, uid_tpl in HELPER_UNIQUE_ID_TEMPLATES.values():
+        new_uid = uid_tpl.format(registry_id)
+        if registry.async_get_entity_id(domain, DOMAIN, new_uid):
+            continue  # already migrated
+        for legacy_key in legacy_keys:
+            legacy_uid = uid_tpl.format(legacy_key)
+            if legacy_uid == new_uid:
+                continue
+            helper_eid = registry.async_get_entity_id(domain, DOMAIN, legacy_uid)
+            if helper_eid:
+                _LOGGER.debug(
+                    "cover_extender: migrating unique_id of %s: %s → %s",
+                    helper_eid, legacy_uid, new_uid,
+                )
+                registry.async_update_entity(helper_eid, new_unique_id=new_uid)
+                break
+
+
+def _migrate_registry_ids(hass: HomeAssistant) -> None:
+    """One-time, idempotent migration to registry-id based cover references.
+
+    - Adds entity_registry_id to every cover item (immutable link to the cover).
+    - Re-syncs the stored entity_id when the cover was renamed while the
+      integration was not loaded (resolved through the stored registry id).
+    - Migrates the helper entities' unique_ids to the registry-id scheme.
+    Covers without a registry entry keep the legacy name-based behaviour.
+    """
+    registry = er.async_get(hass)
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        for sub in entry.subentries.values():
+            if sub.subentry_type != SUBENTRY_TYPE_COVER or "items" not in sub.data:
+                continue
+            items = [dict(it) for it in sub.data["items"]]
+            changed = False
+            for it in items:
+                stored_eid: str = it.get("entity_id") or ""
+                if not stored_eid:
+                    continue
+                reg = registry.async_get(stored_eid)
+                if reg is None and (rid := it.get("entity_registry_id")):
+                    # Cover renamed while the integration was not loaded
+                    reg = registry.async_get(rid)
+                if reg is None:
+                    continue  # cover not in the registry — legacy behaviour
+                # Legacy unique_ids may be based on the stored OR current name
+                legacy_keys = {cover_object_id(stored_eid), cover_object_id(reg.entity_id)}
+                _migrate_helper_unique_ids(registry, legacy_keys, reg.id)
+                if it.get("entity_registry_id") != reg.id:
+                    it["entity_registry_id"] = reg.id
+                    changed = True
+                if it.get("entity_id") != reg.entity_id:
+                    _LOGGER.info(
+                        "cover_extender: cover renamed %s → %s, config re-synced",
+                        stored_eid, reg.entity_id,
+                    )
+                    it["entity_id"] = reg.entity_id
+                    changed = True
+            if changed:
+                hass.config_entries.async_update_subentry(entry, sub, data={"items": items})
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up cover_extender from a config entry."""
     hass.data.setdefault(DOMAIN, {})
@@ -125,6 +195,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # registers its listener — avoids spurious reload triggers.
     _cleanup_empty_singletons(hass)
     await _async_sync_subentry_titles(hass, entry)
+    # Migrate cover references and helper unique_ids to the registry-id scheme
+    # BEFORE platforms are set up (they build unique_ids from the stable key).
+    _migrate_registry_ids(hass)
 
     coordinator = CoverExtenderCoordinator(hass, entry)
     entry.runtime_data = coordinator

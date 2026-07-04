@@ -15,7 +15,7 @@ _LOGGER = logging.getLogger(__name__)
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigSubentryFlow, ConfigEntry
 from homeassistant.data_entry_flow import section
-from homeassistant.helpers import selector
+from homeassistant.helpers import entity_registry as er, selector
 from homeassistant.core import HomeAssistant, callback
 
 from .const import (
@@ -1433,12 +1433,27 @@ class CoverFlowHandler(ConfigSubentryFlow):
 
     # ── Add flow (3 steps) ─────────────────────────────────────────────────────
 
+    def _stamp_registry_id(self, identity: dict[str, Any]) -> dict[str, Any]:
+        """Attach the cover's immutable registry id to the identity dict.
+
+        The runtime resolves entity_registry_id → current entity_id, so a
+        renamed cover keeps working. Covers without a registry entry keep the
+        legacy entity_id-only behaviour.
+        """
+        identity = dict(identity)
+        reg = er.async_get(self.hass).async_get(identity.get("entity_id", ""))
+        if reg:
+            identity["entity_registry_id"] = reg.id
+        else:
+            identity.pop("entity_registry_id", None)
+        return identity
+
     async def async_step_add(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         if user_input is not None:
             _LOGGER.debug("config_flow [cover] async_step_add: identity '%s'", user_input.get("entity_id"))
-            self._pending_identity = user_input
+            self._pending_identity = self._stamp_registry_id(user_input)
             return await self.async_step_add_behavior()
         return self.async_show_form(step_id="add", data_schema=self._identity_schema(), last_step=False)
 
@@ -1481,7 +1496,7 @@ class CoverFlowHandler(ConfigSubentryFlow):
         existing = self._items[self._edit_idx]
         if user_input is not None:
             _LOGGER.debug("config_flow [cover] async_step_edit: identity '%s'", user_input.get("entity_id"))
-            self._pending_identity = user_input
+            self._pending_identity = self._stamp_registry_id(user_input)
             return await self.async_step_edit_behavior()
         identity_keys = ("entity_id", "entity_picture", "facade", "template", "exclusion")
         identity = {k: existing[k] for k in identity_keys if k in existing}

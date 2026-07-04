@@ -7,7 +7,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import config_validation as cv, entity_registry as er
 
 from .const import (
     DOMAIN,
@@ -81,9 +81,19 @@ def _add_cover_profile(
     d: dict[str, Any],
     templates: dict[str, dict[str, Any]],
     profiles: dict[str, Any],
+    hass: HomeAssistant | None = None,
 ) -> None:
-    """Parse one cover item dict and append to profiles (mutates profiles in place)."""
+    """Parse one cover item dict and append to profiles (mutates profiles in place).
+
+    Profiles are keyed by the cover's CURRENT entity_id: when the item carries
+    an entity_registry_id (v2.2+), it is resolved through the registry so a
+    renamed cover keeps working. The stored entity_id remains the fallback.
+    """
     entity_id = d.get("entity_id")
+    if hass is not None and (rid := d.get("entity_registry_id")):
+        reg = er.async_get(hass).async_get(rid)
+        if reg:
+            entity_id = reg.entity_id
     if not entity_id:
         return
 
@@ -307,7 +317,7 @@ def build_profiles_from_subentries(
                 # Support both new singleton format {"items": [...]} and legacy individual format
                 cover_items: list[dict[str, Any]] = d.get("items") if "items" in d else [d]
                 for cover_data in cover_items:
-                    _add_cover_profile(cover_data, templates, profiles)
+                    _add_cover_profile(cover_data, templates, profiles, hass)
 
 
 

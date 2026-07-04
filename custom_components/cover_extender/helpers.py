@@ -44,21 +44,34 @@ async def _subentry_title(hass: HomeAssistant, subentry_type: str) -> str:
     return _TITLE_FALLBACKS.get(subentry_type, subentry_type)
 
 
-# ── Helper entity resolution ──────────────────────────────────────────────────
-# Helper entities (select.mode_*, switch.*_lock, …) are created with a
-# deterministic unique_id derived from the cover's object id. Resolving their
-# CURRENT entity_id through the registry (instead of rebuilding the
-# conventional name) keeps the integration working when the user renames a
-# helper entity in the UI. The conventional name remains as fallback for the
-# window where an entity is not yet registered (fresh add before platform
-# reload).
+# ── Helper entity naming and resolution ──────────────────────────────────────
+# Helper entities (select.mode_*, switch.*_lock, …) carry a deterministic
+# unique_id. Since v2.2 the key inside the unique_id is the cover's entity
+# REGISTRY id (immutable UUID) so that renaming the cover breaks nothing;
+# covers without a registry entry (e.g. YAML template covers without
+# unique_id) fall back to the object id, i.e. the pre-2.2 scheme. Legacy
+# name-based unique_ids are migrated at setup (__init__._migrate_registry_ids)
+# but every lookup still tries both schemes for robustness.
 
-_HELPER_KINDS: dict[str, tuple[str, str, str]] = {
-    # kind -> (domain, unique_id template, conventional entity_id template)
-    "select_mode":     ("select", f"{DOMAIN}_select_mode_{{}}",            "select.mode_{}"),
-    "lock":            ("switch", f"{DOMAIN}_switch_{{}}_lock",            "switch.{}_lock"),
-    "auto_shade":      ("switch", f"{DOMAIN}_switch_{{}}_auto_shade",      "switch.{}_auto_shade"),
-    "auto_solar_gain": ("switch", f"{DOMAIN}_switch_{{}}_auto_solar_gain", "switch.{}_auto_solar_gain"),
+HELPER_UNIQUE_ID_TEMPLATES: dict[str, tuple[str, str]] = {
+    # kind -> (domain, unique_id template — {} is the stable key)
+    "select_mode":     ("select",        f"{DOMAIN}_select_mode_{{}}"),
+    "lock":            ("switch",        f"{DOMAIN}_switch_{{}}_lock"),
+    "auto_shade":      ("switch",        f"{DOMAIN}_switch_{{}}_auto_shade"),
+    "auto_solar_gain": ("switch",        f"{DOMAIN}_switch_{{}}_auto_solar_gain"),
+    "bs_sun_facing":   ("binary_sensor", f"{DOMAIN}_binary_sensor_{{}}_sun_facing"),
+    "bs_auto_shade":   ("binary_sensor", f"{DOMAIN}_binary_sensor_{{}}_auto_shade"),
+    "bs_solar_gain":   ("binary_sensor", f"{DOMAIN}_binary_sensor_{{}}_solar_gain"),
+}
+
+# Conventional entity_id suggested at creation (and used as last-resort
+# fallback when the helper is not registered yet). Stays name-based on
+# purpose: entity ids are human-facing.
+_HELPER_CONVENTIONAL_EIDS: dict[str, str] = {
+    "select_mode":     "select.mode_{}",
+    "lock":            "switch.{}_lock",
+    "auto_shade":      "switch.{}_auto_shade",
+    "auto_solar_gain": "switch.{}_auto_solar_gain",
 }
 
 
@@ -67,17 +80,49 @@ def cover_object_id(cover_entity_id: str) -> str:
     return cover_entity_id.split(".", 1)[1]
 
 
+def cover_stable_key(hass: HomeAssistant, cover_entity_id: str) -> str:
+    """Return the stable key for a cover: its registry id, else its object id."""
+    reg = er.async_get(hass).async_get(cover_entity_id)
+    return reg.id if reg else cover_object_id(cover_entity_id)
+
+
+def helper_unique_id(kind: str, stable_key: str) -> str:
+    """Build the unique_id of a helper entity from its kind and stable key."""
+    return HELPER_UNIQUE_ID_TEMPLATES[kind][1].format(stable_key)
+
+
+def _lookup_helper(hass: HomeAssistant, cover_entity_id: str, kind: str) -> str | None:
+    """Registry lookup of a helper entity, trying the registry-id scheme then
+    the legacy name-based scheme. Returns None when not registered."""
+    domain, uid_tpl = HELPER_UNIQUE_ID_TEMPLATES[kind]
+    registry = er.async_get(hass)
+    for key in dict.fromkeys(
+        (cover_stable_key(hass, cover_entity_id), cover_object_id(cover_entity_id))
+    ):
+        entity_id = registry.async_get_entity_id(domain, DOMAIN, uid_tpl.format(key))
+        if entity_id:
+            return entity_id
+    return None
+
+
 def resolve_helper_entity(hass: HomeAssistant, cover_entity_id: str, kind: str) -> str:
     """Return the current entity_id of a helper entity for *cover_entity_id*.
 
-    Looks up the entity registry by unique_id (survives user renames) and falls
-    back to the conventional entity_id when the entity is not registered yet.
+    Registry lookup by unique_id (survives renames of both the helper and the
+    cover), falling back to the conventional entity_id when the entity is not
+    registered yet (fresh add before platform reload).
     """
-    name = cover_object_id(cover_entity_id)
-    domain, uid_tpl, eid_tpl = _HELPER_KINDS[kind]
-    registry = er.async_get(hass)
-    entity_id = registry.async_get_entity_id(domain, DOMAIN, uid_tpl.format(name))
-    return entity_id or eid_tpl.format(name)
+    return (
+        _lookup_helper(hass, cover_entity_id, kind)
+        or _HELPER_CONVENTIONAL_EIDS[kind].format(cover_object_id(cover_entity_id))
+    )
+
+
+def purge_helper_entity(hass: HomeAssistant, cover_entity_id: str, kind: str) -> None:
+    """Remove a helper entity from the registry (both unique_id schemes)."""
+    entity_id = _lookup_helper(hass, cover_entity_id, kind)
+    if entity_id:
+        er.async_get(hass).async_remove(entity_id)
 
 
 def resolve_mode_position(hass: HomeAssistant, raw: Any) -> int | None:

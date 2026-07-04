@@ -18,7 +18,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback, Event
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import async_track_state_change_event
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
@@ -34,7 +33,12 @@ from .const import (
     ATTR_SUN_FACING,
     SIGNAL_COVER_RELOAD,
 )
-from .helpers import resolve_helper_entity
+from .helpers import (
+    cover_stable_key,
+    helper_unique_id,
+    purge_helper_entity,
+    resolve_helper_entity,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -48,7 +52,7 @@ async def async_setup_entry(
     profiles: dict = hass.data.get(DOMAIN, {}).get(DATA_COVER_PROFILES, {})
     show_entities: dict = hass.data.get(DOMAIN, {}).get(DATA_SHOW_ENTITIES, {})
 
-    sun_facing_entities, auto_shade_entities, solar_gain_entities = _build_entities(profiles, show_entities)
+    sun_facing_entities, auto_shade_entities, solar_gain_entities = _build_entities(hass, profiles, show_entities)
 
     hass.data[DOMAIN][DATA_BINARY_SENSOR_SUN_FACING_IDS] = {
         e.cover_entity_id for e in sun_facing_entities
@@ -73,7 +77,7 @@ async def async_setup_entry(
         new_profiles: dict = hass.data[DOMAIN].get(DATA_COVER_PROFILES, {})
         new_vas: dict = hass.data[DOMAIN].get(DATA_SHOW_ENTITIES, {})
 
-        new_sf, new_as, new_sg = _build_entities(new_profiles, new_vas)
+        new_sf, new_as, new_sg = _build_entities(hass, new_profiles, new_vas)
         new_sf_ids = {e.cover_entity_id for e in new_sf}
         new_as_ids = {e.cover_entity_id for e in new_as}
         new_sg_ids = {e.cover_entity_id for e in new_sg}
@@ -82,18 +86,13 @@ async def async_setup_entry(
         known_as: set[str] = hass.data[DOMAIN].get(DATA_BINARY_SENSOR_AUTO_SHADE_IDS, set())
         known_sg: set[str] = hass.data[DOMAIN].get(DATA_BINARY_SENSOR_AUTO_SOLAR_GAIN_IDS, set())
 
-        registry = er.async_get(hass)
-
         # --- sun_facing ---
         added_sf = [e for e in new_sf if e.cover_entity_id not in known_sf]
         removed_sf = known_sf - new_sf_ids
         if added_sf:
             async_add_entities(added_sf)
         for cover_id in removed_sf:
-            cover_name = cover_id.split(".")[1]
-            eid = registry.async_get_entity_id("binary_sensor", DOMAIN, f"{DOMAIN}_binary_sensor_{cover_name}_sun_facing")
-            if eid:
-                registry.async_remove(eid)
+            purge_helper_entity(hass, cover_id, "bs_sun_facing")
 
         # --- auto_shade ---
         added_as = [e for e in new_as if e.cover_entity_id not in known_as]
@@ -101,10 +100,7 @@ async def async_setup_entry(
         if added_as:
             async_add_entities(added_as)
         for cover_id in removed_as:
-            cover_name = cover_id.split(".")[1]
-            eid = registry.async_get_entity_id("binary_sensor", DOMAIN, f"{DOMAIN}_binary_sensor_{cover_name}_auto_shade")
-            if eid:
-                registry.async_remove(eid)
+            purge_helper_entity(hass, cover_id, "bs_auto_shade")
 
         # --- solar_gain ---
         added_sg = [e for e in new_sg if e.cover_entity_id not in known_sg]
@@ -112,10 +108,7 @@ async def async_setup_entry(
         if added_sg:
             async_add_entities(added_sg)
         for cover_id in removed_sg:
-            cover_name = cover_id.split(".")[1]
-            eid = registry.async_get_entity_id("binary_sensor", DOMAIN, f"{DOMAIN}_binary_sensor_{cover_name}_solar_gain")
-            if eid:
-                registry.async_remove(eid)
+            purge_helper_entity(hass, cover_id, "bs_solar_gain")
 
         hass.data[DOMAIN][DATA_BINARY_SENSOR_SUN_FACING_IDS] = new_sf_ids
         hass.data[DOMAIN][DATA_BINARY_SENSOR_AUTO_SHADE_IDS] = new_as_ids
@@ -131,6 +124,7 @@ async def async_setup_entry(
 
 
 def _build_entities(
+    hass: HomeAssistant,
     profiles: dict,
     show_entities: dict,
 ) -> tuple[list, list, list]:
@@ -144,15 +138,16 @@ def _build_entities(
     solar_gain_entities = []
 
     for cover_id, cfg in profiles.items():
+        key = cover_stable_key(hass, cover_id)
         if expose_sf and cfg.get(CONF_FACADE):
-            sun_facing_entities.append(CoverSunFacingBinarySensor(cover_id))
+            sun_facing_entities.append(CoverSunFacingBinarySensor(cover_id, key))
         if expose_as:
             auto_shade_entities.append(
-                CoverEnableAutoShadeBinarySensor(cover_id, bool(cfg.get(CONF_SHADING, {}).get("enable", False)))
+                CoverEnableAutoShadeBinarySensor(cover_id, bool(cfg.get(CONF_SHADING, {}).get("enable", False)), key)
             )
         if expose_sg:
             solar_gain_entities.append(
-                CoverEnableSolarGainBinarySensor(cover_id, bool(cfg.get(CONF_SOLAR_GAIN, {}).get("enable", False)))
+                CoverEnableSolarGainBinarySensor(cover_id, bool(cfg.get(CONF_SOLAR_GAIN, {}).get("enable", False)), key)
             )
 
     return sun_facing_entities, auto_shade_entities, solar_gain_entities
@@ -167,12 +162,12 @@ class CoverSunFacingBinarySensor(BinarySensorEntity):
 
     _attr_should_poll = False
 
-    def __init__(self, cover_entity_id: str) -> None:
+    def __init__(self, cover_entity_id: str, stable_key: str) -> None:
         self._cover_entity_id = cover_entity_id
         cover_name = cover_entity_id.split(".")[1]
 
         self.entity_id = f"binary_sensor.{cover_name}_sun_facing"
-        self._attr_unique_id = f"{DOMAIN}_binary_sensor_{cover_name}_sun_facing"
+        self._attr_unique_id = helper_unique_id("bs_sun_facing", stable_key)
         self._attr_has_entity_name = True
         self._attr_translation_key = "sun_facing"
         self._attr_is_on = False
@@ -226,17 +221,18 @@ class _BaseSwitchMirrorBinarySensor(BinarySensorEntity):
     _attr_should_poll = False
     _switch_suffix: str
     _sensor_suffix: str
+    _uid_kind: str
     _icon_on: str
     _icon_off: str
 
-    def __init__(self, cover_entity_id: str, initial_state: bool) -> None:
+    def __init__(self, cover_entity_id: str, initial_state: bool, stable_key: str) -> None:
         self._cover_entity_id = cover_entity_id
         cover_name = cover_entity_id.split(".")[1]
         # Conventional fallback; re-resolved via the registry in async_added_to_hass
         self._switch_entity_id = f"switch.{cover_name}_{self._switch_suffix}"
 
         self.entity_id = f"binary_sensor.{cover_name}_{self._sensor_suffix}"
-        self._attr_unique_id = f"{DOMAIN}_binary_sensor_{cover_name}_{self._sensor_suffix}"
+        self._attr_unique_id = helper_unique_id(self._uid_kind, stable_key)
         self._attr_has_entity_name = True
         self._attr_is_on = initial_state
 
@@ -289,6 +285,7 @@ class CoverEnableAutoShadeBinarySensor(_BaseSwitchMirrorBinarySensor):
 
     _switch_suffix = "auto_shade"
     _sensor_suffix = "auto_shade"
+    _uid_kind = "bs_auto_shade"
     _attr_translation_key = "auto_shade"
     _icon_on = "mdi:sun-clock"
     _icon_off = "mdi:sun-clock-outline"
@@ -302,6 +299,7 @@ class CoverEnableSolarGainBinarySensor(_BaseSwitchMirrorBinarySensor):
 
     _switch_suffix = "auto_solar_gain"
     _sensor_suffix = "solar_gain"
+    _uid_kind = "bs_solar_gain"
     _attr_translation_key = "solar_gain"
     _icon_on = "mdi:thermometer-check"
     _icon_off = "mdi:thermometer-off"

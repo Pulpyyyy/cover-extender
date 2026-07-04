@@ -11,7 +11,6 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
@@ -20,6 +19,7 @@ from .const import (
     DATA_SWITCH_COVER_IDS, DATA_SWITCH_AUTO_SHADE_IDS, DATA_SWITCH_AUTO_SOLAR_GAIN_IDS,
     CONF_SHADING, CONF_SOLAR_GAIN, SIGNAL_COVER_RELOAD,
 )
+from .helpers import cover_stable_key, helper_unique_id, purge_helper_entity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,18 +32,18 @@ async def async_setup_entry(
     """Set up switch entities from a config entry."""
     profiles: dict = hass.data.get(DOMAIN, {}).get(DATA_COVER_PROFILES, {})
 
-    lock_entities = [CoverLockSwitch(eid) for eid in profiles]
+    lock_entities = [CoverLockSwitch(eid, cover_stable_key(hass, eid)) for eid in profiles]
     hass.data[DOMAIN][DATA_SWITCH_COVER_IDS] = {e._cover_entity_id for e in lock_entities}
 
     auto_shade_entities = [
-        CoverShadingAutoSwitch(eid)
+        CoverShadingAutoSwitch(eid, cover_stable_key(hass, eid))
         for eid, cfg in profiles.items()
         if cfg.get(CONF_SHADING, {}).get("enable", False)
     ]
     hass.data[DOMAIN][DATA_SWITCH_AUTO_SHADE_IDS] = {e._cover_entity_id for e in auto_shade_entities}
 
     auto_solar_gain_entities = [
-        CoverSolarGainAutoSwitch(eid)
+        CoverSolarGainAutoSwitch(eid, cover_stable_key(hass, eid))
         for eid, cfg in profiles.items()
         if cfg.get(CONF_SOLAR_GAIN, {}).get("enable", False)
     ]
@@ -67,16 +67,14 @@ async def async_setup_entry(
         removed_lock = known_lock - set(new_profiles)
 
         if added_lock:
-            async_add_entities([CoverLockSwitch(eid) for eid in added_lock])
+            async_add_entities([
+                CoverLockSwitch(eid, cover_stable_key(hass, eid)) for eid in added_lock
+            ])
             hass.data[DOMAIN][DATA_SWITCH_COVER_IDS] = known_lock | added_lock
 
         if removed_lock:
-            registry = er.async_get(hass)
             for cover_id in removed_lock:
-                cover_name = cover_id.split(".")[1]
-                eid = registry.async_get_entity_id("switch", DOMAIN, f"{DOMAIN}_switch_{cover_name}_lock")
-                if eid:
-                    registry.async_remove(eid)
+                purge_helper_entity(hass, cover_id, "lock")
             hass.data[DOMAIN][DATA_SWITCH_COVER_IDS] = known_lock - removed_lock
 
         # --- Auto shade ---
@@ -86,16 +84,15 @@ async def async_setup_entry(
         removed_auto_shade = known_auto_shade - should_have
 
         if added_auto_shade:
-            async_add_entities([CoverShadingAutoSwitch(eid) for eid in added_auto_shade])
+            async_add_entities([
+                CoverShadingAutoSwitch(eid, cover_stable_key(hass, eid))
+                for eid in added_auto_shade
+            ])
             hass.data[DOMAIN][DATA_SWITCH_AUTO_SHADE_IDS] = known_auto_shade | added_auto_shade
 
         if removed_auto_shade:
-            registry = er.async_get(hass)
             for cover_id in removed_auto_shade:
-                cover_name = cover_id.split(".")[1]
-                eid = registry.async_get_entity_id("switch", DOMAIN, f"{DOMAIN}_switch_{cover_name}_auto_shade")
-                if eid:
-                    registry.async_remove(eid)
+                purge_helper_entity(hass, cover_id, "auto_shade")
             hass.data[DOMAIN][DATA_SWITCH_AUTO_SHADE_IDS] = known_auto_shade - removed_auto_shade
 
         # --- Auto solar gain ---
@@ -105,16 +102,15 @@ async def async_setup_entry(
         removed_auto_solar_gain = known_auto_solar_gain - should_have_solar_gain
 
         if added_auto_solar_gain:
-            async_add_entities([CoverSolarGainAutoSwitch(eid) for eid in added_auto_solar_gain])
+            async_add_entities([
+                CoverSolarGainAutoSwitch(eid, cover_stable_key(hass, eid))
+                for eid in added_auto_solar_gain
+            ])
             hass.data[DOMAIN][DATA_SWITCH_AUTO_SOLAR_GAIN_IDS] = known_auto_solar_gain | added_auto_solar_gain
 
         if removed_auto_solar_gain:
-            registry = er.async_get(hass)
             for cover_id in removed_auto_solar_gain:
-                cover_name = cover_id.split(".")[1]
-                eid = registry.async_get_entity_id("switch", DOMAIN, f"{DOMAIN}_switch_{cover_name}_auto_solar_gain")
-                if eid:
-                    registry.async_remove(eid)
+                purge_helper_entity(hass, cover_id, "auto_solar_gain")
             hass.data[DOMAIN][DATA_SWITCH_AUTO_SOLAR_GAIN_IDS] = known_auto_solar_gain - removed_auto_solar_gain
 
         if added_lock or removed_lock or added_auto_shade or removed_auto_shade or added_auto_solar_gain or removed_auto_solar_gain:
@@ -135,12 +131,15 @@ class _BaseCoverSwitch(SwitchEntity, RestoreEntity):
     _icon_off: str
     _suffix: str
 
-    def __init__(self, cover_entity_id: str) -> None:
+    def __init__(self, cover_entity_id: str, stable_key: str) -> None:
         self._cover_entity_id = cover_entity_id
         cover_name = cover_entity_id.split(".")[1]
 
+        # entity_id stays name-based (human-facing suggestion); the unique_id
+        # uses the cover's stable key so renaming the cover breaks nothing.
+        # (_suffix values match the helper kinds: lock / auto_shade / auto_solar_gain)
         self.entity_id = f"switch.{cover_name}_{self._suffix}"
-        self._attr_unique_id = f"{DOMAIN}_switch_{cover_name}_{self._suffix}"
+        self._attr_unique_id = helper_unique_id(self._suffix, stable_key)
         self._attr_has_entity_name = True
         self._attr_is_on = False
 

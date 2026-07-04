@@ -27,7 +27,9 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import CoreState, HomeAssistant, ServiceCall, Event, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.entity_registry import EVENT_ENTITY_REGISTRY_UPDATED
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.service import async_extract_entity_ids
 from homeassistant.helpers.storage import Store
@@ -54,6 +56,7 @@ from .const import (
     EVENT_SHADE_APPLIED,
     CONF_COMMAND_INTERVAL,
     DEFAULT_COMMAND_INTERVAL,
+    SUBENTRY_TYPE_COVER,
 )
 from .helpers import build_extra_attrs, resolve_helper_entity, resolve_mode_position
 from .shade import compute_sun_facing, compute_shade_sync
@@ -105,6 +108,8 @@ class CoverExtenderCoordinator:
         self._stopping: bool = False
         self._restart_handle: asyncio.TimerHandle | None = None
         self._started_unsub: Callable[[], None] | None = None
+        # Entity-registry listener (renames of covers / helper entities)
+        self._registry_unsub: Callable[[], None] | None = None
 
     # ── Data loading ──────────────────────────────────────────────────────────
 
@@ -227,10 +232,18 @@ class CoverExtenderCoordinator:
         self._cover_queue.put_nowait((service, data))
 
     # ── Persistent memory ──────────────────────────────────────────────────────
+    # The memory dict is keyed by the cover's registry id (immutable) so stored
+    # positions survive a rename; covers without a registry entry fall back to
+    # their entity_id (pre-2.2 behaviour).
+
+    def _memory_key(self, entity_id: str) -> str:
+        """Stable storage key for a cover: registry id, else entity_id."""
+        reg = er.async_get(self.hass).async_get(entity_id)
+        return reg.id if reg else entity_id
 
     def _get_memory(self, entity_id: str) -> int | None:
         """Return the stored memory position for a cover, or None if not set."""
-        return self.hass.data[DOMAIN].get(DATA_MEMORY, {}).get(entity_id)
+        return self.hass.data[DOMAIN].get(DATA_MEMORY, {}).get(self._memory_key(entity_id))
 
     @callback
     def _memory_to_save(self) -> dict:
@@ -240,10 +253,11 @@ class CoverExtenderCoordinator:
     async def _set_memory(self, entity_id: str, value: int | None) -> None:
         """Store or clear a memory position and re-inject it as a cover state attribute."""
         mem = self.hass.data[DOMAIN].setdefault(DATA_MEMORY, {})
+        key = self._memory_key(entity_id)
         if value is None:
-            mem.pop(entity_id, None)
+            mem.pop(key, None)
         else:
-            mem[entity_id] = value
+            mem[key] = value
         state = self.hass.states.get(entity_id)
         if state:
             new_attrs = dict(state.attributes)
@@ -796,6 +810,60 @@ class CoverExtenderCoordinator:
             _LOGGER.debug("solar_gain switch ON → immediate apply for %s", cover_id)
             self._apply_solar_gain(cover_id, cfg)
 
+    # ── Entity registry updates (renames) ─────────────────────────────────────
+
+    @callback
+    def _handle_registry_update(self, event: Event) -> None:
+        """React to entity renames.
+
+        - Tracked cover renamed → re-sync its stored entity_id in the cover
+          subentry; the update listener then triggers a full profile reload
+          keyed on the new entity_id.
+        - One of our helper entities renamed → rebuild the reverse maps so the
+          rename is picked up immediately (not just at the next reload).
+        """
+        data = event.data
+        if data.get("action") != "update" or "entity_id" not in data.get("changes", {}):
+            return
+        old_id: str = data["changes"]["entity_id"]
+        new_id: str = data["entity_id"]
+        if old_id in self._profiles:
+            _LOGGER.info(
+                "cover_extender: cover renamed %s → %s, re-syncing config", old_id, new_id
+            )
+            self._sync_cover_entity_id(old_id, new_id)
+            return
+        reg = er.async_get(self.hass).async_get(new_id)
+        if reg and reg.platform == DOMAIN:
+            _LOGGER.debug(
+                "cover_extender: helper renamed %s → %s, rebuilding maps", old_id, new_id
+            )
+            self._setup_profiles()
+
+    def _sync_cover_entity_id(self, old_id: str, new_id: str) -> None:
+        """Rewrite a renamed cover's entity_id in the cover subentry.
+
+        async_update_subentry fires the entry update listener, which reloads
+        the profiles (re-resolved through the registry id anyway); if the item
+        cannot be found, fall back to a direct reload.
+        """
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            for sub in entry.subentries.values():
+                if sub.subentry_type != SUBENTRY_TYPE_COVER or "items" not in sub.data:
+                    continue
+                items = [dict(it) for it in sub.data["items"]]
+                changed = False
+                for it in items:
+                    if it.get("entity_id") == old_id:
+                        it["entity_id"] = new_id
+                        changed = True
+                if changed:
+                    self.hass.config_entries.async_update_subentry(
+                        entry, sub, data={"items": items}
+                    )
+                    return
+        self._reload_config()
+
     # ── Service handlers ───────────────────────────────────────────────────────
 
     async def _extract_cover_ids(self, call: ServiceCall) -> list[str]:
@@ -906,7 +974,15 @@ class CoverExtenderCoordinator:
     async def async_start(self) -> None:
         """Load config, start the worker, and defer listener setup to HA started."""
         stored = await self._store.async_load() or {}
-        self.hass.data[DOMAIN][DATA_MEMORY] = {k: int(v) for k, v in stored.items()}
+        # Migrate legacy entity_id keys ("cover.x") to registry ids when possible
+        registry = er.async_get(self.hass)
+        mem: dict[str, int] = {}
+        for key, val in stored.items():
+            if "." in key and (reg := registry.async_get(key)):
+                mem[reg.id] = int(val)
+            else:
+                mem[key] = int(val)
+        self.hass.data[DOMAIN][DATA_MEMORY] = mem
 
         self._start_worker()
 
@@ -915,6 +991,11 @@ class CoverExtenderCoordinator:
         # React to subentry changes automatically
         self._entry.async_on_unload(
             self._entry.add_update_listener(self._on_entry_updated)
+        )
+
+        # React to entity renames (covers and helper entities)
+        self._registry_unsub = self.hass.bus.async_listen(
+            EVENT_ENTITY_REGISTRY_UPDATED, self._handle_registry_update
         )
 
         # _setup_profiles requires cover entities to already be in the state machine.
@@ -944,6 +1025,9 @@ class CoverExtenderCoordinator:
         if self._started_unsub:
             self._started_unsub()
             self._started_unsub = None
+        if self._registry_unsub:
+            self._registry_unsub()
+            self._registry_unsub = None
         if self._worker_task and not self._worker_task.done():
             # Remove done-callback before cancelling so _on_worker_done doesn't restart it.
             self._worker_task.remove_done_callback(self._on_worker_done)

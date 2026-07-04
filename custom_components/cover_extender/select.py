@@ -10,7 +10,6 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
@@ -18,7 +17,12 @@ from .const import (
     DOMAIN, DATA_COVER_PROFILES, DATA_MODES, DATA_SELECT_COVER_IDS,
     CONF_MODES, SIGNAL_COVER_RELOAD,
 )
-from .helpers import resolve_helper_entity
+from .helpers import (
+    cover_stable_key,
+    helper_unique_id,
+    purge_helper_entity,
+    resolve_helper_entity,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,7 +37,10 @@ async def async_setup_entry(
     modes_list: dict = hass.data.get(DOMAIN, {}).get(DATA_MODES, {})
     profiles: dict = hass.data.get(DOMAIN, {}).get(DATA_COVER_PROFILES, {})
     cover_entities = [
-        CoverModeSelect(cover_entity_id, cfg, modes_list, coordinator)
+        CoverModeSelect(
+            cover_entity_id, cfg, modes_list, coordinator,
+            cover_stable_key(hass, cover_entity_id),
+        )
         for cover_entity_id, cfg in profiles.items()
         if cfg.get(CONF_MODES)
     ]
@@ -57,19 +64,18 @@ async def async_setup_entry(
         if added:
             new_modes_list: dict = hass.data[DOMAIN].get(DATA_MODES, {})
             async_add_entities([
-                CoverModeSelect(eid, new_profiles[eid], new_modes_list, coordinator)
+                CoverModeSelect(
+                    eid, new_profiles[eid], new_modes_list, coordinator,
+                    cover_stable_key(hass, eid),
+                )
                 for eid in added
             ])
             hass.data[DOMAIN][DATA_SELECT_COVER_IDS] = known | added
             _LOGGER.info("cover_extender select: %d entity/entities added", len(added))
 
         if removed:
-            registry = er.async_get(hass)
             for cover_id in removed:
-                cover_name = cover_id.split(".")[1]
-                eid = registry.async_get_entity_id("select", DOMAIN, f"{DOMAIN}_select_mode_{cover_name}")
-                if eid:
-                    registry.async_remove(eid)
+                purge_helper_entity(hass, cover_id, "select_mode")
             hass.data[DOMAIN][DATA_SELECT_COVER_IDS] = known - removed
             _LOGGER.info("cover_extender select: %d entity/entities removed", len(removed))
 
@@ -79,13 +85,18 @@ async def async_setup_entry(
 class CoverModeSelect(SelectEntity, RestoreEntity):
     """Mode selector for a cover."""
 
-    def __init__(self, cover_entity_id: str, cfg: dict, modes_list: dict, coordinator) -> None:
+    def __init__(
+        self, cover_entity_id: str, cfg: dict, modes_list: dict, coordinator,
+        stable_key: str,
+    ) -> None:
         self._cover_entity_id = cover_entity_id
         self._coordinator = coordinator
         cover_name = cover_entity_id.split(".")[1]
 
+        # entity_id stays name-based (human-facing suggestion); the unique_id
+        # uses the cover's stable key so renaming the cover breaks nothing.
         self.entity_id = f"select.mode_{cover_name}"
-        self._attr_unique_id = f"{DOMAIN}_select_mode_{cover_name}"
+        self._attr_unique_id = helper_unique_id("select_mode", stable_key)
         self._attr_has_entity_name = True
         self._attr_translation_key = "mode"
 

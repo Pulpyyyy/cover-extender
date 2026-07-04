@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-07-04
+
+### Changed
+- **Covers are now tracked by their entity registry id** (immutable) instead of their entity_id: renaming a cover in HA no longer breaks the configuration, the helper entities, the memory or the automations. The stored entity_id is kept in sync automatically (live via a registry listener, and at startup for renames done while HA was stopped).
+- Helper entities' unique_ids migrate automatically from the name-based scheme to the registry-id scheme at first startup — entity_ids, names, areas and history are preserved. Covers without a registry entry (e.g. YAML template covers without unique_id) keep the legacy name-based behaviour.
+- Stored memory positions are re-keyed from entity_id to registry id at first load.
+- Renaming a helper entity (mode select, lock/auto switches) is now picked up immediately instead of at the next reload.
+
+### Notes
+- The helper entities keep their original entity_id after a cover rename (HA standard behaviour) — rename them manually if you want matching names; this breaks nothing.
+- Automations filtering `cover_extender_*` events on `entity_id` must follow the new cover id after a rename, like for any HA entity.
+
 ## [2.1.0] - 2026-07-04
 
 ### Fixed
