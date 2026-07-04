@@ -5,7 +5,6 @@
   "config_flow": true,
   "dependencies": ["sun"],
   "documentation": "https://github.com/Pulpyyyy/cover_extender",
-  "integration_type": "helper",
   "iot_class": "local_push",
   "requirements": [],
   "single_config_entry": true,
