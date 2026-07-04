@@ -15,7 +15,7 @@ _LOGGER = logging.getLogger(__name__)
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigSubentryFlow, ConfigEntry
 from homeassistant.data_entry_flow import section
-from homeassistant.helpers import selector, translation as ha_translation
+from homeassistant.helpers import selector
 from homeassistant.core import HomeAssistant, callback
 
 from .const import (
@@ -27,6 +27,7 @@ from .const import (
     SUBENTRY_TYPE_MODE,
     SUBENTRY_TYPE_TEMPLATE,
 )
+from .helpers import _subentry_title
 
 _WEATHER_CONDITIONS = [
     "clear-night", "cloudy", "exceptional", "fog", "hail", "lightning",
@@ -47,15 +48,6 @@ _TEMPLATE_BEHAVIOR_KEYS: tuple[str, ...] = (
     "shade_change_threshold", "shade_time_out",
     "solar_gain_position_solar", "solar_gain_position_cold",
 )
-
-_TITLE_FALLBACKS: dict[str, str] = {
-    "global":         "General settings",
-    "facade":         "Facades",
-    "mode":           "Modes",
-    "cover_template": "Templates",
-    "cover":          "Covers",
-}
-
 
 # ── Behavior form: collapsible sections ─────────────────────────────────────────
 # The cover behavior and template automation forms group ~16 fields into
@@ -141,20 +133,6 @@ def _flatten_sections(user_input: dict[str, Any]) -> dict[str, Any]:
         else:
             flat[key] = val
     return flat
-
-async def _subentry_title(hass: HomeAssistant, subentry_type: str) -> str:
-    """Return the translated entry_title for a singleton subentry."""
-    try:
-        translations = await ha_translation.async_get_translations(
-            hass, hass.config.language, "config_subentries", {DOMAIN}
-        )
-        key = f"component.{DOMAIN}.config_subentries.{subentry_type}.entry_title"
-        title = translations.get(key)
-        if title:
-            return title
-    except Exception:
-        pass
-    return _TITLE_FALLBACKS.get(subentry_type, subentry_type)
 
 _DEFAULT_COLOR_HEX = "#FFFFFF"
 _DEFAULT_COLOR_RGB = [255, 255, 255]
@@ -1567,6 +1545,5 @@ class CoverExtenderConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        if self._async_current_entries():
-            return self.async_abort(reason="already_configured")
+        # Single instance is enforced by "single_config_entry" in manifest.json
         return self.async_create_entry(title="Cover Extender", data={})

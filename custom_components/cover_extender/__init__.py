@@ -59,7 +59,7 @@ from .const import (
     SUBENTRY_TYPE_TEMPLATE,
 )
 from .coordinator import CoverExtenderCoordinator
-from .config_flow import _subentry_title
+from .helpers import _subentry_title
 
 import logging
 _LOGGER = logging.getLogger(__name__)
@@ -127,19 +127,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await _async_sync_subentry_titles(hass, entry)
 
     coordinator = CoverExtenderCoordinator(hass, entry)
-    hass.data[DOMAIN]["coordinator"] = coordinator
+    entry.runtime_data = coordinator
 
     await coordinator.async_start()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    _cover_only = vol.Schema({vol.Required("entity_id"): cv.entity_ids})
+    # Services declared with `target:` in services.yaml receive entity_id /
+    # device_id / area_id / label_id keys — the schema must accept them all;
+    # the coordinator resolves them via async_extract_entity_ids.
+    _cover_target = vol.Schema({**cv.TARGET_SERVICE_FIELDS})
 
     hass.services.async_register(
         DOMAIN, SERVICE_APPLY_MODE, coordinator.service_apply_mode,
         schema=vol.Schema({
-            vol.Required("mode"):      cv.string,
-            vol.Required("entity_id"): cv.entity_ids,
+            **cv.TARGET_SERVICE_FIELDS,
+            vol.Required("mode"): cv.string,
         }),
         supports_response=SupportsResponse.OPTIONAL,
     )
@@ -159,19 +162,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.services.async_register(
         DOMAIN, SERVICE_SET_COVER_POSITION, coordinator.service_set_cover_position,
         schema=vol.Schema({
-            vol.Required("entity_id"): cv.entity_ids,
-            vol.Required("position"):  vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
+            **cv.TARGET_SERVICE_FIELDS,
+            vol.Required("position"): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
         }),
     )
     hass.services.async_register(
-        DOMAIN, SERVICE_OPEN_COVER,  coordinator.service_open_cover,  schema=_cover_only
+        DOMAIN, SERVICE_OPEN_COVER,  coordinator.service_open_cover,  schema=_cover_target
     )
     hass.services.async_register(
-        DOMAIN, SERVICE_CLOSE_COVER, coordinator.service_close_cover, schema=_cover_only
+        DOMAIN, SERVICE_CLOSE_COVER, coordinator.service_close_cover, schema=_cover_target
     )
     hass.services.async_register(
         DOMAIN, SERVICE_APPLY_MEMORY, coordinator.service_apply_memory,
-        schema=vol.Schema({vol.Required("entity_id"): cv.entity_ids}),
+        schema=_cover_target,
     )
     hass.services.async_register(
         DOMAIN, SERVICE_RELOAD, coordinator.service_reload,
@@ -192,10 +195,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a cover_extender config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        coordinator: CoverExtenderCoordinator | None = hass.data[DOMAIN].get("coordinator")
+        coordinator: CoverExtenderCoordinator | None = getattr(entry, "runtime_data", None)
         if coordinator:
             await coordinator.async_stop()
-        hass.data[DOMAIN].pop("coordinator", None)
+        entry.runtime_data = None
         for service in (
             SERVICE_APPLY_MODE, SERVICE_GET_MODE_POSITION,
             SERVICE_COMPUTE_SHADE_POSITION, SERVICE_SET_COVER_POSITION,

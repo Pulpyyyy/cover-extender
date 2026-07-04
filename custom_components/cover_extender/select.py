@@ -18,6 +18,7 @@ from .const import (
     DOMAIN, DATA_COVER_PROFILES, DATA_MODES, DATA_SELECT_COVER_IDS,
     CONF_MODES, SIGNAL_COVER_RELOAD,
 )
+from .helpers import resolve_helper_entity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,10 +29,11 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up select entities from a config entry."""
+    coordinator = entry.runtime_data
     modes_list: dict = hass.data.get(DOMAIN, {}).get(DATA_MODES, {})
     profiles: dict = hass.data.get(DOMAIN, {}).get(DATA_COVER_PROFILES, {})
     cover_entities = [
-        CoverModeSelect(cover_entity_id, cfg, modes_list)
+        CoverModeSelect(cover_entity_id, cfg, modes_list, coordinator)
         for cover_entity_id, cfg in profiles.items()
         if cfg.get(CONF_MODES)
     ]
@@ -54,7 +56,10 @@ async def async_setup_entry(
 
         if added:
             new_modes_list: dict = hass.data[DOMAIN].get(DATA_MODES, {})
-            async_add_entities([CoverModeSelect(eid, new_profiles[eid], new_modes_list) for eid in added])
+            async_add_entities([
+                CoverModeSelect(eid, new_profiles[eid], new_modes_list, coordinator)
+                for eid in added
+            ])
             hass.data[DOMAIN][DATA_SELECT_COVER_IDS] = known | added
             _LOGGER.info("cover_extender select: %d entity/entities added", len(added))
 
@@ -74,8 +79,9 @@ async def async_setup_entry(
 class CoverModeSelect(SelectEntity, RestoreEntity):
     """Mode selector for a cover."""
 
-    def __init__(self, cover_entity_id: str, cfg: dict, modes_list: dict) -> None:
+    def __init__(self, cover_entity_id: str, cfg: dict, modes_list: dict, coordinator) -> None:
         self._cover_entity_id = cover_entity_id
+        self._coordinator = coordinator
         cover_name = cover_entity_id.split(".")[1]
 
         self.entity_id = f"select.mode_{cover_name}"
@@ -151,8 +157,7 @@ class CoverModeSelect(SelectEntity, RestoreEntity):
 
         modes_list: dict = self.hass.data.get(DOMAIN, {}).get(DATA_MODES, {})
         mode_props = modes_list.get(option, {})
-        cover_name = self._cover_entity_id.split(".")[1]
-        lock_id = f"switch.{cover_name}_lock"
+        lock_id = resolve_helper_entity(self.hass, self._cover_entity_id, "lock")
         should_lock = mode_props.get("lock", False)
 
         state = self.hass.states.get(lock_id)
@@ -167,9 +172,8 @@ class CoverModeSelect(SelectEntity, RestoreEntity):
                 # memory/position decision instead of its _handle_lock_off listener
                 # (which can't see the target mode's fixed position). Cleared by
                 # _apply_mode_core, and consumed one-shot by _handle_lock_off.
-                coordinator = self.hass.data.get(DOMAIN, {}).get("coordinator")
-                if coordinator is not None:
-                    coordinator._suspend_lock_off.add(self._cover_entity_id)
+                if self._coordinator is not None:
+                    self._coordinator._suspend_lock_off.add(self._cover_entity_id)
                 await self.hass.services.async_call(
                     "switch", "turn_off", {"entity_id": lock_id}, blocking=True
                 )

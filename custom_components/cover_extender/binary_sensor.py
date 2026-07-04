@@ -34,6 +34,7 @@ from .const import (
     ATTR_SUN_FACING,
     SIGNAL_COVER_RELOAD,
 )
+from .helpers import resolve_helper_entity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -231,6 +232,7 @@ class _BaseSwitchMirrorBinarySensor(BinarySensorEntity):
     def __init__(self, cover_entity_id: str, initial_state: bool) -> None:
         self._cover_entity_id = cover_entity_id
         cover_name = cover_entity_id.split(".")[1]
+        # Conventional fallback; re-resolved via the registry in async_added_to_hass
         self._switch_entity_id = f"switch.{cover_name}_{self._switch_suffix}"
 
         self.entity_id = f"binary_sensor.{cover_name}_{self._sensor_suffix}"
@@ -245,6 +247,10 @@ class _BaseSwitchMirrorBinarySensor(BinarySensorEntity):
 
     async def async_added_to_hass(self) -> None:
         """Read switch initial state then track it."""
+        # Registry lookup survives a user rename of the mirrored switch
+        self._switch_entity_id = resolve_helper_entity(
+            self.hass, self._cover_entity_id, self._switch_suffix
+        )
         switch_state = self.hass.states.get(self._switch_entity_id)
         if switch_state:
             self._attr_is_on = switch_state.state == "on"

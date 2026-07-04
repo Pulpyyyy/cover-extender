@@ -1,12 +1,13 @@
 {
   "domain": "cover_extender",
   "name": "Cover Extender",
-  "version": "2.0.0",
-  "homeassistant": "2026.1.0",
-  "documentation": "https://github.com/Pulpyyyy/cover_extender",
-  "dependencies": ["sun"],
   "codeowners": ["@pulpyyyy"],
-  "requirements": [],
+  "config_flow": true,
+  "dependencies": ["sun"],
+  "documentation": "https://github.com/Pulpyyyy/cover_extender",
+  "integration_type": "helper",
   "iot_class": "local_push",
-  "config_flow": true
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "2.0.0"
 }

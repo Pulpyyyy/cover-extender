@@ -21,14 +21,17 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import CoreState, HomeAssistant, ServiceCall, Event, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.service import async_extract_entity_ids
 from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
@@ -52,7 +55,7 @@ from .const import (
     CONF_COMMAND_INTERVAL,
     DEFAULT_COMMAND_INTERVAL,
 )
-from .helpers import build_extra_attrs, resolve_mode_position
+from .helpers import build_extra_attrs, resolve_helper_entity, resolve_mode_position
 from .shade import compute_sun_facing, compute_shade_sync
 from .schemas import build_profiles_from_subentries
 
@@ -60,6 +63,10 @@ _LOGGER = logging.getLogger(__name__)
 
 # Delay before restarting the worker after an unexpected crash (seconds).
 _WORKER_RESTART_DELAY = 1.0
+
+# Debounce for persisting memory positions to storage (seconds). Batches the
+# bursts of writes produced by rapid mode changes / multi-cover services.
+_MEMORY_SAVE_DELAY = 2.0
 
 
 class CoverExtenderCoordinator:
@@ -84,6 +91,20 @@ class CoverExtenderCoordinator:
         # single authority for memory restoration on a mode-driven unlock, since
         # it (unlike _handle_lock_off) knows the target mode's fixed position.
         self._suspend_lock_off: set[str] = set()
+        # Timestamp of the last known movement per cover, used by the shade
+        # time_out throttle. Stamped when we enqueue a command AND when a
+        # current_position change is observed in the state machine (remote
+        # controls, HA UI, other automations) — most recent write wins.
+        self._last_move: dict[str, datetime] = {}
+        # Reverse map switch.<cover>_auto_solar_gain → cover (rebuilt on reload)
+        self._sg_switch_to_cover: dict[str, str] = {}
+        # Attribute keys injected per cover — used to strip them when a cover
+        # is removed from the config (otherwise they linger until restart).
+        self._injected_attrs: dict[str, set[str]] = {}
+        # Lifecycle guards: block worker restarts / deferred setup after stop
+        self._stopping: bool = False
+        self._restart_handle: asyncio.TimerHandle | None = None
+        self._started_unsub: Callable[[], None] | None = None
 
     # ── Data loading ──────────────────────────────────────────────────────────
 
@@ -93,6 +114,33 @@ class CoverExtenderCoordinator:
         """Load configuration from the UI subentries."""
         return build_profiles_from_subentries(self._entry, self.hass)
 
+    # ── Config publication / reload ───────────────────────────────────────────
+
+    def _store_config(
+        self, config: tuple[dict, dict, dict, dict, dict, float]
+    ) -> None:
+        """Publish a freshly built configuration tuple into hass.data."""
+        profiles, modes_list, facades, show_entities, solar_gain_global, interval = config
+        data = self.hass.data[DOMAIN]
+        data[DATA_COVER_PROFILES]   = profiles
+        data[DATA_MODES]            = modes_list
+        data[DATA_FACADES]          = facades
+        data[DATA_SHOW_ENTITIES]    = show_entities
+        data[DATA_SOLAR_GAIN]       = solar_gain_global
+        data[CONF_COMMAND_INTERVAL] = interval
+        self._command_interval      = interval
+
+    def _reload_config(self) -> int:
+        """Rebuild config from subentries, publish it, refresh listeners and entities.
+
+        Returns the number of profiles loaded.
+        """
+        config = build_profiles_from_subentries(self._entry, self.hass)
+        self._store_config(config)
+        self._setup_profiles()
+        async_dispatcher_send(self.hass, SIGNAL_COVER_RELOAD)
+        return len(config[0])
+
     # ── Subentry update listener ──────────────────────────────────────────────
 
     async def _on_entry_updated(
@@ -100,20 +148,9 @@ class CoverExtenderCoordinator:
     ) -> None:
         """Reload profiles whenever a subentry is added / updated / removed."""
         self._entry = entry
-        profiles, modes_list, facades, show_entities, solar_gain_global, interval = (
-            build_profiles_from_subentries(entry, hass)
-        )
-        self.hass.data[DOMAIN][DATA_COVER_PROFILES]   = profiles
-        self.hass.data[DOMAIN][DATA_MODES]            = modes_list
-        self.hass.data[DOMAIN][DATA_FACADES]          = facades
-        self.hass.data[DOMAIN][DATA_SHOW_ENTITIES]    = show_entities
-        self.hass.data[DOMAIN][DATA_SOLAR_GAIN]       = solar_gain_global
-        self.hass.data[DOMAIN][CONF_COMMAND_INTERVAL] = interval
-        self._command_interval = interval
-        self._setup_profiles()
-        async_dispatcher_send(self.hass, SIGNAL_COVER_RELOAD)
+        count = self._reload_config()
         _LOGGER.info(
-            "cover_extender: subentry change — reloaded %d profiles", len(profiles)
+            "cover_extender: subentry change — reloaded %d profiles", count
         )
 
     # ── Shortcuts to shared hass.data ─────────────────────────────────────────
@@ -134,6 +171,8 @@ class CoverExtenderCoordinator:
 
     def _start_worker(self) -> None:
         """(Re)start the queue worker, cancelling any previous instance."""
+        if self._stopping:
+            return
         if self._worker_task and not self._worker_task.done():
             self._worker_task.cancel()
         self._worker_task = self.hass.async_create_background_task(
@@ -143,15 +182,9 @@ class CoverExtenderCoordinator:
         self._worker_task.add_done_callback(self._on_worker_done)
 
     @callback
-    def _on_save_done(self, task: asyncio.Task) -> None:
-        """Log any error from a fire-and-forget storage save."""
-        if not task.cancelled() and (exc := task.exception()):
-            _LOGGER.error("cover_extender: failed to persist memory to storage: %s", exc)
-
-    @callback
     def _on_worker_done(self, task: asyncio.Task) -> None:
         """Restart the worker after an unexpected crash (Fix #3)."""
-        if task.cancelled():
+        if task.cancelled() or self._stopping:
             return
         exc = task.exception()
         if exc is not None:
@@ -160,7 +193,10 @@ class CoverExtenderCoordinator:
                 exc, _WORKER_RESTART_DELAY,
                 exc_info=exc,
             )
-            self.hass.loop.call_later(_WORKER_RESTART_DELAY, self._start_worker)
+            # Keep the handle so async_stop can cancel a pending restart.
+            self._restart_handle = self.hass.loop.call_later(
+                _WORKER_RESTART_DELAY, self._start_worker
+            )
 
     async def _cover_queue_worker(self) -> None:
         """Send queued cover commands with a minimum interval between each.
@@ -186,6 +222,8 @@ class CoverExtenderCoordinator:
     def _enqueue_cover(self, service: str, data: dict) -> None:
         """Add a physical cover command to the global FIFO queue."""
         _LOGGER.debug("cover_extender: enqueue cover.%s %s", service, data)
+        if entity_id := data.get("entity_id"):
+            self._last_move[entity_id] = dt_util.utcnow()
         self._cover_queue.put_nowait((service, data))
 
     # ── Persistent memory ──────────────────────────────────────────────────────
@@ -193,6 +231,11 @@ class CoverExtenderCoordinator:
     def _get_memory(self, entity_id: str) -> int | None:
         """Return the stored memory position for a cover, or None if not set."""
         return self.hass.data[DOMAIN].get(DATA_MEMORY, {}).get(entity_id)
+
+    @callback
+    def _memory_to_save(self) -> dict:
+        """Snapshot of the memory dict, called by the delayed storage save."""
+        return dict(self.hass.data[DOMAIN].get(DATA_MEMORY, {}))
 
     async def _set_memory(self, entity_id: str, value: int | None) -> None:
         """Store or clear a memory position and re-inject it as a cover state attribute."""
@@ -209,7 +252,8 @@ class CoverExtenderCoordinator:
             else:
                 new_attrs["memory"] = value
             self.hass.states.async_set(entity_id, state.state, new_attrs)
-        self.hass.async_create_task(self._store.async_save(dict(mem))).add_done_callback(self._on_save_done)
+        # Debounced write; the Store flushes pending saves on HA shutdown.
+        self._store.async_delay_save(self._memory_to_save, _MEMORY_SAVE_DELAY)
         self.hass.bus.async_fire(
             EVENT_MEMORY_SAVED,
             {"entity_id": entity_id, "position": value},
@@ -224,12 +268,15 @@ class CoverExtenderCoordinator:
         if cover_st and cover_st.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             _LOGGER.debug("auto_shade %s: cover unavailable → skipped", entity_id)
             return
-        cover_name = entity_id.split(".")[1]
-        auto_sw = self.hass.states.get(f"switch.{cover_name}_auto_shade")
+        auto_sw = self.hass.states.get(
+            resolve_helper_entity(self.hass, entity_id, "auto_shade")
+        )
         if not auto_sw or auto_sw.state != "on":
             _LOGGER.debug("auto_shade %s: switch missing or off → skipped", entity_id)
             return
-        position, should_update = compute_shade_sync(self.hass, entity_id, cfg)
+        position, should_update = compute_shade_sync(
+            self.hass, entity_id, cfg, self._last_move.get(entity_id)
+        )
         if not should_update:
             return
         _LOGGER.debug("auto_shade %s → %d%%", entity_id, position)
@@ -253,8 +300,9 @@ class CoverExtenderCoordinator:
         if cover_st and cover_st.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             _LOGGER.debug("auto_solar_gain %s: cover unavailable → skipped", entity_id)
             return
-        cover_name = entity_id.split(".")[1]
-        solar_gain_sw = self.hass.states.get(f"switch.{cover_name}_auto_solar_gain")
+        solar_gain_sw = self.hass.states.get(
+            resolve_helper_entity(self.hass, entity_id, "auto_solar_gain")
+        )
         if not solar_gain_sw or solar_gain_sw.state != "on":
             _LOGGER.debug("auto_solar_gain %s: switch missing or off → skipped", entity_id)
             return
@@ -346,9 +394,8 @@ class CoverExtenderCoordinator:
                 _LOGGER.debug("_apply_mode_core: mode '%s' not configured for %s", mode, entity_id)
                 return
 
-            cover_name = entity_id.split(".")[1]
-            lock_id    = f"switch.{cover_name}_lock"
-            shading_id = f"switch.{cover_name}_auto_shade"
+            lock_id    = resolve_helper_entity(self.hass, entity_id, "lock")
+            shading_id = resolve_helper_entity(self.hass, entity_id, "auto_shade")
 
             from_mode_cfg = self._modes_list.get(from_mode, {}) if from_mode else {}
             to_mode_cfg   = self._modes_list.get(mode, {})
@@ -357,21 +404,24 @@ class CoverExtenderCoordinator:
             current_pos = cover_state.attributes.get("current_position") if cover_state else None
             old_memory  = self._get_memory(entity_id)
 
-            from_lock    = from_mode_cfg.get("lock", False)
-            to_lock      = to_mode_cfg.get("lock", False)
-            to_behavior = to_mode_cfg.get("behavior")  # "auto_shade", "solar_gain", or None
+            from_behavior = from_mode_cfg.get("behavior")  # "auto_shade", "solar_gain", or None
+            to_behavior   = to_mode_cfg.get("behavior")
+            # Effective lock: a behavior forces the lock switch on regardless of the
+            # mode's own lock flag — memory save/restore must follow the same rule,
+            # otherwise entering a lock=False behavior mode loses the user's position.
+            from_locked = from_mode_cfg.get("lock", False) or from_behavior in ("auto_shade", "solar_gain")
+            to_locked   = to_mode_cfg.get("lock", False) or to_behavior in ("auto_shade", "solar_gain")
 
-            # 1. unlock → lock: save current position to memory
-            if not from_lock and to_lock and current_pos is not None:
+            # 1. unlocked → locked: save current position to memory
+            if not from_locked and to_locked and current_pos is not None:
                 await self._set_memory(entity_id, int(current_pos))
 
             # 2+3+3b. Apply lock, auto_shade, and auto_solar_gain in parallel.
-            # Behaviors auto_shade and solar_gain force the lock on (mutually exclusive).
-            solar_gain_id = f"switch.{cover_name}_auto_solar_gain"
-            final_lock = to_lock or to_behavior in ("auto_shade", "solar_gain")
-            await asyncio.gather(
+            # Behaviors auto_shade and solar_gain are mutually exclusive.
+            solar_gain_id = resolve_helper_entity(self.hass, entity_id, "auto_solar_gain")
+            switch_results = await asyncio.gather(
                 self.hass.services.async_call(
-                    "switch", "turn_on" if final_lock else "turn_off",
+                    "switch", "turn_on" if to_locked else "turn_off",
                     {"entity_id": lock_id},
                 ),
                 self.hass.services.async_call(
@@ -382,7 +432,16 @@ class CoverExtenderCoordinator:
                     "switch", "turn_on" if to_behavior == "solar_gain" else "turn_off",
                     {"entity_id": solar_gain_id},
                 ),
+                # One failed switch call must not abort the mode change mid-way
+                # (position would never be applied) — log and continue instead.
+                return_exceptions=True,
             )
+            for res in switch_results:
+                if isinstance(res, Exception):
+                    _LOGGER.warning(
+                        "_apply_mode_core '%s' → %s: switch call failed: %s",
+                        mode, entity_id, res,
+                    )
 
             # 4. Position (skipped when solar_gain active — _apply_solar_gain determines position)
             target_position: int | None = None
@@ -391,7 +450,7 @@ class CoverExtenderCoordinator:
                 if fixed_position is not None:
                     target_position = resolve_mode_position(self.hass, fixed_position)
                     consume_memory  = False
-                elif from_lock and not to_lock and old_memory is not None:
+                elif from_locked and not to_locked and old_memory is not None:
                     target_position = old_memory
                     consume_memory  = True
                 else:
@@ -423,7 +482,8 @@ class CoverExtenderCoordinator:
 
             # 5b. Shading: compute and apply shade position immediately on mode entry.
             #     Bypass the switch-state check in _apply_shade (the switch was just
-            #     turned on above so its HA state hasn't settled yet).
+            #     turned on above so its HA state hasn't settled yet) and the time_out
+            #     throttle (last_move=None): selecting the mode is an explicit request.
             if to_behavior == "auto_shade":
                 shade_pos, shade_should_update = compute_shade_sync(self.hass, entity_id, cfg)
                 if shade_should_update:
@@ -445,7 +505,7 @@ class CoverExtenderCoordinator:
             )
             _LOGGER.debug(
                 "_apply_mode_core '%s' → %s (from=%s, lock=%s, position=%s)",
-                mode, entity_id, from_mode, to_lock, target_position,
+                mode, entity_id, from_mode, to_locked, target_position,
             )
         finally:
             # Re-enable manual lock-off handling for this cover.
@@ -466,11 +526,13 @@ class CoverExtenderCoordinator:
         profiles = self._profiles
 
         # ── Build new reverse-maps (local variables) ──────────────────────────
+        # Helper entity ids are resolved through the registry so the maps stay
+        # correct when the user renamed a helper entity in the UI.
         new_select_to_cover: dict[str, str] = {
-            f"select.mode_{eid.split('.')[1]}": eid for eid in profiles
+            resolve_helper_entity(self.hass, eid, "select_mode"): eid for eid in profiles
         }
         new_lock_to_cover: dict[str, str] = {
-            f"switch.{eid.split('.')[1]}_lock": eid for eid in profiles
+            resolve_helper_entity(self.hass, eid, "lock"): eid for eid in profiles
         }
         new_entity_mode_map: dict[str, list[tuple[str, str]]] = {}
         for cover_id, cfg in profiles.items():
@@ -520,35 +582,59 @@ class CoverExtenderCoordinator:
             )
 
         # Fix #7 — trigger solar gain immediately when auto_solar_gain switch turns ON
-        solar_gain_switches = [
-            f"switch.{eid.split('.')[1]}_auto_solar_gain"
+        new_sg_switch_to_cover: dict[str, str] = {
+            resolve_helper_entity(self.hass, eid, "auto_solar_gain"): eid
             for eid, cfg in profiles.items()
             if cfg.get(CONF_SOLAR_GAIN, {}).get("enable", False)
-        ]
-        if solar_gain_switches:
+        }
+        if new_sg_switch_to_cover:
             new_unsubs.append(
                 async_track_state_change_event(
-                    self.hass, solar_gain_switches, self._handle_solar_gain_switch_on
+                    self.hass,
+                    list(new_sg_switch_to_cover.keys()),
+                    self._handle_solar_gain_switch_on,
                 )
             )
 
         # ── Atomic swap: cancel old → assign new ─────────────────────────────
         for unsub in self._unsubs:
             unsub()
-        self._select_to_cover  = new_select_to_cover
-        self._lock_to_cover    = new_lock_to_cover
-        self._entity_mode_map  = new_entity_mode_map
-        self._unsubs           = new_unsubs
+        old_injected = self._injected_attrs
+        self._select_to_cover     = new_select_to_cover
+        self._lock_to_cover       = new_lock_to_cover
+        self._entity_mode_map     = new_entity_mode_map
+        self._sg_switch_to_cover  = new_sg_switch_to_cover
+        self._unsubs              = new_unsubs
+
+        # ── Strip injected attributes from covers removed from the config ─────
+        # Without this they linger on the cover until the next HA restart.
+        for stale_id in set(old_injected) - set(profiles):
+            state = self.hass.states.get(stale_id)
+            if state:
+                remaining = {
+                    k: v for k, v in state.attributes.items()
+                    if k not in old_injected[stale_id]
+                }
+                _LOGGER.debug(
+                    "cover_extender: stripping injected attributes from removed cover %s",
+                    stale_id,
+                )
+                self.hass.states.async_set(stale_id, state.state, remaining)
 
         # ── Initial attribute injection on already-loaded covers ──────────────
+        new_injected: dict[str, set[str]] = {}
         for entity_id, cfg in profiles.items():
             extra_attrs = build_extra_attrs(cfg, memory=self._get_memory(entity_id))
+            # Track every key we may inject for this cover ("memory" can appear
+            # later via _set_memory, sun_facing via _inject_sun_facing).
+            new_injected[entity_id] = set(extra_attrs) | {ATTR_SUN_FACING, "memory"}
             state = self.hass.states.get(entity_id)
             if state:
                 if not all(state.attributes.get(k) == v for k, v in extra_attrs.items()):
                     self.hass.states.async_set(
                         entity_id, state.state, {**state.attributes, **extra_attrs}
                     )
+        self._injected_attrs = new_injected
 
         self._inject_sun_facing()
 
@@ -557,9 +643,20 @@ class CoverExtenderCoordinator:
         """Re-inject custom attributes on every cover state change (Fix #8)."""
         entity_id = event.data.get("entity_id")
         new_state = event.data.get("new_state")
+        old_state = event.data.get("old_state")
         profiles  = self._profiles
         if not new_state or entity_id not in profiles:
             return
+        # Movement observed (any source: our queue, remote control, HA UI…) →
+        # stamp for the shade time_out throttle. Our own attribute injections
+        # never touch current_position, so they can't falsely re-arm it.
+        if (
+            old_state
+            and (old_pos := old_state.attributes.get("current_position")) is not None
+            and (new_pos := new_state.attributes.get("current_position")) is not None
+            and old_pos != new_pos
+        ):
+            self._last_move[entity_id] = dt_util.utcnow()
         # Skip attribute injection when the cover is unavailable (Fix #8)
         if new_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             return
@@ -652,9 +749,17 @@ class CoverExtenderCoordinator:
         except (ValueError, TypeError):
             return
         for cover_id, mode_name in self._entity_mode_map.get(ref_entity, []):
-            cover_name   = cover_id.split(".")[1]
-            select_state = self.hass.states.get(f"select.mode_{cover_name}")
+            select_state = self.hass.states.get(
+                resolve_helper_entity(self.hass, cover_id, "select_mode")
+            )
             if not select_state or select_state.state != mode_name:
+                continue
+            # Respect exclusion, like _apply_mode_core and _handle_lock_off do
+            exclusion: list[str] = self._profiles.get(cover_id, {}).get(CONF_EXCLUSION, [])
+            if any(self.hass.states.is_state(e, "on") for e in exclusion):
+                _LOGGER.debug(
+                    "mode entity '%s' → %s: blocked by exclusion", ref_entity, cover_id
+                )
                 continue
             _LOGGER.debug(
                 "mode entity '%s' → %d%% : applying to %s (mode=%s)",
@@ -685,20 +790,24 @@ class CoverExtenderCoordinator:
         if old_state.state == "on" or new_state.state != "on":
             return  # Only react to the off → on transition
         switch_id: str = event.data.get("entity_id", "")
-        # Reverse-lookup: switch.volet_sam_auto_solar_gain → cover.volet_sam
-        cover_name = switch_id.removeprefix("switch.").removesuffix("_auto_solar_gain")
-        cover_id   = f"cover.{cover_name}"
-        cfg = self._profiles.get(cover_id)
+        cover_id = self._sg_switch_to_cover.get(switch_id)
+        cfg = self._profiles.get(cover_id) if cover_id else None
         if cfg and cfg.get(CONF_SOLAR_GAIN, {}).get("enable", False):
             _LOGGER.debug("solar_gain switch ON → immediate apply for %s", cover_id)
             self._apply_solar_gain(cover_id, cfg)
 
     # ── Service handlers ───────────────────────────────────────────────────────
 
+    async def _extract_cover_ids(self, call: ServiceCall) -> list[str]:
+        """Resolve the service target (entity_id / device_id / area_id / label_id)
+        to the cover entity ids it references."""
+        entity_ids = await async_extract_entity_ids(self.hass, call)
+        return sorted(e for e in entity_ids if e.startswith("cover."))
+
     async def service_apply_mode(self, call: ServiceCall) -> dict:
         """Apply a mode to one or more covers via select.select_option."""
         mode: str       = call.data["mode"]
-        target_ids: list[str] = call.data.get("entity_id", [])
+        target_ids: list[str] = await self._extract_cover_ids(call)
 
         applied: list[str] = []
         skipped: list[str] = []
@@ -709,8 +818,7 @@ class CoverExtenderCoordinator:
                 _LOGGER.debug("apply_mode: mode '%s' not configured for %s", mode, entity_id)
                 skipped.append(entity_id)
                 continue
-            cover_name = entity_id.split(".")[1]
-            select_id  = f"select.mode_{cover_name}"
+            select_id = resolve_helper_entity(self.hass, entity_id, "select_mode")
             if not self.hass.states.get(select_id):
                 _LOGGER.warning(
                     "apply_mode: entity '%s' not found — component not ready yet?", select_id
@@ -737,7 +845,9 @@ class CoverExtenderCoordinator:
         """Compute the solar shade position for a cover."""
         entity_id: str = call.data["entity_id"]
         cfg = self._profiles.get(entity_id, {})
-        position, should_update = compute_shade_sync(self.hass, entity_id, cfg)
+        position, should_update = compute_shade_sync(
+            self.hass, entity_id, cfg, self._last_move.get(entity_id)
+        )
         _LOGGER.debug(
             "compute_shade_position %s → %d%% (update=%s)", entity_id, position, should_update
         )
@@ -746,8 +856,9 @@ class CoverExtenderCoordinator:
     async def _set_cover_position_impl(self, entity_ids: list[str], position: int) -> None:
         """Move or store in memory depending on lock state."""
         for entity_id in entity_ids:
-            cover_name = entity_id.split(".")[1]
-            lock_state = self.hass.states.get(f"switch.{cover_name}_lock")
+            lock_state = self.hass.states.get(
+                resolve_helper_entity(self.hass, entity_id, "lock")
+            )
             if lock_state and lock_state.state == "on":
                 _LOGGER.debug(
                     "set_cover_position %s: lock active → writing memory (%d%%)",
@@ -762,20 +873,20 @@ class CoverExtenderCoordinator:
     async def service_set_cover_position(self, call: ServiceCall) -> None:
         """Move one or more covers, respecting the lock."""
         await self._set_cover_position_impl(
-            call.data.get("entity_id", []), call.data["position"]
+            await self._extract_cover_ids(call), call.data["position"]
         )
 
     async def service_open_cover(self, call: ServiceCall) -> None:
         """Open one or more covers (position 100), respecting the lock."""
-        await self._set_cover_position_impl(call.data.get("entity_id", []), 100)
+        await self._set_cover_position_impl(await self._extract_cover_ids(call), 100)
 
     async def service_close_cover(self, call: ServiceCall) -> None:
         """Close one or more covers (position 0), respecting the lock."""
-        await self._set_cover_position_impl(call.data.get("entity_id", []), 0)
+        await self._set_cover_position_impl(await self._extract_cover_ids(call), 0)
 
     async def service_apply_memory(self, call: ServiceCall) -> None:
         """Apply the stored memory position regardless of lock state."""
-        for entity_id in call.data.get("entity_id", []):
+        for entity_id in await self._extract_cover_ids(call):
             position = self._get_memory(entity_id)
             if position is None:
                 _LOGGER.debug("apply_memory %s: no memory stored, skipping", entity_id)
@@ -786,20 +897,9 @@ class CoverExtenderCoordinator:
             )
 
     async def service_reload(self, call: ServiceCall) -> None:
-        """Reload cover configuration (YAML file or subentries) without restarting HA."""
-        new_profiles, new_modes_list, new_facades, new_vas, new_solar_gain, new_interval = (
-            await self._load_data()
-        )
-        self.hass.data[DOMAIN][DATA_COVER_PROFILES]   = new_profiles
-        self.hass.data[DOMAIN][DATA_MODES]            = new_modes_list
-        self.hass.data[DOMAIN][DATA_FACADES]          = new_facades
-        self.hass.data[DOMAIN][DATA_SHOW_ENTITIES]    = new_vas
-        self.hass.data[DOMAIN][DATA_SOLAR_GAIN]       = new_solar_gain
-        self.hass.data[DOMAIN][CONF_COMMAND_INTERVAL] = new_interval
-        self._command_interval                        = new_interval
-        self._setup_profiles()
-        async_dispatcher_send(self.hass, SIGNAL_COVER_RELOAD)
-        _LOGGER.info("cover_extender reloaded (%d profiles)", len(new_profiles))
+        """Reload cover configuration from subentries without restarting HA."""
+        count = self._reload_config()
+        _LOGGER.info("cover_extender reloaded (%d profiles)", count)
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -810,16 +910,7 @@ class CoverExtenderCoordinator:
 
         self._start_worker()
 
-        profiles, modes_list, facades, show_entities, solar_gain_global, command_interval = (
-            await self._load_data()
-        )
-        self.hass.data[DOMAIN][DATA_COVER_PROFILES]      = profiles
-        self.hass.data[DOMAIN][DATA_MODES]               = modes_list
-        self.hass.data[DOMAIN][DATA_FACADES]             = facades
-        self.hass.data[DOMAIN][DATA_SHOW_ENTITIES]       = show_entities
-        self.hass.data[DOMAIN][DATA_SOLAR_GAIN]          = solar_gain_global
-        self.hass.data[DOMAIN][CONF_COMMAND_INTERVAL]    = command_interval
-        self._command_interval                           = command_interval
+        self._store_config(await self._load_data())
 
         # React to subentry changes automatically
         self._entry.async_on_unload(
@@ -833,12 +924,26 @@ class CoverExtenderCoordinator:
         if self.hass.state is CoreState.running:
             self._setup_profiles()
         else:
-            self.hass.bus.async_listen_once(
-                "homeassistant_started", lambda _: self._setup_profiles()
+            @callback
+            def _on_ha_started(_event: Event) -> None:
+                self._started_unsub = None
+                self._setup_profiles()
+
+            # Keep the unsub so async_stop cancels it if the entry is unloaded
+            # before HA finishes starting (would otherwise leak listeners).
+            self._started_unsub = self.hass.bus.async_listen_once(
+                EVENT_HOMEASSISTANT_STARTED, _on_ha_started
             )
 
     async def async_stop(self, _event: Event | None = None) -> None:
-        """Cancel the worker and unsubscribe all listeners."""
+        """Cancel the worker, pending restarts, and all listeners."""
+        self._stopping = True
+        if self._restart_handle:
+            self._restart_handle.cancel()
+            self._restart_handle = None
+        if self._started_unsub:
+            self._started_unsub()
+            self._started_unsub = None
         if self._worker_task and not self._worker_task.done():
             # Remove done-callback before cancelling so _on_worker_done doesn't restart it.
             self._worker_task.remove_done_callback(self._on_worker_done)

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 import math
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -16,7 +16,6 @@ from .const import (
     DOMAIN,
     CONF_FACADE,
     CONF_SHADING,
-    CONF_MODES,
     CONF_ANGLE_LEFT,
     CONF_ANGLE_RIGHT,
     CONF_AZIMUTH,
@@ -73,6 +72,7 @@ def compute_shade_sync(
     hass: HomeAssistant,
     entity_id: str,
     cfg: dict[str, Any],
+    last_move: datetime | None = None,
 ) -> tuple[int, bool]:
     """Compute the shade position and should_update flag (synchronous).
 
@@ -80,8 +80,11 @@ def compute_shade_sync(
     and the current position is below the threshold, the current position is
     returned unchanged and should_update is False.
 
-    Also respects time_out: if the cover was last updated less than time_out
-    minutes ago, should_update is False even if the position changed enough.
+    Also respects time_out: *last_move* is the timestamp of the last known cover
+    movement (command sent by the coordinator OR position change observed in the
+    state machine — remote controls, HA UI, other automations). If it is less
+    than time_out minutes old, should_update is False even if the position
+    changed enough. Pass None to bypass the throttle.
 
     Returns (position_percent, should_update).
     """
@@ -97,13 +100,7 @@ def compute_shade_sync(
     threshold = float(auto_shade.get("change_threshold", 5))
     time_out  = float(auto_shade.get("time_out",         1))
 
-    modes_dict  = cfg.get(CONF_MODES, {})
-    shade_fixed = modes_dict.get("Ombre")
-    default_pos = (
-        float(shade_fixed)
-        if shade_fixed is not None
-        else float(auto_shade.get("default_position", 100))
-    )
+    default_pos = float(auto_shade.get("default_position", 100))
 
     facade      = cfg.get(CONF_FACADE, "south")
     facades_cfg = hass.data[DOMAIN].get(DATA_FACADES, {})
@@ -120,7 +117,9 @@ def compute_shade_sync(
     fov              = deg2rad * degrees
     alpha            = deg2rad * sun_ele
     gamma            = deg2rad * ((win_azi - sun_azi + 180) % 360 - 180)
-    default_height_m = default_pos / 100.0 * h_max
+    # Map the default % onto the [h_min, h_max] range so that _h2perc gives
+    # back exactly default_pos (was wrong when min_height > 0).
+    default_height_m = h_min + default_pos / 100.0 * (h_max - h_min)
 
     def _h2perc(h: float) -> float:
         return 100.0 * (h - h_min) / (h_max - h_min) if h_max != h_min else 0.0
@@ -148,7 +147,9 @@ def compute_shade_sync(
 
     cover_st = hass.states.get(entity_id)
     if cover_st:
-        current = int(cover_st.attributes.get("current_position", position))
+        # current_position may exist with a None value (position unknown / moving)
+        raw_current = cover_st.attributes.get("current_position")
+        current = position if raw_current is None else int(raw_current)
         diff = abs(current - position)
         if diff < threshold:
             _LOGGER.debug(
@@ -157,16 +158,13 @@ def compute_shade_sync(
             )
             return current, False
 
-        # Use last_changed (not last_updated): the coordinator re-injects custom
-        # attributes (sun_facing, memory, modes) very frequently, which bumps
-        # last_updated on every write and would falsely reset the time_out throttle.
-        # last_changed only moves when the cover's state actually changes.
-        time_ok = dt_util.utcnow() - timedelta(minutes=time_out) >= cover_st.last_changed
-        if not time_ok:
-            _LOGGER.debug(
-                "shade %s: time_out %.1f min not elapsed → no move",
-                entity_id, time_out,
-            )
-        return position, time_ok
-
-    return position, True
+    time_ok = (
+        last_move is None
+        or dt_util.utcnow() - last_move >= timedelta(minutes=time_out)
+    )
+    if not time_ok:
+        _LOGGER.debug(
+            "shade %s: time_out %.1f min not elapsed since last move → no move",
+            entity_id, time_out,
+        )
+    return position, time_ok
