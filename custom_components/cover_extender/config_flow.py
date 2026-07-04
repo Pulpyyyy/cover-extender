@@ -1022,10 +1022,14 @@ class TemplateFlowHandler(ConfigSubentryFlow):
         used = _usage_counts(self.hass)["template"]
         options: list[dict[str, str]] = [{"value": _ACTION_ADD, "label": "Add template"}]
         for i, item in enumerate(self._items):
-            label = (
-                f"{item['name']} "
-                f"({float(item.get('angle_left', 85)):g}°/{float(item.get('angle_right', 85)):g}°)"
-            )
+            # Dimensions are what tells templates apart: height (range) and
+            # obstacle distance, from the geometry section.
+            shade = item.get("shade", {})
+            max_h = float(shade.get("max_height", 1.8))
+            min_h = float(shade.get("min_height", 0.0))
+            dist = float(shade.get("distance", 0.4))
+            height = f"H {min_h:g}-{max_h:g} m" if min_h else f"H {max_h:g} m"
+            label = f"{item['name']} ({height} · D {dist:g} m)"
             options.append({
                 "value": f"select:{i}",
                 "label": _with_usage(label, used.get(item["name"], 0), labels),
