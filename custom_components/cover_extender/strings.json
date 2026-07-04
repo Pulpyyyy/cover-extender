@@ -82,22 +82,22 @@
     },
     "facade_manage": {
       "options": {
-        "__add__": "Add facade"
+        "add": "Add facade"
       }
     },
     "mode_manage": {
       "options": {
-        "__add__": "Add mode"
+        "add": "Add mode"
       }
     },
     "template_manage": {
       "options": {
-        "__add__": "Add template"
+        "add": "Add template"
       }
     },
     "cover_manage": {
       "options": {
-        "__add__": "Add cover"
+        "add": "Add cover"
       }
     },
     "mode_position_type": {

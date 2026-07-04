@@ -16,6 +16,10 @@ jobs:
 
   hacs:
     runs-on: ubuntu-latest
+    # Non-blocking while the repo is private: the HACS action fetches
+    # hacs.json/manifest.json unauthenticated from raw.githubusercontent.com,
+    # which 404s on private repos. Remove this once the repo goes public.
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: hacs/action@main

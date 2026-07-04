@@ -82,22 +82,22 @@
     },
     "facade_manage": {
       "options": {
-        "__add__": "Ajouter une façade"
+        "add": "Ajouter une façade"
       }
     },
     "mode_manage": {
       "options": {
-        "__add__": "Ajouter un mode"
+        "add": "Ajouter un mode"
       }
     },
     "template_manage": {
       "options": {
-        "__add__": "Ajouter un gabarit"
+        "add": "Ajouter un gabarit"
       }
     },
     "cover_manage": {
       "options": {
-        "__add__": "Ajouter un volet"
+        "add": "Ajouter un volet"
       }
     },
     "mode_position_type": {

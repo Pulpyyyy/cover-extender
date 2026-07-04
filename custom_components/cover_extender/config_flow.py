@@ -39,7 +39,9 @@ _WEATHER_CONDITIONS = [
     "snowy-rainy", "sunny", "windy", "windy-variant",
 ]
 
-_ACTION_ADD = "__add__"
+# Sentinel option value for "add a new item" in manage lists. Must satisfy
+# hassfest's translation-key rules ([a-z0-9-_]+, no leading/trailing _ or -).
+_ACTION_ADD = "add"
 
 # Behavior keys that a template can define and a cover can override.
 # Activation flags (shade_enable, solar_gain_enable) are intentionally absent:
