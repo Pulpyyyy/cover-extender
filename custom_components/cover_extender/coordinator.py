@@ -832,13 +832,26 @@ class CoverExtenderCoordinator:
                 "cover_extender: cover renamed %s → %s, re-syncing config", old_id, new_id
             )
             self._sync_cover_entity_id(old_id, new_id)
+            # A soft reload is not enough: the per-cover entities (select,
+            # switches, sensors) keep their internal binding to the old id and
+            # cannot be swapped by add/remove (same stable unique_id). A full
+            # entry reload recreates everything bound to the new entity_id.
+            self._schedule_entry_reload()
             return
         reg = er.async_get(self.hass).async_get(new_id)
         if reg and reg.platform == DOMAIN:
+            # Helper renamed: reverse maps AND entity-to-entity subscriptions
+            # (mirror binary_sensors track the switch entity_id) must rebind.
             _LOGGER.debug(
-                "cover_extender: helper renamed %s → %s, rebuilding maps", old_id, new_id
+                "cover_extender: helper renamed %s → %s, reloading entry", old_id, new_id
             )
-            self._setup_profiles()
+            self._schedule_entry_reload()
+
+    def _schedule_entry_reload(self) -> None:
+        """Schedule a full config-entry reload (rare events: entity renames)."""
+        self.hass.async_create_task(
+            self.hass.config_entries.async_reload(self._entry.entry_id)
+        )
 
     def _sync_cover_entity_id(self, old_id: str, new_id: str) -> None:
         """Rewrite a renamed cover's entity_id in the cover subentry.
