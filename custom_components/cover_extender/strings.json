@@ -58,6 +58,7 @@
     }
   },
   "config": {
+    "step": {},
     "abort": {
       "already_configured": "Cover Extender is already configured."
     }
