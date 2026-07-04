@@ -24,7 +24,7 @@
     },
     "apply_mode": {
       "name": "Apply mode",
-      "description": "Moves the given covers to the position defined for the given mode. Returns {\"applied\": [...], \"skipped\": [...]} as a response variable.",
+      "description": "Moves the given covers to the position defined for the given mode. Returns the lists of applied and skipped covers as a response variable.",
       "fields": {
         "mode": {
           "name": "Mode",

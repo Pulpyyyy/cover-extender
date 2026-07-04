@@ -24,7 +24,7 @@
     },
     "apply_mode": {
       "name": "Appliquer un mode",
-      "description": "Déplace les volets à la position définie pour le mode donné. Retourne {\"applied\": [...], \"skipped\": [...]} comme variable de réponse.",
+      "description": "Déplace les volets à la position définie pour le mode donné. Retourne les listes des volets appliqués (applied) et ignorés (skipped) comme variable de réponse.",
       "fields": {
         "mode": {
           "name": "Mode",
