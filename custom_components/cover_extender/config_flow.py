@@ -467,8 +467,12 @@ def _mode_position_selector() -> Any:
 
 
 def _mode_position_schema() -> vol.Schema:
-    """Single-position form used by the cover wizard's per-mode loop."""
-    return vol.Schema({vol.Required("position"): _mode_position_selector()})
+    """Single-position form used by the cover wizard's per-mode loop.
+
+    Optional on purpose: an untouched field keeps the stored value (or means
+    "none" for a newly linked mode) instead of silently submitting fixed 0.
+    """
+    return vol.Schema({vol.Optional("position"): _mode_position_selector()})
 
 
 def _choice_to_mode_cfg(choice: dict[str, Any]) -> dict[str, Any]:
@@ -503,6 +507,31 @@ def _mode_cfg_to_choice(cfg: Any) -> dict[str, Any]:
     if cfg_type == "entity" and value:
         return {"active_choice": "entity", "entity": value}
     return {"active_choice": "none"}
+
+
+def _mode_cfg_display(cfg: Any, labels: dict[str, str]) -> str:
+    """Human-readable current value of a mode config, for labels/placeholders."""
+    choice = _mode_cfg_to_choice(cfg)
+    active = choice.get("active_choice")
+    if active == "fixed":
+        return f"{choice['fixed']} %"
+    if active == "entity":
+        return str(choice["entity"])
+    return labels.get("pos_none", "none")
+
+
+def _mode_position_suggested(cfg: Any) -> Any | None:
+    """Suggested value for a mode-position `choose` field, or None.
+
+    The frontend wraps a choose field's suggested_value into its FIRST choice
+    ({active_choice: first, first: value}), so only a raw number pre-fills
+    correctly (into "fixed"). Entity/none configs cannot be pre-filled — they
+    are conveyed through the field label instead and kept when untouched.
+    """
+    choice = _mode_cfg_to_choice(cfg)
+    if choice.get("active_choice") == "fixed":
+        return choice["fixed"]
+    return None
 
 
 # ── Singleton save helper ──────────────────────────────────────────────────────
@@ -921,18 +950,27 @@ class ModeFlowHandler(ConfigSubentryFlow):
 
         if user_input is not None:
             covers = self._pos_covers
+            touched = 0
             for key, idx in self._pos_key_to_idx.items():
+                if key not in user_input:
+                    continue  # untouched optional field -> keep the stored value
+                value = user_input[key]
                 item = covers[idx]
                 modes = dict(item.get("modes", {}))
-                modes[mode_name] = _choice_to_mode_cfg(user_input.get(key) or {})
+                modes[mode_name] = _choice_to_mode_cfg(
+                    value if isinstance(value, dict) else {"active_choice": "fixed", "fixed": value}
+                )
                 covers[idx] = {**item, "modes": modes}
+                touched += 1
             _LOGGER.debug(
-                "config_flow [mode] async_step_positions: saving '%s' positions on %d cover(s)",
-                mode_name, len(self._pos_key_to_idx),
+                "config_flow [mode] async_step_positions: '%s' updated on %d/%d cover(s)",
+                mode_name, touched, len(self._pos_key_to_idx),
             )
-            _update_singleton_in_place(self, SUBENTRY_TYPE_COVER, covers)
+            if touched:
+                _update_singleton_in_place(self, SUBENTRY_TYPE_COVER, covers)
             return await self.async_step_manage()
 
+        labels = await _ui_labels(self.hass)
         _, sub = _find_singleton(self.hass, SUBENTRY_TYPE_COVER)
         self._pos_covers = [dict(it) for it in (sub.data.get("items", []) if sub else [])]
         self._pos_key_to_idx = {}
@@ -945,11 +983,17 @@ class ModeFlowHandler(ConfigSubentryFlow):
             entity_id = item.get("entity_id", "")
             state = self.hass.states.get(entity_id)
             friendly = state.attributes.get("friendly_name") if state else None
-            # Key doubles as the displayed label; entity_id keeps it unique.
-            key = f"{friendly} ({entity_id})" if friendly else entity_id
+            # Key doubles as the displayed label (dynamic fields cannot be
+            # translated); entity_id keeps it unique, and the current value is
+            # part of the label because entity/none configs cannot pre-fill
+            # the choose widget (see _mode_position_suggested).
+            base = f"{friendly} ({entity_id})" if friendly else entity_id
+            key = f"{base} · {_mode_cfg_display(modes.get(mode_name), labels)}"
             self._pos_key_to_idx[key] = i
-            fields[vol.Required(key)] = _mode_position_selector()
-            suggested[key] = _mode_cfg_to_choice(modes.get(mode_name))
+            # Optional: an untouched field keeps the stored value on submit.
+            fields[vol.Optional(key)] = _mode_position_selector()
+            if (raw := _mode_position_suggested(modes.get(mode_name))) is not None:
+                suggested[key] = raw
         if not fields:
             return await self.async_step_manage()
         return self.async_show_form(
@@ -1527,22 +1571,32 @@ class CoverFlowHandler(ConfigSubentryFlow):
         # Record the answer for the mode just shown, then advance.
         if user_input is not None:
             name = to_prompt[self._mode_pos_idx]
-            self._pending_modes_result[name] = _choice_to_mode_cfg(
-                user_input.get("position") or {}
-            )
+            if "position" in user_input:
+                value = user_input["position"]
+                self._pending_modes_result[name] = _choice_to_mode_cfg(
+                    value if isinstance(value, dict) else {"active_choice": "fixed", "fixed": value}
+                )
+            elif name in self._pending_modes_existing:
+                # Untouched optional field -> keep the stored value.
+                self._pending_modes_result[name] = self._pending_modes_existing[name]
+            else:
+                self._pending_modes_result[name] = {"type": "auto"}
             self._mode_pos_idx += 1
 
         # No (more) modes to process -> finalize.
         if self._mode_pos_idx >= len(to_prompt):
             return await self._finalize_modes()
 
-        # Plain mode -> editable form, pre-filled with the stored value if any.
+        # Plain mode -> editable form. The choose widget only pre-fills fixed
+        # positions (frontend wraps suggested values into the first choice);
+        # the current value is shown via the {current} placeholder and kept
+        # when the field is left untouched.
         name = to_prompt[self._mode_pos_idx]
+        labels = await _ui_labels(self.hass)
+        existing = self._pending_modes_existing.get(name)
         schema = _mode_position_schema()
-        if (existing := self._pending_modes_existing.get(name)) is not None:
-            schema = self.add_suggested_values_to_schema(
-                schema, {"position": _mode_cfg_to_choice(existing)}
-            )
+        if (raw := _mode_position_suggested(existing)) is not None:
+            schema = self.add_suggested_values_to_schema(schema, {"position": raw})
         return self.async_show_form(
             step_id="mode_position",
             data_schema=schema,
@@ -1551,6 +1605,7 @@ class CoverFlowHandler(ConfigSubentryFlow):
                 "cover": self._current_cover_label(),
                 "index": str(self._mode_pos_idx + 1),
                 "total": str(len(to_prompt)),
+                "current": _mode_cfg_display(existing, labels),
             },
             last_step=(self._mode_pos_idx >= len(to_prompt) - 1),
         )

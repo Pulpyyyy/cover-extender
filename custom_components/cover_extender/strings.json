@@ -76,6 +76,7 @@
         "modes": "mode(s)",
         "lock": "lock",
         "hidden": "hidden",
+        "pos_none": "none",
         "no_facade": "(no facade created yet)",
         "no_template": "(no template created yet)",
         "no_mode": "(no mode created yet)"
@@ -337,7 +338,7 @@
         },
         "positions": {
           "title": "Positions - {name}",
-          "description": "Position the {name} mode applies to each of its {count} linked cover(s): a fixed value in %, an entity driving it live, or none (the cover stays in place). Current values pre-filled."
+          "description": "Position the {name} mode applies to each of its {count} linked cover(s). The current value is shown in each cover's label; untouched covers keep it. Choices: a fixed value in %, an entity driving it live, or none (the cover stays in place)."
         },
         "delete_blocked": {
           "title": "Deletion blocked",
@@ -613,12 +614,12 @@
         },
         "mode_position": {
           "title": "Mode position - {name} ({cover})",
-          "description": "Mode {index}/{total}. Position for this mode: a fixed %, an entity, or none (the cover stays in place).",
+          "description": "Mode {index}/{total}. Current value: {current}. Leaving the field untouched keeps it.",
           "data": {
-            "position": "Fixed position"
+            "position": "Position"
           },
           "data_description": {
-            "position": "Pick a fixed %, an entity driving it live, or none (the cover stays in place)."
+            "position": "Pick a fixed position in %, an entity that drives it live, or none (the cover stays in place)."
           }
         },
         "mode_position_auto": {

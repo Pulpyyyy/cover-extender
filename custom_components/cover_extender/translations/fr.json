@@ -76,6 +76,7 @@
         "modes": "mode(s)",
         "lock": "verrouillage",
         "hidden": "masqué",
+        "pos_none": "aucune",
         "no_facade": "(aucune façade créée)",
         "no_template": "(aucun gabarit créé)",
         "no_mode": "(aucun mode créé)"
@@ -337,7 +338,7 @@
         },
         "positions": {
           "title": "Positions - {name}",
-          "description": "Position appliquée par le mode {name} à chacun des {count} volet(s) liés : valeur fixe en %, entité qui la pilote en direct, ou aucune (le volet reste en place). Valeurs actuelles préremplies."
+          "description": "Position appliquée par le mode {name} à chacun des {count} volet(s) liés. La valeur actuelle est affichée dans le libellé de chaque volet ; un volet non modifié la conserve. Choix possibles : position fixe en %, entité qui la pilote en direct, ou aucune (le volet reste en place)."
         },
         "delete_blocked": {
           "title": "Suppression impossible",
@@ -613,9 +614,9 @@
         },
         "mode_position": {
           "title": "Position du mode - {name} ({cover})",
-          "description": "Mode {index}/{total}. Position de ce mode : valeur fixe, entité, ou aucune (le volet reste en place).",
+          "description": "Mode {index}/{total}. Valeur actuelle : {current}. Ne rien toucher conserve cette valeur.",
           "data": {
-            "position": "Position fixe"
+            "position": "Position"
           },
           "data_description": {
             "position": "Choisissez une position fixe en %, une entité qui la pilote en direct, ou aucune (le volet reste en place)."
