@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-07-04
+
+### Added
+- **Per-cover mode positions are now editable** (previously: unlink then relink). Two entry points: from a cover, the "Link modes" action re-asks the position of every selected non-automation mode pre-filled with its current value; from a mode, a new "Per-cover positions" action edits the mode's position on every linked cover in a single pre-filled page.
+- Config flow validation with inline errors: duplicate or empty facade/mode/template names refused, already-configured cover refused, facade required, min/max coherence checks on heights and sun elevations. Adding a cover aborts with an explicit message when no facade exists yet.
+- Deleting a facade, template or mode still referenced by covers is blocked, with the list of covers using it.
+- Manage lists show what matters at a glance: usage counts everywhere, facade azimuth, template dimensions (height range + obstacle distance), mode markers (lock / behavior / hidden), and per-cover facade + template + linked-mode count.
+- The test suite now validates `strings.json` and `fr.json` against the real hassfest translations schema (vendored) and asserts key parity between the two files.
+
+### Changed
+- Facade and template dropdowns are sorted, show the azimuth, and display a translated placeholder instead of an empty option when nothing exists yet; the mode multiselect carries lock/behavior markers.
+
+### Fixed
+- hassfest validation passes: `__add__` selector keys renamed to `add`, subentry translation key `entry_title` renamed to the official `entry_type`, JSON-literal braces removed from the `apply_mode` service description, required empty `config.step` key added.
+- `manifest.json`: added the required `issue_tracker` URL and fixed the `documentation` URL.
+
 ## [2.2.0] - 2026-07-04
 
 ### Changed
