@@ -444,28 +444,31 @@ def _behavior_errors(flat: dict[str, Any]) -> dict[str, str]:
 
 # ── Per-cover mode position form (shared by cover and mode flows) ─────────────
 
-def _mode_position_schema() -> vol.Schema:
-    """Form for a NON-automation mode's per-cover position: Fixed / Entity / None.
+def _mode_position_selector() -> Any:
+    """`choose` selector for a NON-automation mode's per-cover position.
 
-    A `choose` selector shows the right input per choice:
+    Shows the right input per choice:
       - Fixed  -> a % slider applied as the position,
       - Entity -> an input_number/number whose value drives the position live
                   (the coordinator tracks it via _handle_mode_entity_change),
       - None   -> no forced position (the cover stays in place; locks if a lock mode).
-    Automation modes never reach this form (their position comes from the behavior).
+    Automation modes never reach this selector (their position comes from the behavior).
     """
-    return vol.Schema({
-        vol.Required("position"): selector.selector({
-            "choose": {
-                "translation_key": "mode_position_choice",
-                "choices": {
-                    "fixed":  {"selector": {"number": {"min": 0, "max": 100, "mode": "slider", "unit_of_measurement": "%"}}},
-                    "entity": {"selector": {"entity": {"domain": ["input_number", "number"]}}},
-                    "none":   {"selector": {"constant": {"value": True}}},
-                },
-            }
-        }),
+    return selector.selector({
+        "choose": {
+            "translation_key": "mode_position_choice",
+            "choices": {
+                "fixed":  {"selector": {"number": {"min": 0, "max": 100, "mode": "slider", "unit_of_measurement": "%"}}},
+                "entity": {"selector": {"entity": {"domain": ["input_number", "number"]}}},
+                "none":   {"selector": {"constant": {"value": True}}},
+            },
+        }
     })
+
+
+def _mode_position_schema() -> vol.Schema:
+    """Single-position form used by the cover wizard's per-mode loop."""
+    return vol.Schema({vol.Required("position"): _mode_position_selector()})
 
 
 def _choice_to_mode_cfg(choice: dict[str, Any]) -> dict[str, Any]:
@@ -777,10 +780,8 @@ class ModeFlowHandler(ConfigSubentryFlow):
     _items: list[dict[str, Any]]
     _edit_idx: int
     _blocked: tuple[str, list[str]]
-    _pos_active: bool
     _pos_covers: list[dict[str, Any]]
-    _pos_targets: list[int]
-    _pos_idx: int
+    _pos_key_to_idx: dict[str, int]
 
     @staticmethod
     def _item_schema(values: dict[str, Any] | None = None) -> vol.Schema:
@@ -909,59 +910,55 @@ class ModeFlowHandler(ConfigSubentryFlow):
     async def async_step_positions(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Edit this mode's position on every cover linking it, one per screen.
+        """Edit this mode's position on every cover linking it, all on one form.
 
-        Each screen is pre-filled with the cover's current value; the cover
-        singleton is persisted once after the last screen.
+        One `choose` field per linked cover. Dynamic fields cannot carry
+        translations, so the field KEY is the cover's display label (the
+        frontend shows untranslated keys as-is). Values are pre-filled with
+        the current positions and the cover singleton is persisted in one shot.
         """
         mode_name = self._items[self._edit_idx]["name"]
 
-        if user_input is None and not getattr(self, "_pos_active", False):
-            # First entry from the item menu: snapshot covers and pick targets.
-            _, sub = _find_singleton(self.hass, SUBENTRY_TYPE_COVER)
-            self._pos_covers = [dict(it) for it in (sub.data.get("items", []) if sub else [])]
-            self._pos_targets = [
-                i for i, it in enumerate(self._pos_covers)
-                if mode_name in (it.get("modes") or {})
-            ]
-            self._pos_idx = 0
-            self._pos_active = True
-            if not self._pos_targets:
-                self._pos_active = False
-                return await self.async_step_manage()
-
         if user_input is not None:
-            idx = self._pos_targets[self._pos_idx]
-            item = self._pos_covers[idx]
-            modes = dict(item.get("modes", {}))
-            modes[mode_name] = _choice_to_mode_cfg(user_input.get("position") or {})
-            self._pos_covers[idx] = {**item, "modes": modes}
-            self._pos_idx += 1
-
-        if self._pos_idx >= len(self._pos_targets):
-            self._pos_active = False
+            covers = self._pos_covers
+            for key, idx in self._pos_key_to_idx.items():
+                item = covers[idx]
+                modes = dict(item.get("modes", {}))
+                modes[mode_name] = _choice_to_mode_cfg(user_input.get(key) or {})
+                covers[idx] = {**item, "modes": modes}
             _LOGGER.debug(
                 "config_flow [mode] async_step_positions: saving '%s' positions on %d cover(s)",
-                mode_name, len(self._pos_targets),
+                mode_name, len(self._pos_key_to_idx),
             )
-            _update_singleton_in_place(self, SUBENTRY_TYPE_COVER, self._pos_covers)
+            _update_singleton_in_place(self, SUBENTRY_TYPE_COVER, covers)
             return await self.async_step_manage()
 
-        target = self._pos_covers[self._pos_targets[self._pos_idx]]
-        current = (target.get("modes") or {}).get(mode_name)
-        schema = self.add_suggested_values_to_schema(
-            _mode_position_schema(), {"position": _mode_cfg_to_choice(current)}
-        )
+        _, sub = _find_singleton(self.hass, SUBENTRY_TYPE_COVER)
+        self._pos_covers = [dict(it) for it in (sub.data.get("items", []) if sub else [])]
+        self._pos_key_to_idx = {}
+        fields: dict[Any, Any] = {}
+        suggested: dict[str, Any] = {}
+        for i, item in enumerate(self._pos_covers):
+            modes = item.get("modes") or {}
+            if mode_name not in modes:
+                continue
+            entity_id = item.get("entity_id", "")
+            state = self.hass.states.get(entity_id)
+            friendly = state.attributes.get("friendly_name") if state else None
+            # Key doubles as the displayed label; entity_id keeps it unique.
+            key = f"{friendly} ({entity_id})" if friendly else entity_id
+            self._pos_key_to_idx[key] = i
+            fields[vol.Required(key)] = _mode_position_selector()
+            suggested[key] = _mode_cfg_to_choice(modes.get(mode_name))
+        if not fields:
+            return await self.async_step_manage()
         return self.async_show_form(
             step_id="positions",
-            data_schema=schema,
+            data_schema=self.add_suggested_values_to_schema(vol.Schema(fields), suggested),
             description_placeholders={
                 "name": mode_name,
-                "cover": _cover_display(self.hass, target),
-                "index": str(self._pos_idx + 1),
-                "total": str(len(self._pos_targets)),
+                "count": str(len(fields)),
             },
-            last_step=(self._pos_idx >= len(self._pos_targets) - 1),
         )
 
     async def async_step_delete(

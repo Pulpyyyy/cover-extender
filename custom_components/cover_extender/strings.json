@@ -336,14 +336,8 @@
           }
         },
         "positions": {
-          "title": "Position of {name} - {cover}",
-          "description": "Cover {index}/{total}. Position this mode applies to this cover: a fixed value, an entity, or none (the cover stays in place). Current value pre-filled.",
-          "data": {
-            "position": "Position"
-          },
-          "data_description": {
-            "position": "Pick a fixed position in %, an entity that drives it live, or none (the cover stays in place)."
-          }
+          "title": "Positions - {name}",
+          "description": "Position the {name} mode applies to each of its {count} linked cover(s): a fixed value in %, an entity driving it live, or none (the cover stays in place). Current values pre-filled."
         },
         "delete_blocked": {
           "title": "Deletion blocked",

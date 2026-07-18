@@ -336,14 +336,8 @@
           }
         },
         "positions": {
-          "title": "Position de {name} - {cover}",
-          "description": "Volet {index}/{total}. Position appliquée par ce mode à ce volet : valeur fixe, entité, ou aucune (le volet reste en place). Valeur actuelle préremplie.",
-          "data": {
-            "position": "Position"
-          },
-          "data_description": {
-            "position": "Choisissez une position fixe en %, une entité qui la pilote en direct, ou aucune (le volet reste en place)."
-          }
+          "title": "Positions - {name}",
+          "description": "Position appliquée par le mode {name} à chacun des {count} volet(s) liés : valeur fixe en %, entité qui la pilote en direct, ou aucune (le volet reste en place). Valeurs actuelles préremplies."
         },
         "delete_blocked": {
           "title": "Suppression impossible",
