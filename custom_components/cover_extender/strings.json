@@ -331,7 +331,18 @@
           "title": "Mode - {name}",
           "menu_options": {
             "edit": "Edit",
+            "positions": "Per-cover positions",
             "delete": "Delete"
+          }
+        },
+        "positions": {
+          "title": "Position of {name} - {cover}",
+          "description": "Cover {index}/{total}. Position this mode applies to this cover: a fixed value, an entity, or none (the cover stays in place). Current value pre-filled.",
+          "data": {
+            "position": "Position"
+          },
+          "data_description": {
+            "position": "Pick a fixed position in %, an entity that drives it live, or none (the cover stays in place)."
           }
         },
         "delete_blocked": {
@@ -601,7 +612,7 @@
         },
         "modes": {
           "title": "Link modes to cover ({cover})",
-          "description": "Select the modes to link to this cover: only linked modes can be applied to it. Modes are created in the Modes section.",
+          "description": "Select the modes to link to this cover: only linked modes can be applied to it. The position of each selected mode is then asked, pre-filled with its current value. Modes are created in the Modes section.",
           "data": {
             "selected_modes": "Linked modes"
           }

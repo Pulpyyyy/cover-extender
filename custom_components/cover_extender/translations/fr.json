@@ -331,7 +331,18 @@
           "title": "Mode - {name}",
           "menu_options": {
             "edit": "Modifier",
+            "positions": "Positions par volet",
             "delete": "Supprimer"
+          }
+        },
+        "positions": {
+          "title": "Position de {name} - {cover}",
+          "description": "Volet {index}/{total}. Position appliquée par ce mode à ce volet : valeur fixe, entité, ou aucune (le volet reste en place). Valeur actuelle préremplie.",
+          "data": {
+            "position": "Position"
+          },
+          "data_description": {
+            "position": "Choisissez une position fixe en %, une entité qui la pilote en direct, ou aucune (le volet reste en place)."
           }
         },
         "delete_blocked": {
@@ -601,7 +612,7 @@
         },
         "modes": {
           "title": "Lier des modes au volet ({cover})",
-          "description": "Sélectionnez les modes à lier à ce volet : seuls les modes liés pourront lui être appliqués. Les modes se créent dans la section Modes.",
+          "description": "Sélectionnez les modes à lier à ce volet : seuls les modes liés pourront lui être appliqués. La position de chaque mode coché est ensuite demandée, préremplie avec sa valeur actuelle. Les modes se créent dans la section Modes.",
           "data": {
             "selected_modes": "Modes liés"
           }

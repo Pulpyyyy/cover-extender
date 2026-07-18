@@ -442,6 +442,66 @@ def _behavior_errors(flat: dict[str, Any]) -> dict[str, str]:
     return {}
 
 
+# ── Per-cover mode position form (shared by cover and mode flows) ─────────────
+
+def _mode_position_schema() -> vol.Schema:
+    """Form for a NON-automation mode's per-cover position: Fixed / Entity / None.
+
+    A `choose` selector shows the right input per choice:
+      - Fixed  -> a % slider applied as the position,
+      - Entity -> an input_number/number whose value drives the position live
+                  (the coordinator tracks it via _handle_mode_entity_change),
+      - None   -> no forced position (the cover stays in place; locks if a lock mode).
+    Automation modes never reach this form (their position comes from the behavior).
+    """
+    return vol.Schema({
+        vol.Required("position"): selector.selector({
+            "choose": {
+                "translation_key": "mode_position_choice",
+                "choices": {
+                    "fixed":  {"selector": {"number": {"min": 0, "max": 100, "mode": "slider", "unit_of_measurement": "%"}}},
+                    "entity": {"selector": {"entity": {"domain": ["input_number", "number"]}}},
+                    "none":   {"selector": {"constant": {"value": True}}},
+                },
+            }
+        }),
+    })
+
+
+def _choice_to_mode_cfg(choice: dict[str, Any]) -> dict[str, Any]:
+    """Convert a submitted `choose` value into the stored mode config."""
+    active = choice.get("active_choice")
+    if active == "fixed":
+        return {"type": "fixed", "value": int(choice.get("fixed", 0))}
+    if active == "entity" and choice.get("entity"):
+        return {"type": "entity", "value": str(choice.get("entity")).strip()}
+    return {"type": "auto"}  # "none" (or "entity" with nothing picked)
+
+
+def _mode_cfg_to_choice(cfg: Any) -> dict[str, Any]:
+    """Convert a stored mode config into a `choose` suggested value.
+
+    Handles the current dict format and legacy raw values (int = fixed
+    position, str = entity id, None = no forced position).
+    """
+    if isinstance(cfg, dict):
+        cfg_type, value = cfg.get("type"), cfg.get("value")
+    elif cfg is None:
+        return {"active_choice": "none"}
+    elif isinstance(cfg, (int, float)):
+        cfg_type, value = "fixed", cfg
+    else:
+        cfg_type, value = "entity", cfg
+    if cfg_type == "fixed":
+        try:
+            return {"active_choice": "fixed", "fixed": int(value or 0)}
+        except (TypeError, ValueError):
+            return {"active_choice": "none"}
+    if cfg_type == "entity" and value:
+        return {"active_choice": "entity", "entity": value}
+    return {"active_choice": "none"}
+
+
 # ── Singleton save helper ──────────────────────────────────────────────────────
 
 def _singleton_save(
@@ -717,6 +777,10 @@ class ModeFlowHandler(ConfigSubentryFlow):
     _items: list[dict[str, Any]]
     _edit_idx: int
     _blocked: tuple[str, list[str]]
+    _pos_active: bool
+    _pos_covers: list[dict[str, Any]]
+    _pos_targets: list[int]
+    _pos_idx: int
 
     @staticmethod
     def _item_schema(values: dict[str, Any] | None = None) -> vol.Schema:
@@ -826,12 +890,78 @@ class ModeFlowHandler(ConfigSubentryFlow):
     async def async_step_item(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        item_name = self._items[self._edit_idx]["name"]
+        item = self._items[self._edit_idx]
+        item_name = item["name"]
         _LOGGER.debug("config_flow [mode] async_step_item: showing menu for '%s'", item_name)
+        # "Positions" only makes sense for a plain mode (automation modes have
+        # computed positions) that is linked to at least one cover.
+        menu_options = ["edit", "delete"]
+        if not item.get("behavior") and _referencing_covers(
+            self.hass, SUBENTRY_TYPE_MODE, item_name
+        ):
+            menu_options = ["edit", "positions", "delete"]
         return self.async_show_menu(
             step_id="item",
-            menu_options=["edit", "delete"],
+            menu_options=menu_options,
             description_placeholders={"name": item_name},
+        )
+
+    async def async_step_positions(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Edit this mode's position on every cover linking it, one per screen.
+
+        Each screen is pre-filled with the cover's current value; the cover
+        singleton is persisted once after the last screen.
+        """
+        mode_name = self._items[self._edit_idx]["name"]
+
+        if user_input is None and not getattr(self, "_pos_active", False):
+            # First entry from the item menu: snapshot covers and pick targets.
+            _, sub = _find_singleton(self.hass, SUBENTRY_TYPE_COVER)
+            self._pos_covers = [dict(it) for it in (sub.data.get("items", []) if sub else [])]
+            self._pos_targets = [
+                i for i, it in enumerate(self._pos_covers)
+                if mode_name in (it.get("modes") or {})
+            ]
+            self._pos_idx = 0
+            self._pos_active = True
+            if not self._pos_targets:
+                self._pos_active = False
+                return await self.async_step_manage()
+
+        if user_input is not None:
+            idx = self._pos_targets[self._pos_idx]
+            item = self._pos_covers[idx]
+            modes = dict(item.get("modes", {}))
+            modes[mode_name] = _choice_to_mode_cfg(user_input.get("position") or {})
+            self._pos_covers[idx] = {**item, "modes": modes}
+            self._pos_idx += 1
+
+        if self._pos_idx >= len(self._pos_targets):
+            self._pos_active = False
+            _LOGGER.debug(
+                "config_flow [mode] async_step_positions: saving '%s' positions on %d cover(s)",
+                mode_name, len(self._pos_targets),
+            )
+            _update_singleton_in_place(self, SUBENTRY_TYPE_COVER, self._pos_covers)
+            return await self.async_step_manage()
+
+        target = self._pos_covers[self._pos_targets[self._pos_idx]]
+        current = (target.get("modes") or {}).get(mode_name)
+        schema = self.add_suggested_values_to_schema(
+            _mode_position_schema(), {"position": _mode_cfg_to_choice(current)}
+        )
+        return self.async_show_form(
+            step_id="positions",
+            data_schema=schema,
+            description_placeholders={
+                "name": mode_name,
+                "cover": _cover_display(self.hass, target),
+                "index": str(self._pos_idx + 1),
+                "total": str(len(self._pos_targets)),
+            },
+            last_step=(self._pos_idx >= len(self._pos_targets) - 1),
         )
 
     async def async_step_delete(
@@ -1362,30 +1492,6 @@ class CoverFlowHandler(ConfigSubentryFlow):
             )
         })
 
-    @staticmethod
-    def _mode_position_schema() -> vol.Schema:
-        """Per-cover form for a NON-automation mode: Fixed / Entity / None.
-
-        A `choose` selector shows the right input per choice:
-          - Fixed  -> a % slider applied as the position,
-          - Entity -> an input_number/number whose value drives the position live
-                      (the coordinator tracks it via _handle_mode_entity_change),
-          - None   -> no forced position (the cover stays in place; locks if a lock mode).
-        Automation modes never reach this form (their position comes from the behavior).
-        """
-        return vol.Schema({
-            vol.Required("position"): selector.selector({
-                "choose": {
-                    "translation_key": "mode_position_choice",
-                    "choices": {
-                        "fixed":  {"selector": {"number": {"min": 0, "max": 100, "mode": "slider", "unit_of_measurement": "%"}}},
-                        "entity": {"selector": {"entity": {"domain": ["input_number", "number"]}}},
-                        "none":   {"selector": {"constant": {"value": True}}},
-                    },
-                }
-            }),
-        })
-
     def _mode_behavior(self, mode_name: str) -> str | None:
         """Return the behavior (auto_shade / solar_gain / None) of a mode by name.
 
@@ -1411,44 +1517,38 @@ class CoverFlowHandler(ConfigSubentryFlow):
     async def async_step_mode_position(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Ask Fixed-vs-None position for each NEWLY added plain mode, one per screen.
+        """Ask the per-cover position for each queued plain mode, one per screen.
 
-        Only modes in self._modes_to_prompt are asked (new, non-automation):
-          - an already-linked mode keeps its stored value (not re-asked),
-          - an automation mode (auto_shade / solar_gain) has a known "auto" value,
-          - a removed mode simply drops out.
-        Both kept and automation modes are merged in _finalize_modes with no screen.
+        Modes in self._modes_to_prompt are asked (non-automation): every
+        selected one in the link-modes shortcut (pre-filled with the stored
+        value so it can be edited), only the new ones in the add wizard.
+        Automation modes (auto_shade / solar_gain) have a known "auto" value
+        and are merged in _finalize_modes with no screen.
         """
         to_prompt = self._modes_to_prompt
 
         # Record the answer for the mode just shown, then advance.
         if user_input is not None:
             name = to_prompt[self._mode_pos_idx]
-            choice = user_input.get("position") or {}
-            active = choice.get("active_choice")
-            if active == "fixed":
-                self._pending_modes_result[name] = {
-                    "type": "fixed",
-                    "value": int(choice.get("fixed", 0)),
-                }
-            elif active == "entity" and choice.get("entity"):
-                self._pending_modes_result[name] = {
-                    "type": "entity",
-                    "value": str(choice.get("entity")).strip(),
-                }
-            else:  # "none" (or "entity" with nothing picked)
-                self._pending_modes_result[name] = {"type": "auto"}
+            self._pending_modes_result[name] = _choice_to_mode_cfg(
+                user_input.get("position") or {}
+            )
             self._mode_pos_idx += 1
 
-        # No (more) new modes to process -> finalize.
+        # No (more) modes to process -> finalize.
         if self._mode_pos_idx >= len(to_prompt):
             return await self._finalize_modes()
 
-        # New plain mode -> editable Fixed/None form (new mode has no prior value).
+        # Plain mode -> editable form, pre-filled with the stored value if any.
         name = to_prompt[self._mode_pos_idx]
+        schema = _mode_position_schema()
+        if (existing := self._pending_modes_existing.get(name)) is not None:
+            schema = self.add_suggested_values_to_schema(
+                schema, {"position": _mode_cfg_to_choice(existing)}
+            )
         return self.async_show_form(
             step_id="mode_position",
-            data_schema=self._mode_position_schema(),
+            data_schema=schema,
             description_placeholders={
                 "name": name,
                 "cover": self._current_cover_label(),
@@ -1496,9 +1596,10 @@ class CoverFlowHandler(ConfigSubentryFlow):
     def _begin_mode_positions(self, selected: list[str], kind: str) -> None:
         """Initialise the per-mode position loop state.
 
-        Only NEW, non-automation modes are queued for a position prompt; already
-        linked modes keep their stored value and automation modes are auto. To
-        change the position of an already-linked mode, unlink then relink it.
+        Non-automation modes are queued for a position prompt. In the
+        link-modes shortcut EVERY selected one is asked (pre-filled with its
+        stored value, so positions are editable in place); in the add wizard
+        they are all new anyway. Automation modes are always auto.
         """
         self._pending_modes_selected = selected
         self._pending_modes_existing = (
@@ -1507,8 +1608,7 @@ class CoverFlowHandler(ConfigSubentryFlow):
         )
         self._modes_to_prompt = [
             name for name in selected
-            if name not in self._pending_modes_existing
-            and self._mode_behavior(name) not in ("auto_shade", "solar_gain")
+            if self._mode_behavior(name) not in ("auto_shade", "solar_gain")
         ]
         self._pending_modes_result = {}
         self._mode_pos_idx = 0
