@@ -466,15 +466,6 @@ def _mode_position_selector() -> Any:
     })
 
 
-def _mode_position_schema() -> vol.Schema:
-    """Single-position form used by the cover wizard's per-mode loop.
-
-    Optional on purpose: an untouched field keeps the stored value (or means
-    "none" for a newly linked mode) instead of silently submitting fixed 0.
-    """
-    return vol.Schema({vol.Optional("position"): _mode_position_selector()})
-
-
 def _choice_to_mode_cfg(choice: dict[str, Any]) -> dict[str, Any]:
     """Convert a submitted `choose` value into the stored mode config."""
     active = choice.get("active_choice")
@@ -1434,7 +1425,8 @@ class CoverFlowHandler(ConfigSubentryFlow):
     Add wizard (3 steps):
       Step 1 (add):           entity_id, entity_picture, facade, template, exclusion
       Step 2 (add_behavior):  angles + shade/solar-gain params + activation
-      Step 3 (add_modes):     link modes, then a position per NEW non-automation mode
+      Step 3 (add_modes):     link modes, then ONE form with a position field
+                              per new non-automation mode
 
     Edit wizard (2 steps): identity then behavior only. Modes are managed by the
     dedicated "link modes" action (async_step_modes) to avoid duplication.
@@ -1448,7 +1440,7 @@ class CoverFlowHandler(ConfigSubentryFlow):
     _pending_modes_existing: dict[str, Any]
     _modes_to_prompt: list[str]
     _pending_modes_result: dict[str, Any]
-    _mode_pos_idx: int
+    _mode_pos_key_to_name: dict[str, str]
     _modes_flow_kind: str  # "add" | "edit" | "shortcut"
 
     def _load_items(self) -> None:
@@ -1558,56 +1550,51 @@ class CoverFlowHandler(ConfigSubentryFlow):
     async def async_step_mode_position(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Ask the per-cover position for each queued plain mode, one per screen.
+        """Ask the per-cover position of every queued plain mode, all on one form.
 
-        Modes in self._modes_to_prompt are asked (non-automation): every
-        selected one in the link-modes shortcut (pre-filled with the stored
-        value so it can be edited), only the new ones in the add wizard.
-        Automation modes (auto_shade / solar_gain) have a known "auto" value
-        and are merged in _finalize_modes with no screen.
+        One `choose` field per non-automation mode of self._modes_to_prompt.
+        Dynamic fields cannot carry translations, so the field KEY is the mode
+        name plus its current value (the frontend shows untranslated keys as-is)
+        — the choose widget can only pre-fill fixed positions. Untouched fields
+        keep the stored value. Automation modes (auto_shade / solar_gain) have a
+        known "auto" value and are merged in _finalize_modes with no field.
         """
-        to_prompt = self._modes_to_prompt
-
-        # Record the answer for the mode just shown, then advance.
         if user_input is not None:
-            name = to_prompt[self._mode_pos_idx]
-            if "position" in user_input:
-                value = user_input["position"]
-                self._pending_modes_result[name] = _choice_to_mode_cfg(
-                    value if isinstance(value, dict) else {"active_choice": "fixed", "fixed": value}
-                )
-            elif name in self._pending_modes_existing:
-                # Untouched optional field -> keep the stored value.
-                self._pending_modes_result[name] = self._pending_modes_existing[name]
-            else:
-                self._pending_modes_result[name] = {"type": "auto"}
-            self._mode_pos_idx += 1
-
-        # No (more) modes to process -> finalize.
-        if self._mode_pos_idx >= len(to_prompt):
+            for key, name in self._mode_pos_key_to_name.items():
+                if key in user_input:
+                    value = user_input[key]
+                    self._pending_modes_result[name] = _choice_to_mode_cfg(
+                        value if isinstance(value, dict)
+                        else {"active_choice": "fixed", "fixed": value}
+                    )
+                elif name in self._pending_modes_existing:
+                    # Untouched optional field -> keep the stored value.
+                    self._pending_modes_result[name] = self._pending_modes_existing[name]
+                else:
+                    self._pending_modes_result[name] = {"type": "auto"}
             return await self._finalize_modes()
 
-        # Plain mode -> editable form. The choose widget only pre-fills fixed
-        # positions (frontend wraps suggested values into the first choice);
-        # the current value is shown via the {current} placeholder and kept
-        # when the field is left untouched.
-        name = to_prompt[self._mode_pos_idx]
+        if not self._modes_to_prompt:
+            return await self._finalize_modes()
+
         labels = await _ui_labels(self.hass)
-        existing = self._pending_modes_existing.get(name)
-        schema = _mode_position_schema()
-        if (raw := _mode_position_suggested(existing)) is not None:
-            schema = self.add_suggested_values_to_schema(schema, {"position": raw})
+        self._mode_pos_key_to_name = {}
+        fields: dict[Any, Any] = {}
+        suggested: dict[str, Any] = {}
+        for name in self._modes_to_prompt:
+            existing = self._pending_modes_existing.get(name)
+            key = f"{name} · {_mode_cfg_display(existing, labels)}"
+            self._mode_pos_key_to_name[key] = name
+            fields[vol.Optional(key)] = _mode_position_selector()
+            if (raw := _mode_position_suggested(existing)) is not None:
+                suggested[key] = raw
         return self.async_show_form(
             step_id="mode_position",
-            data_schema=schema,
+            data_schema=self.add_suggested_values_to_schema(vol.Schema(fields), suggested),
             description_placeholders={
-                "name": name,
                 "cover": self._current_cover_label(),
-                "index": str(self._mode_pos_idx + 1),
-                "total": str(len(to_prompt)),
-                "current": _mode_cfg_display(existing, labels),
+                "count": str(len(fields)),
             },
-            last_step=(self._mode_pos_idx >= len(to_prompt) - 1),
         )
 
     async def _finalize_modes(self) -> config_entries.ConfigFlowResult:
@@ -1663,7 +1650,7 @@ class CoverFlowHandler(ConfigSubentryFlow):
             if self._mode_behavior(name) not in ("auto_shade", "solar_gain")
         ]
         self._pending_modes_result = {}
-        self._mode_pos_idx = 0
+        self._mode_pos_key_to_name = {}
         self._modes_flow_kind = kind
 
     # ── Helpers ────────────────────────────────────────────────────────────────

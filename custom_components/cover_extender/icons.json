@@ -1,0 +1,76 @@
+{
+  "config_subentries": {
+    "global": {
+      "step": {
+        "user": {
+          "sections": {
+            "display": "mdi:eye",
+            "solar_gain": "mdi:sun-thermometer"
+          }
+        },
+        "reconfigure": {
+          "sections": {
+            "display": "mdi:eye",
+            "solar_gain": "mdi:sun-thermometer"
+          }
+        }
+      }
+    },
+    "cover": {
+      "step": {
+        "add_behavior": {
+          "sections": {
+            "geometry": "mdi:ruler-square",
+            "detection": "mdi:sun-angle",
+            "shading": "mdi:roller-shade",
+            "solar_gain": "mdi:sun-thermometer"
+          }
+        },
+        "edit_behavior": {
+          "sections": {
+            "geometry": "mdi:ruler-square",
+            "detection": "mdi:sun-angle",
+            "shading": "mdi:roller-shade",
+            "solar_gain": "mdi:sun-thermometer"
+          }
+        }
+      }
+    },
+    "mode": {
+      "step": {
+        "add": {
+          "sections": {
+            "appearance": "mdi:palette",
+            "options": "mdi:cog"
+          }
+        },
+        "edit": {
+          "sections": {
+            "appearance": "mdi:palette",
+            "options": "mdi:cog"
+          }
+        }
+      }
+    },
+    "cover_template": {
+      "step": {
+        "add_automation": {
+          "sections": {
+            "geometry": "mdi:ruler-square",
+            "detection": "mdi:sun-angle",
+            "shading": "mdi:roller-shade",
+            "solar_gain": "mdi:sun-thermometer"
+          }
+        },
+        "edit_automation": {
+          "sections": {
+            "geometry": "mdi:ruler-square",
+            "detection": "mdi:sun-angle",
+            "shading": "mdi:roller-shade",
+            "solar_gain": "mdi:sun-thermometer"
+          }
+        }
+      }
+    }
+  }
+}

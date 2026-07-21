@@ -102,12 +102,6 @@
         "add": "Add cover"
       }
     },
-    "mode_position_type": {
-      "options": {
-        "fixed": "Fixed position",
-        "none": "None (stay in place)"
-      }
-    },
     "mode_position_choice": {
       "options": {
         "fixed": "Fixed position",
@@ -337,7 +331,7 @@
           }
         },
         "positions": {
-          "title": "Positions - {name}",
+          "title": "Per-cover positions - {name}",
           "description": "Position the {name} mode applies to each of its {count} linked cover(s). The current value is shown in each cover's label; untouched covers keep it. Choices: a fixed value in %, an entity driving it live, or none (the cover stays in place)."
         },
         "delete_blocked": {
@@ -437,7 +431,7 @@
           }
         },
         "add_automation": {
-          "title": "Add template - automation",
+          "title": "Add template - behavior",
           "sections": {
             "geometry": {
               "name": "Geometry",
@@ -511,7 +505,7 @@
           }
         },
         "edit_automation": {
-          "title": "Edit template - automation",
+          "title": "Edit template - behavior",
           "sections": {
             "geometry": {
               "name": "Geometry",
@@ -601,30 +595,20 @@
           "title": "Cover - {name}",
           "menu_options": {
             "edit": "Edit",
-            "modes": "Link modes",
+            "modes": "Configure modes",
             "delete": "Delete"
           }
         },
         "modes": {
-          "title": "Link modes to cover ({cover})",
-          "description": "Select the modes to link to this cover: only linked modes can be applied to it. The position of each selected mode is then asked, pre-filled with its current value. Modes are created in the Modes section.",
+          "title": "Configure cover modes ({cover})",
+          "description": "Select the modes to link to this cover: only linked modes can be applied to it. The position of every selected mode is then asked on a single screen, pre-filled with its current value. Modes are created in the Modes section.",
           "data": {
             "selected_modes": "Linked modes"
           }
         },
         "mode_position": {
-          "title": "Mode position - {name} ({cover})",
-          "description": "Mode {index}/{total}. Current value: {current}. Leaving the field untouched keeps it.",
-          "data": {
-            "position": "Position"
-          },
-          "data_description": {
-            "position": "Pick a fixed position in %, an entity that drives it live, or none (the cover stays in place)."
-          }
-        },
-        "mode_position_auto": {
-          "title": "Mode position - {name} ({cover})",
-          "description": "This mode's position is handled automatically by its behavior (auto-shade or solar gain). Nothing to set here."
+          "title": "Per-mode positions ({cover})",
+          "description": "Position this cover takes for each of its {count} linked mode(s). The current value is shown in each mode's label; untouched modes keep it. Choices: a fixed value in %, an entity driving it live, or none (the cover stays in place)."
         },
         "add": {
           "title": "Add cover - identity",
@@ -714,7 +698,7 @@
           }
         },
         "add_modes": {
-          "title": "Add cover - link modes ({cover})",
+          "title": "Add cover - modes ({cover})",
           "description": "Select the modes to link to this cover: only linked modes can be applied to it. Modes are created in the Modes section.",
           "data": {
             "selected_modes": "Linked modes"
@@ -804,13 +788,6 @@
                 "solar_gain_position_cold": "Position otherwise."
               }
             }
-          }
-        },
-        "edit_modes": {
-          "title": "Edit cover - link modes ({cover})",
-          "description": "Select the modes to link to this cover: only linked modes can be applied to it. Modes are created in the Modes section.",
-          "data": {
-            "selected_modes": "Linked modes"
           }
         }
       }

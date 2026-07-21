@@ -172,6 +172,11 @@ def _migrate_registry_ids(hass: HomeAssistant) -> None:
                     continue  # cover not in the registry — legacy behaviour
                 # Legacy unique_ids may be based on the stored OR current name
                 legacy_keys = {cover_object_id(stored_eid), cover_object_id(reg.entity_id)}
+                # Cover deleted and re-created (e.g. platform swap): the stored
+                # registry id no longer matches — migrate helpers keyed on it too,
+                # otherwise duplicate *_2 helpers get created.
+                if (old_rid := it.get("entity_registry_id")) and old_rid != reg.id:
+                    legacy_keys.add(old_rid)
                 _migrate_helper_unique_ids(registry, legacy_keys, reg.id)
                 if it.get("entity_registry_id") != reg.id:
                     it["entity_registry_id"] = reg.id

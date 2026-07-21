@@ -67,7 +67,7 @@
     "mode_behavior": {
       "options": {
         "auto_shade": "Ombrage automatique",
-        "solar_gain": "Gain solaire"
+        "solar_gain": "Apport solaire"
       }
     },
     "item_labels": {
@@ -100,12 +100,6 @@
     "cover_manage": {
       "options": {
         "add": "Ajouter un volet"
-      }
-    },
-    "mode_position_type": {
-      "options": {
-        "fixed": "Position fixe",
-        "none": "Aucune (rester en place)"
       }
     },
     "mode_position_choice": {
@@ -142,7 +136,7 @@
               "data": {
                 "show_sun_facing": "Afficher les capteurs d'exposition",
                 "show_auto_shade": "Afficher les capteurs d'ombrage",
-                "show_solar_gain": "Afficher les capteurs de gain solaire"
+                "show_solar_gain": "Afficher les capteurs d'apport solaire"
               },
               "data_description": {
                 "show_sun_facing": "Crée un capteur binaire sun_facing pour chaque volet ayant une façade.",
@@ -183,7 +177,7 @@
               "data": {
                 "show_sun_facing": "Afficher les capteurs d'exposition",
                 "show_auto_shade": "Afficher les capteurs d'ombrage",
-                "show_solar_gain": "Afficher les capteurs de gain solaire"
+                "show_solar_gain": "Afficher les capteurs d'apport solaire"
               },
               "data_description": {
                 "show_sun_facing": "Crée un capteur binaire sun_facing pour chaque volet ayant une façade.",
@@ -337,7 +331,7 @@
           }
         },
         "positions": {
-          "title": "Positions - {name}",
+          "title": "Positions par volet - {name}",
           "description": "Position appliquée par le mode {name} à chacun des {count} volet(s) liés. La valeur actuelle est affichée dans le libellé de chaque volet ; un volet non modifié la conserve. Choix possibles : position fixe en %, entité qui la pilote en direct, ou aucune (le volet reste en place)."
         },
         "delete_blocked": {
@@ -389,7 +383,7 @@
     "cover_template": {
       "entry_type": "Gabarits",
       "initiate_flow": {
-        "user": "Gérer les gabarits de volet"
+        "user": "Gérer les gabarits"
       },
       "abort": {
         "reconfigure_successful": "Gabarits mis à jour avec succès.",
@@ -403,14 +397,14 @@
       },
       "step": {
         "manage": {
-          "title": "Modèles ({count})",
+          "title": "Gabarits ({count})",
           "data": {
             "action": "Action"
           },
           "description": "Choisissez un élément à modifier, ou ajoutez-en un."
         },
         "item": {
-          "title": "Modèle - {name}",
+          "title": "Gabarit - {name}",
           "menu_options": {
             "edit": "Modifier",
             "delete": "Supprimer"
@@ -424,20 +418,20 @@
           }
         },
         "add": {
-          "title": "Ajouter un modèle - identité",
+          "title": "Ajouter un gabarit - identité",
           "data": {
             "name": "Nom",
             "angle_left": "Angle gauche",
             "angle_right": "Angle droit"
           },
           "data_description": {
-            "name": "Nom du modèle. Le renommer met à jour les volets qui l'utilisent.",
+            "name": "Nom du gabarit. Le renommer met à jour les volets qui l'utilisent.",
             "angle_left": "Tolérance d'azimut à gauche de la façade où le soleil compte encore comme face.",
             "angle_right": "Tolérance d'azimut à droite de la façade où le soleil compte encore comme face."
           }
         },
         "add_automation": {
-          "title": "Ajouter un modèle - automatisation",
+          "title": "Ajouter un gabarit - comportement",
           "sections": {
             "geometry": {
               "name": "Géométrie",
@@ -498,20 +492,20 @@
           }
         },
         "edit": {
-          "title": "Modifier un modèle - identité",
+          "title": "Modifier un gabarit - identité",
           "data": {
             "name": "Nom",
             "angle_left": "Angle gauche",
             "angle_right": "Angle droit"
           },
           "data_description": {
-            "name": "Nom du modèle. Le renommer met à jour les volets qui l'utilisent.",
+            "name": "Nom du gabarit. Le renommer met à jour les volets qui l'utilisent.",
             "angle_left": "Tolérance d'azimut à gauche de la façade où le soleil compte encore comme face.",
             "angle_right": "Tolérance d'azimut à droite de la façade où le soleil compte encore comme face."
           }
         },
         "edit_automation": {
-          "title": "Modifier un modèle - automatisation",
+          "title": "Modifier un gabarit - comportement",
           "sections": {
             "geometry": {
               "name": "Géométrie",
@@ -601,30 +595,20 @@
           "title": "Volet - {name}",
           "menu_options": {
             "edit": "Modifier",
-            "modes": "Lier des modes",
+            "modes": "Configurer les modes",
             "delete": "Supprimer"
           }
         },
         "modes": {
-          "title": "Lier des modes au volet ({cover})",
-          "description": "Sélectionnez les modes à lier à ce volet : seuls les modes liés pourront lui être appliqués. La position de chaque mode coché est ensuite demandée, préremplie avec sa valeur actuelle. Les modes se créent dans la section Modes.",
+          "title": "Configurer les modes du volet ({cover})",
+          "description": "Sélectionnez les modes à lier à ce volet : seuls les modes liés pourront lui être appliqués. La position de tous les modes cochés est ensuite demandée sur un seul écran, préremplie avec sa valeur actuelle. Les modes se créent dans la section Modes.",
           "data": {
             "selected_modes": "Modes liés"
           }
         },
         "mode_position": {
-          "title": "Position du mode - {name} ({cover})",
-          "description": "Mode {index}/{total}. Valeur actuelle : {current}. Ne rien toucher conserve cette valeur.",
-          "data": {
-            "position": "Position"
-          },
-          "data_description": {
-            "position": "Choisissez une position fixe en %, une entité qui la pilote en direct, ou aucune (le volet reste en place)."
-          }
-        },
-        "mode_position_auto": {
-          "title": "Position du mode - {name} ({cover})",
-          "description": "La position de ce mode est gérée automatiquement par son comportement (ombrage ou gain solaire). Rien à définir ici."
+          "title": "Positions par mode ({cover})",
+          "description": "Position que prend ce volet pour chacun de ses {count} mode(s) liés. La valeur actuelle est indiquée dans le libellé de chaque mode ; les modes non touchés la conservent. Choix : une position fixe en %, une entité qui la pilote en direct, ou aucune (le volet reste en place)."
         },
         "add": {
           "title": "Ajouter un volet - identité",
@@ -637,12 +621,12 @@
           },
           "data_description": {
             "facade": "Façade à laquelle appartient le volet (définit son orientation).",
-            "template": "Modèle optionnel fournissant des valeurs de comportement par défaut.",
+            "template": "Gabarit optionnel fournissant des valeurs de comportement par défaut.",
             "exclusion": "Tant qu'une de ces entités est active, les mouvements auto sont mémorisés au lieu d'être appliqués.",
             "entity_picture": "URL d'image optionnelle injectée comme entity_picture du volet.",
             "entity_id": "L'entité volet à enrichir."
           },
-          "description": "Choisissez l'entité volet et sa façade. Les façades et modèles se créent d'abord dans leurs sections dédiées."
+          "description": "Choisissez l'entité volet et sa façade. Les façades et gabarits se créent d'abord dans leurs sections dédiées."
         },
         "add_behavior": {
           "title": "Ajouter un volet - comportement ({cover})",
@@ -701,7 +685,7 @@
               "name": "Apport solaire",
               "description": "Positionnement piloté par la température.",
               "data": {
-                "solar_gain_enable": "Activer le gain solaire",
+                "solar_gain_enable": "Activer l'apport solaire",
                 "solar_gain_position_solar": "Position (ensoleillé)",
                 "solar_gain_position_cold": "Position (froid)"
               },
@@ -714,14 +698,14 @@
           }
         },
         "add_modes": {
-          "title": "Ajouter un volet - lier des modes ({cover})",
+          "title": "Ajouter un volet - modes ({cover})",
           "description": "Sélectionnez les modes à lier à ce volet : seuls les modes liés pourront lui être appliqués. Les modes se créent dans la section Modes.",
           "data": {
             "selected_modes": "Modes liés"
           }
         },
         "edit": {
-          "title": "Modifier le volet - identité ({cover})",
+          "title": "Modifier un volet - identité ({cover})",
           "data": {
             "entity_id": "Entité volet",
             "entity_picture": "URL de l'image",
@@ -731,14 +715,14 @@
           },
           "data_description": {
             "facade": "Façade à laquelle appartient le volet (définit son orientation).",
-            "template": "Modèle optionnel fournissant des valeurs de comportement par défaut.",
+            "template": "Gabarit optionnel fournissant des valeurs de comportement par défaut.",
             "exclusion": "Tant qu'une de ces entités est active, les mouvements auto sont mémorisés au lieu d'être appliqués.",
             "entity_picture": "URL d'image optionnelle injectée comme entity_picture du volet.",
             "entity_id": "L'entité volet à enrichir."
           }
         },
         "edit_behavior": {
-          "title": "Modifier le volet - comportement ({cover})",
+          "title": "Modifier un volet - comportement ({cover})",
           "sections": {
             "geometry": {
               "name": "Géométrie",
@@ -794,7 +778,7 @@
               "name": "Apport solaire",
               "description": "Positionnement piloté par la température.",
               "data": {
-                "solar_gain_enable": "Activer le gain solaire",
+                "solar_gain_enable": "Activer l'apport solaire",
                 "solar_gain_position_solar": "Position (ensoleillé)",
                 "solar_gain_position_cold": "Position (froid)"
               },
@@ -804,13 +788,6 @@
                 "solar_gain_position_cold": "Position sinon."
               }
             }
-          }
-        },
-        "edit_modes": {
-          "title": "Modifier le volet - lier des modes ({cover})",
-          "description": "Sélectionnez les modes à lier à ce volet : seuls les modes liés pourront lui être appliqués. Les modes se créent dans la section Modes.",
-          "data": {
-            "selected_modes": "Modes liés"
           }
         }
       }
