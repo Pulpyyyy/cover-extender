@@ -54,6 +54,18 @@ STORAGE_VERSION = 1
 # Dispatcher signal fired after a reload so select entities can refresh their options
 SIGNAL_COVER_RELOAD = f"{DOMAIN}_reload"
 
+# ── External attributes contract (shared, cross-integration) ──────────────────
+# Neutral namespace owned by neither integration. It lets a target cover entity
+# (e.g. ESPSomfy-RTS) carry the extras we would otherwise force onto it with a
+# hass.states.async_set on every state change — the source of an attribute
+# ping-pong and entity_picture flicker. When the target declares itself a
+# "reader" we deposit the extras here and fire EXTERNAL_ATTRS_SIGNAL instead of
+# writing its state; the entity then merges them through its own property.
+# Covers that are NOT readers (velux mqtt, esphome, older firmware) keep the
+# direct async_set fallback unchanged.
+EXTERNAL_ATTRS_DATA   = "cover_external_attrs"
+EXTERNAL_ATTRS_SIGNAL = "cover_external_attrs_updated"
+
 # HA bus events
 EVENT_MODE_CHANGED  = f"{DOMAIN}_mode_changed"
 EVENT_MEMORY_SAVED  = f"{DOMAIN}_memory_saved"

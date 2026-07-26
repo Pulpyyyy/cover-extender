@@ -51,6 +51,8 @@ from .const import (
     STORAGE_KEY,
     STORAGE_VERSION,
     SIGNAL_COVER_RELOAD,
+    EXTERNAL_ATTRS_DATA,
+    EXTERNAL_ATTRS_SIGNAL,
     EVENT_MODE_CHANGED,
     EVENT_MEMORY_SAVED,
     EVENT_SHADE_APPLIED,
@@ -103,7 +105,12 @@ class CoverExtenderCoordinator:
         self._sg_switch_to_cover: dict[str, str] = {}
         # Attribute keys injected per cover — used to strip them when a cover
         # is removed from the config (otherwise they linger until restart).
+        # Only tracks the direct-write (fallback) covers; reader covers carry
+        # their extras through the external-attrs contract instead.
         self._injected_attrs: dict[str, set[str]] = {}
+        # Reader covers whose extras we deposited into the external-attrs
+        # contract — cleared (and the target re-notified) on unload.
+        self._external_deposited: set[str] = set()
         # Lifecycle guards: block worker restarts / deferred setup after stop
         self._stopping: bool = False
         self._restart_handle: asyncio.TimerHandle | None = None
@@ -260,14 +267,21 @@ class CoverExtenderCoordinator:
             mem.pop(key, None)
         else:
             mem[key] = value
-        state = self.hass.states.get(entity_id)
-        if state:
-            new_attrs = dict(state.attributes)
+        if self._is_reader(entity_id):
+            # Reader carries "memory" itself: deposit (or drop) + notify.
             if value is None:
-                new_attrs.pop("memory", None)
+                self._deposit_external(entity_id, {}, drop=("memory",))
             else:
-                new_attrs["memory"] = value
-            self.hass.states.async_set(entity_id, state.state, new_attrs)
+                self._deposit_external(entity_id, {"memory": value})
+        else:
+            state = self.hass.states.get(entity_id)
+            if state:
+                new_attrs = dict(state.attributes)
+                if value is None:
+                    new_attrs.pop("memory", None)
+                else:
+                    new_attrs["memory"] = value
+                self.hass.states.async_set(entity_id, state.state, new_attrs)
         # Debounced write; the Store flushes pending saves on HA shutdown.
         self._store.async_delay_save(self._memory_to_save, _MEMORY_SAVE_DELAY)
         self.hass.bus.async_fire(
@@ -527,6 +541,95 @@ class CoverExtenderCoordinator:
             # Re-enable manual lock-off handling for this cover.
             self._suspend_lock_off.discard(entity_id)
 
+    # ── External attributes contract ───────────────────────────────────────────
+    # A reader cover (one that declared itself in the shared contract, e.g. an
+    # ESPSomfy shade) carries our extras itself. For those we deposit the extras
+    # in hass.data and fire the dispatcher INSTEAD of writing the entity state,
+    # which stops the ping-pong of state_changed events. Every other cover keeps
+    # the direct hass.states.async_set fallback, byte-for-byte the old path.
+    #
+    # Init order: the target integration may load after us, so "reader" status is
+    # re-checked dynamically at every injection point rather than frozen at setup.
+    # A cover that starts on the fallback path and later becomes a reader is
+    # migrated on its next state change: _deposit_external publishes the extras
+    # and _handle_cover_state_change stops writing its state (ESPSomfy's own
+    # write then drops the stale async_set attributes and re-adds them from the
+    # contract). The deposit is idempotent, so a reader in steady state fires no
+    # dispatcher on ordinary position steps.
+
+    def _external_store(self) -> dict[str, Any]:
+        """Return the shared external-attrs store, creating it if missing."""
+        store = self.hass.data.get(EXTERNAL_ATTRS_DATA)
+        if not isinstance(store, dict):
+            store = {}
+            self.hass.data[EXTERNAL_ATTRS_DATA] = store
+        store.setdefault("readers", set())
+        store.setdefault("injected", {})
+        return store
+
+    def _is_reader(self, entity_id: str) -> bool:
+        """True when the cover entity can read the external-attrs contract."""
+        store = self.hass.data.get(EXTERNAL_ATTRS_DATA)
+        if not isinstance(store, dict):
+            return False
+        return entity_id in store.get("readers", ())
+
+    def _deposit_external(
+        self, entity_id: str, updates: dict[str, Any], drop: tuple[str, ...] = ()
+    ) -> None:
+        """Merge extras into the contract and notify the reader — only on change.
+
+        Idempotent: when the resulting dict equals what is already stored, no
+        dispatcher is fired, so steady-state position steps stay silent.
+        """
+        store = self._external_store()
+        current = store["injected"].get(entity_id, {})
+        merged = {k: v for k, v in current.items() if k not in drop}
+        merged.update(updates)
+        if merged == current:
+            return
+        store["injected"][entity_id] = merged
+        self._external_deposited.add(entity_id)
+        async_dispatcher_send(self.hass, EXTERNAL_ATTRS_SIGNAL, entity_id)
+
+    def _apply_extra_attrs(
+        self, entity_id: str, extra_attrs: dict[str, Any], state: Any = None
+    ) -> None:
+        """Carry extra_attrs on a cover, via the contract or a direct write.
+
+        Reader   → deposit into the contract + dispatcher (no state write).
+        Fallback → hass.states.async_set, exactly as before (guarded so an
+                   unchanged set never fires a redundant state_changed).
+        """
+        if self._is_reader(entity_id):
+            self._deposit_external(entity_id, extra_attrs)
+            return
+        if state is None:
+            state = self.hass.states.get(entity_id)
+        if state and not all(
+            state.attributes.get(k) == v for k, v in extra_attrs.items()
+        ):
+            self.hass.states.async_set(
+                entity_id, state.state, {**state.attributes, **extra_attrs}
+            )
+
+    def _clear_external_attrs(self) -> None:
+        """Drop every extra we deposited and notify the readers (on unload).
+
+        Only touches "injected" (our side of the contract); "readers" is owned
+        by the target integration. Notifying makes the target rewrite its state
+        without our extras.
+        """
+        store = self.hass.data.get(EXTERNAL_ATTRS_DATA)
+        if not isinstance(store, dict):
+            self._external_deposited.clear()
+            return
+        injected = store.get("injected", {})
+        for entity_id in list(self._external_deposited):
+            injected.pop(entity_id, None)
+            async_dispatcher_send(self.hass, EXTERNAL_ATTRS_SIGNAL, entity_id)
+        self._external_deposited.clear()
+
     # ── Listeners ──────────────────────────────────────────────────────────────
 
     @callback
@@ -631,6 +734,13 @@ class CoverExtenderCoordinator:
         # ── Strip injected attributes from covers removed from the config ─────
         # Without this they linger on the cover until the next HA restart.
         for stale_id in set(old_injected) - set(profiles):
+            if stale_id in self._external_deposited:
+                # Reader cover: drop our extras from the contract and let it
+                # rewrite itself without them.
+                self._external_store()["injected"].pop(stale_id, None)
+                self._external_deposited.discard(stale_id)
+                async_dispatcher_send(self.hass, EXTERNAL_ATTRS_SIGNAL, stale_id)
+                continue
             state = self.hass.states.get(stale_id)
             if state:
                 remaining = {
@@ -648,14 +758,12 @@ class CoverExtenderCoordinator:
         for entity_id, cfg in profiles.items():
             extra_attrs = build_extra_attrs(cfg, memory=self._get_memory(entity_id))
             # Track every key we may inject for this cover ("memory" can appear
-            # later via _set_memory, sun_facing via _inject_sun_facing).
+            # later via _set_memory, sun_facing via _inject_sun_facing). Only
+            # meaningful for the fallback path; readers carry them via the
+            # contract, but tracking is harmless if the cover flips over later.
             new_injected[entity_id] = set(extra_attrs) | {ATTR_SUN_FACING, "memory"}
-            state = self.hass.states.get(entity_id)
-            if state:
-                if not all(state.attributes.get(k) == v for k, v in extra_attrs.items()):
-                    self.hass.states.async_set(
-                        entity_id, state.state, {**state.attributes, **extra_attrs}
-                    )
+            # Reader → contract deposit; fallback → guarded direct write.
+            self._apply_extra_attrs(entity_id, extra_attrs)
         self._injected_attrs = new_injected
 
         self._inject_sun_facing()
@@ -683,9 +791,10 @@ class CoverExtenderCoordinator:
         if new_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             return
         extra_attrs = build_extra_attrs(profiles[entity_id], memory=self._get_memory(entity_id))
-        if all(new_state.attributes.get(k) == v for k, v in extra_attrs.items()):
-            return  # Guard against infinite loops
-        self.hass.states.async_set(entity_id, new_state.state, {**new_state.attributes, **extra_attrs})
+        # Reader → deposit (idempotent; no dispatcher on unchanged extras, so a
+        # position step fires nothing) and never write the entity state.
+        # Fallback → guarded direct write, exactly as before.
+        self._apply_extra_attrs(entity_id, extra_attrs, new_state)
 
     @callback
     def _inject_sun_facing(self, _event: Event | None = None) -> None:
@@ -699,12 +808,12 @@ class CoverExtenderCoordinator:
                 continue
 
             sun_facing = compute_sun_facing(self.hass, cfg, facades)
-            if sun_facing is not None and state:
-                if state.attributes.get(ATTR_SUN_FACING) != sun_facing:
-                    self.hass.states.async_set(
-                        entity_id, state.state,
-                        {**state.attributes, ATTR_SUN_FACING: sun_facing},
-                    )
+            if sun_facing is not None and (state or self._is_reader(entity_id)):
+                # Reader → contract deposit (only on change); fallback → guarded
+                # direct write (unchanged).
+                self._apply_extra_attrs(
+                    entity_id, {ATTR_SUN_FACING: sun_facing}, state
+                )
 
             if cfg.get(CONF_SHADING, {}).get("enable", False):
                 self._apply_shade(entity_id, cfg)
@@ -1056,3 +1165,6 @@ class CoverExtenderCoordinator:
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
+        # Drop the extras we carried through the external-attrs contract so the
+        # reader entities rewrite themselves without them.
+        self._clear_external_attrs()

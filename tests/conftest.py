@@ -110,6 +110,10 @@ class FakeStates:
     def set(self, entity_id: str, state: str, attributes: dict | None = None):
         self._states[entity_id] = FakeState(state, attributes)
 
+    def async_set(self, entity_id: str, state: str, attributes: dict | None = None, *a, **k):
+        """Mirror hass.states.async_set for coordinator tests."""
+        self._states[entity_id] = FakeState(state, attributes)
+
     def get(self, entity_id: str):
         return self._states.get(entity_id)
 
