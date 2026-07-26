@@ -29,7 +29,7 @@ from custom_components.cover_extender.const import (
     EXTERNAL_ATTRS_SIGNAL,
 )
 
-from .conftest import FakeState
+from conftest import FakeState
 
 
 class FakeEvent:

@@ -51,7 +51,35 @@ except ImportError:
 
     core.HomeAssistant = HomeAssistant
     core.callback = lambda func: func
+
+    class _CoreState:
+        running = "running"
+
+    core.CoreState = _CoreState
+
+    class ServiceCall:  # type-hint placeholder
+        pass
+
+    class Event:  # type-hint placeholder
+        pass
+
+    core.ServiceCall = ServiceCall
+    core.Event = Event
     ha.core = core
+
+    # homeassistant.config_entries / homeassistant.const
+    config_entries = _module("homeassistant.config_entries")
+
+    class ConfigEntry:  # type-hint placeholder
+        pass
+
+    config_entries.ConfigEntry = ConfigEntry
+
+    const = _module("homeassistant.const")
+    const.EVENT_HOMEASSISTANT_STARTED = "homeassistant_started"
+    const.STATE_UNAVAILABLE = "unavailable"
+    const.STATE_UNKNOWN = "unknown"
+    ha.const = const
 
     # homeassistant.util.dt
     util = _module("homeassistant.util")
@@ -87,9 +115,36 @@ except ImportError:
     cv.string = vol.Coerce(str)
     cv.ensure_list = lambda v: v if isinstance(v, list) else [v]
 
+    # homeassistant.helpers.{dispatcher, event, service, storage}
+    dispatcher = _module("homeassistant.helpers.dispatcher")
+    dispatcher.async_dispatcher_send = lambda hass, signal, *a: None
+    dispatcher.async_dispatcher_connect = lambda hass, signal, target: (lambda: None)
+
+    event = _module("homeassistant.helpers.event")
+    event.async_track_state_change_event = lambda hass, entity_ids, action: (lambda: None)
+
+    service = _module("homeassistant.helpers.service")
+
+    async def _async_extract_entity_ids(hass, call, expand_group=True):
+        return []
+
+    service.async_extract_entity_ids = _async_extract_entity_ids
+
+    storage = _module("homeassistant.helpers.storage")
+
+    class Store:  # patched out by the coordinator tests
+        def __init__(self, *a, **k):
+            pass
+
+    storage.Store = Store
+
     helpers_mod.entity_registry = er
     helpers_mod.translation = translation
     helpers_mod.config_validation = cv
+    helpers_mod.dispatcher = dispatcher
+    helpers_mod.event = event
+    helpers_mod.service = service
+    helpers_mod.storage = storage
     ha.helpers = helpers_mod
 
 
