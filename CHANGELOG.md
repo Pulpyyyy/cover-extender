@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-07-26
+
+### Added
+- **Shared external-attrs contract** — extra attributes (modes, auto_shade, sun_facing…) meant for a "reader" cover (a fork exposing the shared `hass.data['cover_external_attrs']` contract, e.g. ESPSomfy-RTS Enhanced v3.4.0) are now deposited in the contract instead of being written back onto the cover state. This ends the attribute ping-pong that multiplied `state_changed` events and froze the display while several covers were moving. Readers are detected dynamically; every other cover (velux mqtt, esphome, older firmware) keeps the `async_set` fallback, so the integration works whether the target component is present or not.
+- **Integration brand images** shipped locally in `custom_components/cover_extender/brand/` (`icon.png`, `icon@2x.png`, `logo.png`, `logo@2x.png`). Since HA 2026.3 these take priority over the brands CDN, so the integration shows its own icon without being listed in the Home Assistant brands repository.
+
+### Fixed
+- Covers deleted and re-created (e.g. a platform swap) migrate their helper entities instead of creating duplicate `*_2` helpers: the stored registry id is now part of the legacy keys checked at startup.
+
+### Removed
+- Compiled `__pycache__` bytecode that had been committed by mistake, and the duplicate `icon.png` / `logo.png` that sat at the integration root (an unused location, superseded by `brand/`).
+
 ## [2.3.0] - 2026-07-04
 
 ### Added
