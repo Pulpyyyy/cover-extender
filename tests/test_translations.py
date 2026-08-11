@@ -157,3 +157,28 @@ def test_translation_files_have_same_keys():
     extra_in_fr = key_paths(fr) - key_paths(strings)
     assert not missing_in_fr, f"keys missing in fr.json: {sorted(missing_in_fr)}"
     assert not extra_in_fr, f"keys in fr.json absent from strings.json: {sorted(extra_in_fr)}"
+
+
+# Top-level keys accepted by hassfest's icons schema (script/hassfest/icons.py).
+# Notably absent: "config_subentries" — the frontend has no lookup for subentry
+# section icons either, so they never render. An icons.json holding them fails
+# hassfest outright, which is what happened between 2026-07-21 and 2026-08-12.
+# This integration is subentries-only, leaving no valid content for the file,
+# so it ships none; this test guards against it coming back.
+_ICONS_ALLOWED_KEYS = frozenset({
+    "conditions", "config", "entity", "entity_component",
+    "issues", "options", "services", "triggers",
+})
+
+
+def test_icons_file_has_no_unsupported_keys():
+    """If an icons.json reappears, keep it within the hassfest schema."""
+    icons_file = _COMPONENT / "icons.json"
+    if not icons_file.exists():
+        pytest.skip("no icons.json shipped")
+    unsupported = set(json.loads(icons_file.read_text(encoding="utf-8")))
+    unsupported -= _ICONS_ALLOWED_KEYS
+    assert not unsupported, (
+        f"icons.json holds keys hassfest rejects: {sorted(unsupported)}. "
+        f"Allowed: {sorted(_ICONS_ALLOWED_KEYS)}"
+    )
