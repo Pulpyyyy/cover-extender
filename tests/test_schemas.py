@@ -1,42 +1,42 @@
-"""Tests for the subentry → profiles builder (schemas.py)."""
+"""Tests for the options → profiles builder (schemas.py)."""
 from __future__ import annotations
 
 import pytest
 
 from custom_components.cover_extender import schemas
-from custom_components.cover_extender.schemas import build_profiles_from_subentries
-
-
-class FakeSub:
-    def __init__(self, subentry_type: str, data: dict):
-        self.subentry_type = subentry_type
-        self.data = data
-        self.subentry_id = f"sub_{id(self)}"
+from custom_components.cover_extender.const import (
+    OPT_CONFIG,
+    SECTION_COVER,
+    SECTION_FACADE,
+    SECTION_GLOBAL,
+    SECTION_MODE,
+    SECTION_TEMPLATE,
+)
+from custom_components.cover_extender.schemas import build_profiles_from_options
 
 
 class FakeEntry:
-    def __init__(self, subs: list[FakeSub]):
-        self.subentries = {s.subentry_id: s for s in subs}
-        self.options: dict = {}
+    def __init__(self, options: dict):
+        self.options = options
 
 
 def _entry(covers=None, facades=None, modes=None, templates=None, global_data=None) -> FakeEntry:
-    subs = []
+    sections: dict = {}
     if facades is not None:
-        subs.append(FakeSub("facade", {"items": facades}))
+        sections[SECTION_FACADE] = facades
     if modes is not None:
-        subs.append(FakeSub("mode", {"items": modes}))
+        sections[SECTION_MODE] = modes
     if templates is not None:
-        subs.append(FakeSub("cover_template", {"items": templates}))
+        sections[SECTION_TEMPLATE] = templates
     if covers is not None:
-        subs.append(FakeSub("cover", {"items": covers}))
+        sections[SECTION_COVER] = covers
     if global_data is not None:
-        subs.append(FakeSub("global", global_data))
-    return FakeEntry(subs)
+        sections[SECTION_GLOBAL] = global_data
+    return FakeEntry({OPT_CONFIG: sections} if sections else {})
 
 
 def test_empty_entry_returns_defaults():
-    profiles, modes, facades, show, sg, interval = build_profiles_from_subentries(_entry())
+    profiles, modes, facades, show, sg, interval = build_profiles_from_options(_entry())
     assert profiles == {} and modes == {} and facades == {}
     assert show == {"sun_facing": False, "auto_shade": False, "solar_gain": False}
     assert interval == 0.15  # DEFAULT_COMMAND_INTERVAL_MS / 1000
@@ -47,11 +47,13 @@ def test_facades_and_modes_parsed():
         facades=[{"name": "south", "azimuth": 175}],
         modes=[{"name": "Night", "icon": "mdi:weather-night", "lock": True, "behavior": None}],
     )
-    _, modes, facades, _, _, _ = build_profiles_from_subentries(entry)
+    _, modes, facades, _, _, _ = build_profiles_from_options(entry)
     assert facades == {"south": {"azimuth": 175.0}}
     assert modes["Night"]["lock"] is True
     assert modes["Night"]["behavior"] is None
     assert modes["Night"]["icon"] == "mdi:weather-night"
+    assert modes["Night"]["color"] == "#FFFFFF"  # default
+    assert modes["Night"]["hidden"] is False     # default
 
 
 def test_cover_profile_basic_and_mode_conversion():
@@ -66,7 +68,7 @@ def test_cover_profile_basic_and_mode_conversion():
             "Legacy": 30,  # pre-UI numeric format
         },
     }])
-    profiles, _, _, _, _, _ = build_profiles_from_subentries(entry)
+    profiles, _, _, _, _, _ = build_profiles_from_options(entry)
     cfg = profiles["cover.volet_sam"]
     assert cfg["facade"] == "south"
     assert cfg["exclusion"] == ["binary_sensor.fenetre"]
@@ -92,7 +94,7 @@ def test_template_inheritance_and_cover_override():
             "shade_distance": 0.9,  # cover override beats template
         }],
     )
-    profiles, _, _, _, _, _ = build_profiles_from_subentries(entry)
+    profiles, _, _, _, _, _ = build_profiles_from_options(entry)
     cfg = profiles["cover.volet_sam"]
     assert cfg["angle_left"] == 60.0 and cfg["angle_right"] == 70.0
     assert cfg["shade"]["enable"] is True
@@ -104,7 +106,7 @@ def test_template_inheritance_and_cover_override():
 
 def test_missing_template_falls_back_to_defaults():
     entry = _entry(covers=[{"entity_id": "cover.volet_sam", "template": "inexistant"}])
-    profiles, _, _, _, _, _ = build_profiles_from_subentries(entry)
+    profiles, _, _, _, _, _ = build_profiles_from_options(entry)
     cfg = profiles["cover.volet_sam"]
     assert cfg["angle_left"] == 85.0
     assert cfg["shade"]["distance"] == 0.4  # SHADE_DEFAULTS
@@ -119,7 +121,7 @@ def test_global_settings_flat_keys():
         "sg_weather_entity": "weather.maison",
         "sg_good_conditions": ["sunny"],
     })
-    _, _, _, show, sg, interval = build_profiles_from_subentries(entry)
+    _, _, _, show, sg, interval = build_profiles_from_options(entry)
     assert interval == 0.5
     assert show == {"sun_facing": True, "auto_shade": False, "solar_gain": False}
     assert sg["temperature_entity"] == "sensor.temp_salon"
@@ -129,13 +131,21 @@ def test_global_settings_flat_keys():
 
 def test_global_threshold_entity_id_stays_string():
     entry = _entry(global_data={"sg_temperature_threshold": "input_number.seuil"})
-    _, _, _, _, sg, _ = build_profiles_from_subentries(entry)
+    _, _, _, _, sg, _ = build_profiles_from_options(entry)
     assert sg["temperature_threshold"] == "input_number.seuil"
+
+
+def test_pre_v2_flat_options_fallback():
+    """Pre-2.0 installs stored global settings as bare flat keys in entry.options."""
+    entry = FakeEntry({"command_interval": 300, "show_auto_shade": True})
+    _, _, _, show, _, interval = build_profiles_from_options(entry)
+    assert interval == 0.3
+    assert show == {"sun_facing": False, "auto_shade": True, "solar_gain": False}
 
 
 def test_cover_without_entity_id_is_skipped():
     entry = _entry(covers=[{"facade": "south"}])
-    profiles, _, _, _, _, _ = build_profiles_from_subentries(entry)
+    profiles, _, _, _, _, _ = build_profiles_from_options(entry)
     assert profiles == {}
 
 
@@ -150,11 +160,8 @@ def test_registry_id_resolves_to_current_entity_id(hass, monkeypatch):
         "entity_registry_id": uid,
         "facade": "south",
     }])
-    hass.config_entries = type(
-        "FakeCE", (), {"async_entries": lambda self, domain: [entry]}
-    )()
 
-    profiles, _, _, _, _, _ = build_profiles_from_subentries(entry, hass)
+    profiles, _, _, _, _, _ = build_profiles_from_options(entry, hass)
     assert "cover.volet_salle_a_manger" in profiles
     assert "cover.volet_sam" not in profiles
 
@@ -165,9 +172,6 @@ def test_registry_id_unresolvable_falls_back_to_stored_entity_id(hass, monkeypat
         "entity_id": "cover.volet_sam",
         "entity_registry_id": "unknown-uuid",
     }])
-    hass.config_entries = type(
-        "FakeCE", (), {"async_entries": lambda self, domain: [entry]}
-    )()
 
-    profiles, _, _, _, _, _ = build_profiles_from_subentries(entry, hass)
+    profiles, _, _, _, _, _ = build_profiles_from_options(entry, hass)
     assert "cover.volet_sam" in profiles

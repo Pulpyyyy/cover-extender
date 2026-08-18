@@ -5,7 +5,7 @@ import logging
 from typing import Any
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er, translation as ha_translation
+from homeassistant.helpers import entity_registry as er
 
 from .const import (
     DOMAIN,
@@ -19,29 +19,6 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-_TITLE_FALLBACKS: dict[str, str] = {
-    "global":         "General settings",
-    "facade":         "Facades",
-    "mode":           "Modes",
-    "cover_template": "Templates",
-    "cover":          "Covers",
-}
-
-
-async def _subentry_title(hass: HomeAssistant, subentry_type: str) -> str:
-    """Return the translated entry_type label for a singleton subentry."""
-    try:
-        translations = await ha_translation.async_get_translations(
-            hass, hass.config.language, "config_subentries", {DOMAIN}
-        )
-        key = f"component.{DOMAIN}.config_subentries.{subentry_type}.entry_type"
-        title = translations.get(key)
-        if title:
-            return title
-    except Exception:
-        pass
-    return _TITLE_FALLBACKS.get(subentry_type, subentry_type)
 
 
 # ── Helper entity naming and resolution ──────────────────────────────────────

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-08-16
+
+### Breaking
+- **The config flow wizards are gone; configuration now lives in an embedded admin panel** served at `/cover-extender` (sidebar entry, per-user visibility; also linked from the integration page and the hub device's configuration URL). The config flow only creates the entry and stops there.
+- **Storage moved from config subentries to `entry.options["config"]`** - config entry version 1 → 2, migrated automatically at startup. The migration is one-way: a downgrade to 2.x is refused rather than risking corruption.
+
+### Added
+- Admin panel with four tabs: **Covers**, **Matrix** (modes × covers - the screen a config flow cannot draw), **Modes** (drag to reorder; the order drives the mode selectors), **Settings** (facades, templates, global settings, and a read-only count of the entities the configuration produced).
+- Matrix cell popover: link/unlink a mode, set the per-cover position (fixed slider, entity, none), apply to the whole facade in one tick.
+- Two admin-only WebSocket commands (`cover_extender/config/get` / `config/save`). All validation stays server-side: the behavior field table (defaults, bounds, units) is sent to the panel, deleting a facade/template/mode still referenced by covers is refused, renames cascade to the covers referencing them.
+- The panel carries its own EN/FR dictionary keyed on the reader's language (`hass.locale`), with key-by-key English fallback.
+
 ## [2.4.0] - 2026-07-26
 
 ### Added

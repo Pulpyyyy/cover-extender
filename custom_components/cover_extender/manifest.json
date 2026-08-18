@@ -3,11 +3,11 @@
   "name": "Cover Extender",
   "codeowners": ["@pulpyyyy"],
   "config_flow": true,
-  "dependencies": ["sun"],
+  "dependencies": ["sun", "frontend", "http", "websocket_api"],
   "documentation": "https://github.com/Pulpyyyy/cover-extender",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/Pulpyyyy/cover-extender/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "2.4.0"
+  "version": "3.0.0"
 }

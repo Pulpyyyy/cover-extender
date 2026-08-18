@@ -58,11 +58,12 @@ from .const import (
     EVENT_SHADE_APPLIED,
     CONF_COMMAND_INTERVAL,
     DEFAULT_COMMAND_INTERVAL,
-    SUBENTRY_TYPE_COVER,
+    OPT_CONFIG,
+    SECTION_COVER,
 )
 from .helpers import build_extra_attrs, resolve_helper_entity, resolve_mode_position
 from .shade import compute_sun_facing, compute_shade_sync
-from .schemas import build_profiles_from_subentries
+from .schemas import build_profiles_from_options
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ class CoverExtenderCoordinator:
         self._store: Store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._cover_queue: asyncio.Queue[tuple[str, dict]] = asyncio.Queue()
         self._worker_task: asyncio.Task | None = None
-        # Configurable interval between cover commands (from the global subentry)
+        # Configurable interval between cover commands (from the global settings)
         self._command_interval: float = DEFAULT_COMMAND_INTERVAL
         # Reverse maps rebuilt on every _setup_profiles call
         self._select_to_cover: dict[str, str] = {}
@@ -123,8 +124,8 @@ class CoverExtenderCoordinator:
     async def _load_data(
         self,
     ) -> tuple[dict, dict, dict, dict, dict, float]:
-        """Load configuration from the UI subentries."""
-        return build_profiles_from_subentries(self._entry, self.hass)
+        """Load configuration from the UI-edited entry options."""
+        return build_profiles_from_options(self._entry, self.hass)
 
     # ── Config publication / reload ───────────────────────────────────────────
 
@@ -143,28 +144,28 @@ class CoverExtenderCoordinator:
         self._command_interval      = interval
 
     def _reload_config(self) -> int:
-        """Rebuild config from subentries, publish it, refresh listeners and entities.
+        """Rebuild config from entry.options, publish it, refresh listeners and entities.
 
         Returns the number of profiles loaded.
         """
         if self._stopping:
             return 0
-        config = build_profiles_from_subentries(self._entry, self.hass)
+        config = build_profiles_from_options(self._entry, self.hass)
         self._store_config(config)
         self._setup_profiles()
         async_dispatcher_send(self.hass, SIGNAL_COVER_RELOAD)
         return len(config[0])
 
-    # ── Subentry update listener ──────────────────────────────────────────────
+    # ── Options update listener ──────────────────────────────────────────────
 
     async def _on_entry_updated(
         self, hass: HomeAssistant, entry: ConfigEntry
     ) -> None:
-        """Reload profiles whenever a subentry is added / updated / removed."""
+        """Reload profiles whenever entry.options changes."""
         self._entry = entry
         count = self._reload_config()
         _LOGGER.info(
-            "cover_extender: subentry change — reloaded %d profiles", count
+            "cover_extender: options change — reloaded %d profiles", count
         )
 
     # ── Shortcuts to shared hass.data ─────────────────────────────────────────
@@ -934,7 +935,7 @@ class CoverExtenderCoordinator:
         """React to entity renames.
 
         - Tracked cover renamed → re-sync its stored entity_id in the cover
-          subentry; the update listener then triggers a full profile reload
+          section; the update listener then triggers a full profile reload
           keyed on the new entity_id.
         - One of our helper entities renamed → rebuild the reverse maps so the
           rename is picked up immediately (not just at the next reload).
@@ -971,28 +972,27 @@ class CoverExtenderCoordinator:
         )
 
     def _sync_cover_entity_id(self, old_id: str, new_id: str) -> None:
-        """Rewrite a renamed cover's entity_id in the cover subentry.
+        """Rewrite a renamed cover's entity_id in the cover section of the options.
 
-        async_update_subentry fires the entry update listener, which reloads
-        the profiles (re-resolved through the registry id anyway); if the item
+        async_update_entry fires the entry update listener, which reloads the
+        profiles (re-resolved through the registry id anyway); if the item
         cannot be found, fall back to a direct reload.
         """
-        for entry in self.hass.config_entries.async_entries(DOMAIN):
-            for sub in entry.subentries.values():
-                if sub.subentry_type != SUBENTRY_TYPE_COVER or "items" not in sub.data:
-                    continue
-                items = [dict(it) for it in sub.data["items"]]
-                changed = False
-                for it in items:
-                    if it.get("entity_id") == old_id:
-                        it["entity_id"] = new_id
-                        changed = True
-                if changed:
-                    self.hass.config_entries.async_update_subentry(
-                        entry, sub, data={"items": items}
-                    )
-                    return
-        self._reload_config()
+        entry = self._entry
+        sections = dict(entry.options.get(OPT_CONFIG) or {})
+        items = [dict(it) for it in (sections.get(SECTION_COVER) or [])]
+        changed = False
+        for it in items:
+            if it.get("entity_id") == old_id:
+                it["entity_id"] = new_id
+                changed = True
+        if not changed:
+            self._reload_config()
+            return
+        self.hass.config_entries.async_update_entry(
+            entry,
+            options={**entry.options, OPT_CONFIG: {**sections, SECTION_COVER: items}},
+        )
 
     # ── Service handlers ───────────────────────────────────────────────────────
 
@@ -1095,7 +1095,7 @@ class CoverExtenderCoordinator:
             )
 
     async def service_reload(self, call: ServiceCall) -> None:
-        """Reload cover configuration from subentries without restarting HA."""
+        """Reload cover configuration from entry.options without restarting HA."""
         count = self._reload_config()
         _LOGGER.info("cover_extender reloaded (%d profiles)", count)
 
@@ -1118,7 +1118,7 @@ class CoverExtenderCoordinator:
 
         self._store_config(await self._load_data())
 
-        # React to subentry changes automatically
+        # React to options changes automatically
         self._entry.async_on_unload(
             self._entry.add_update_listener(self._on_entry_updated)
         )

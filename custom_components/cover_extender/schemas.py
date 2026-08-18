@@ -1,4 +1,4 @@
-"""Voluptuous schemas and subentry → profiles builder for cover_extender."""
+"""Voluptuous schemas and options → profiles builder for cover_extender."""
 from __future__ import annotations
 
 import logging
@@ -10,7 +10,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv, entity_registry as er
 
 from .const import (
-    DOMAIN,
     CONF_FACADE,
     CONF_MODES,
     CONF_ENTITY_PICTURE,
@@ -20,11 +19,12 @@ from .const import (
     CONF_ANGLE_RIGHT,
     CONF_EXCLUSION,
     DEFAULT_COMMAND_INTERVAL_MS,
-    SUBENTRY_TYPE_FACADE,
-    SUBENTRY_TYPE_GLOBAL,
-    SUBENTRY_TYPE_MODE,
-    SUBENTRY_TYPE_COVER,
-    SUBENTRY_TYPE_TEMPLATE,
+    OPT_CONFIG,
+    SECTION_COVER,
+    SECTION_FACADE,
+    SECTION_GLOBAL,
+    SECTION_MODE,
+    SECTION_TEMPLATE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -180,14 +180,15 @@ def _add_cover_profile(
     }
 
 
-def build_profiles_from_subentries(
+def build_profiles_from_options(
     entry: Any,
     hass: HomeAssistant | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], float]:
-    """Convert UI subentries into the runtime configuration 6-tuple.
+    """Convert entry.options[OPT_CONFIG] into the runtime configuration 6-tuple.
 
-    When *hass* is provided every config entry for the domain is scanned so
-    that subentries spread across more than one entry are also picked up.
+    Every section has been normalised by the v1 → v2 migration, so the legacy
+    subentry shapes (per-item subentries, ``{"items": [...]}`` wrappers) are
+    handled there and not here — this reads plain lists and one flat dict.
 
     Returns (profiles, modes_list, facades, show_entities, solar_gain_global, command_interval).
     """
@@ -195,24 +196,15 @@ def build_profiles_from_subentries(
     modes_list: dict[str, Any] = {}
     profiles: dict[str, Any] = {}
 
-    # Determine the full set of entries to scan for subentries
-    if hass is not None:
-        all_entries: list[Any] = hass.config_entries.async_entries(DOMAIN)
-    else:
-        all_entries = [entry]
+    sections: dict[str, Any] = dict(entry.options.get(OPT_CONFIG) or {})
 
-    # ── Global settings live in the "global" singleton subentry ─────────────────
-    global_data: dict[str, Any] = {}
-    for _e in all_entries:
-        for _sub in _e.subentries.values():
-            if _sub.subentry_type == SUBENTRY_TYPE_GLOBAL:
-                global_data = dict(_sub.data)
-                break
-        if global_data:
-            break
-    # Fallback: support legacy installations that stored global settings in options
-    if not global_data:
-        global_data = entry.options or {}
+    # ── Global settings ───────────────────────────────────────────────────────
+    # Fallback: pre-2.0 installations stored the settings as bare flat keys in
+    # entry.options, before OPT_CONFIG nested them under "global".
+    if sections:
+        global_data: dict[str, Any] = dict(sections.get(SECTION_GLOBAL) or {})
+    else:
+        global_data = dict(entry.options or {})
     command_interval: float = int(global_data.get("command_interval", DEFAULT_COMMAND_INTERVAL_MS)) / 1000.0
 
     # UI stores individual flat keys (show_sun_facing, show_auto_shade, show_solar_gain)
@@ -262,67 +254,29 @@ def build_profiles_from_subentries(
             "solar_gain":  tpl_sg,
         }
 
-    for _entry in all_entries:
-        for subentry in _entry.subentries.values():
-            if subentry.subentry_type != SUBENTRY_TYPE_TEMPLATE:
-                continue
-            d = subentry.data
-            if "items" in d:
-                # Singleton format: {"items": [{name, angle_left, ...}, ...]}
-                for item in d["items"]:
-                    _add_template(item)
-            else:
-                # Legacy individual format: {name, angle_left, ...}
-                _add_template(d)
+    for item in sections.get(SECTION_TEMPLATE) or []:
+        _add_template(item)
 
     # ── Main pass ─────────────────────────────────────────────────────────────
-    for _entry in all_entries:
-        for subentry in _entry.subentries.values():
-            stype = subentry.subentry_type
-            d = subentry.data
+    for item in sections.get(SECTION_FACADE) or []:
+        if name := item.get("name"):
+            facades[name] = {"azimuth": float(item.get("azimuth", 180.0))}
 
-            if stype == SUBENTRY_TYPE_FACADE:
-                if "items" in d:
-                    # Current singleton format: {"items": [{"name": ..., "azimuth": ...}, ...]}
-                    for item in d["items"]:
-                        if name := item.get("name"):
-                            facades[name] = {"azimuth": float(item.get("azimuth", 180.0))}
-                elif name := d.get("name"):
-                    # Legacy individual format: {"name": ..., "azimuth": ...}
-                    facades[name] = {"azimuth": float(d.get("azimuth", 180.0))}
+    for item in sections.get(SECTION_MODE) or []:
+        if name := item.get("name"):
+            modes_list[name] = {
+                "icon":     item.get("icon",     "mdi:help-circle"),
+                "color":    item.get("color",    "#FFFFFF"),
+                "lock":     bool(item.get("lock", False)),
+                "behavior": item.get("behavior") or None,
+                "hidden":   bool(item.get("hidden", False)),
+            }
 
-            elif stype == SUBENTRY_TYPE_MODE:
-                if "items" in d:
-                    # Current singleton format: {"items": [...]}
-                    for item in d["items"]:
-                        if name := item.get("name"):
-                            modes_list[name] = {
-                                "icon":     item.get("icon",     "mdi:help-circle"),
-                                "color":    item.get("color",    "#FFFFFF"),
-                                "lock":     bool(item.get("lock", False)),
-                                "behavior": item.get("behavior") or None,
-                                "hidden":   bool(item.get("hidden", False)),
-                            }
-                elif name := d.get("name"):
-                    # Legacy individual format
-                    modes_list[name] = {
-                        "icon":     d.get("icon",     "mdi:help-circle"),
-                        "color":    d.get("color",    "#FFFFFF"),
-                        "lock":     bool(d.get("lock", False)),
-                        "behavior": d.get("behavior") or None,
-                        "hidden":   bool(d.get("hidden", False)),
-                    }
-
-            elif stype == SUBENTRY_TYPE_COVER:
-                # Support both new singleton format {"items": [...]} and legacy individual format
-                cover_items: list[dict[str, Any]] = d.get("items") if "items" in d else [d]
-                for cover_data in cover_items:
-                    _add_cover_profile(cover_data, templates, profiles, hass)
-
-
+    for cover_data in sections.get(SECTION_COVER) or []:
+        _add_cover_profile(cover_data, templates, profiles, hass)
 
     _LOGGER.debug(
-        "build_profiles_from_subentries: %d profiles, %d modes, %d facades, %d templates",
+        "build_profiles_from_options: %d profiles, %d modes, %d facades, %d templates",
         len(profiles), len(modes_list), len(facades), len(templates),
     )
     return profiles, modes_list, facades, show_entities, solar_gain_global, command_interval
