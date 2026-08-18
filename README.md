@@ -137,7 +137,7 @@ Everything it does is:
 
 Cover Extender respects Home Assistant's ecosystem:
 
-- Full UI configuration via config flow and subentries
+- Full UI configuration via an embedded admin panel
 - Hot reload, no restart required
 - Native entities, services, and events
 - Plays well with dashboards and automations
@@ -157,8 +157,11 @@ It aims to feel like:
 
 ## ✨ Features
 
+- **Admin panel**  
+  All configuration happens in a dedicated panel at `/cover-extender`: covers, modes, facades, templates and global settings, plus a **matrix** view (modes × covers) where every per-cover position is one click away.
+
 - **Mode system**  
-  Named modes with icons, colors, lock, and an optional `behavior` field (`auto_shade` or `solar_gain`).
+  Named modes with icons, colors, lock, and an optional `behavior` field (`auto_shade` or `solar_gain`). A behavior computes the position; any single cover can still override it with a fixed or entity-driven position.
 
 - **Automation lock**  
   Prevents physical moves; requested positions are stored in memory until unlocked.
@@ -204,27 +207,50 @@ It aims to feel like:
 
 2. Restart Home Assistant.
 
-3. Go to **Settings → Integrations → Add integration** and search for **Cover Extender**.
+3. Go to **Settings → Integrations → Add integration** and search for **Cover Extender**. The config flow creates the entry and stops there.
 
-4. The setup wizard opens. Configure your facades, modes, cover templates and covers directly from the UI.
+4. Open the **Cover Extender** panel to configure everything else: from the sidebar (each user can show or hide the entry via the sidebar editor), from the button on the integration page, or directly at `http://your-ha:8123/cover-extender`.
 
 > Requires Home Assistant 2026.1 or later.
+
+**Upgrading from 2.x:** the stored configuration migrates automatically at first startup (config subentries are lifted into the entry options). The migration is one-way - a later downgrade to 2.x is refused rather than risking corruption.
 
 ---
 
 # 🧾 Configuration
 
-All configuration is managed through **Settings → Integrations → Cover Extender** using subentries.
+All configuration is managed in the **admin panel** at `/cover-extender`. The panel talks to the integration through two admin-only WebSocket commands; every value is validated server-side and persisted into the config entry, and each save hot-reloads the integration - no restart, ever.
 
-## Subentry types
+The panel has four tabs:
 
-| Type | Description |
+| Tab | What it edits |
 |---|---|
-| **Facade** | A building orientation with a compass azimuth (°). |
-| **Mode** | A named operating mode: icon, color, lock flag, automation behavior. |
-| **Cover template** | Shared angle + shade/solar-gain settings reused across covers. |
-| **Cover** | A cover profile: entity, facade, modes, automation, exclusion. |
-| **Global settings** | Command interval, binary sensor visibility, solar-gain global config. |
+| **Covers** | The cover profiles: entity, facade, template, exclusion, shading and solar-gain parameters. |
+| **Matrix** | Modes × covers: link modes and set every per-cover position from one grid. |
+| **Modes** | The modes: icon, color, lock, behavior, visibility. Drag to reorder - the order drives the mode selectors. |
+| **Settings** | Facades, cover templates, global settings, and a count of the entities all this produced. |
+
+## The matrix
+
+The matrix is the heart of the panel - the screen a config flow could never draw:
+
+![Matrix tab](docs/panel-matrix.png)
+
+Each cell is the position of one mode on one cover. Click a cell to edit it, an empty cell to link the mode; deleting and renaming stay safe (a facade, template or mode still referenced by covers cannot be deleted, and renames cascade). The cell popover offers three choices - **Fixed** (slider), **Entity** (an `input_number`/`number` whose value drives the position live) and **None** - plus a one-tick "apply to the whole facade".
+
+On a mode with an `auto_shade` or `solar_gain` behavior, the position is computed, so cells show `auto`. Since 3.1.0 the same popover can **override the computation for a single cover**: pick Fixed or Entity and that cover ignores the computed position while in this mode (its auto switches stay off, lock and memory follow the mode's own lock flag). The other covers keep the computed position. In the screenshot above, *Shade* computes everywhere except on *Office*, pinned at 30 %:
+
+![Overriding an automatic mode for one cover](docs/matrix-override.png)
+
+The panel follows your Home Assistant theme ([dark version](docs/panel-matrix-dark.png)) and each admin reads it in their own language (English and French shipped).
+
+## The other tabs
+
+| | |
+|---|---|
+| ![Covers tab](docs/panel-covers.png) | ![Modes tab](docs/panel-modes.png) |
+
+![Settings tab](docs/panel-settings.png)
 
 ---
 
@@ -249,6 +275,8 @@ Each mode defines the context in which a cover operates:
 
 `auto_shade` and `solar_gain` are mutually exclusive per mode.
 
+A behavior computes the position for every linked cover - unless a cover carries its own fixed or entity position for that mode (set in the matrix), in which case that cover is driven by its stored position instead of the computation.
+
 ---
 
 ## Cover templates
@@ -271,20 +299,16 @@ If two or more covers have the same physical window geometry and the same shadin
 
 ## Covers
 
-Each cover profile links a `cover.*` entity to its facade, modes and automation settings.
+Each cover profile links a `cover.*` entity to its facade, modes and automation settings. The cover editor (Covers tab) groups them in collapsible sections:
 
-### Identity step
-- Cover entity, optional image URL, facade, optional cover template, exclusion entities.
+### Identity
+- Cover entity, optional image path (host-relative, e.g. `/local/…`), facade, optional cover template, exclusion entities.
 
-### Angles step *(only when no template)*
-- `angle_left` / `angle_right`: sun azimuth offsets relative to the facade normal (0–90°).
+### Modes
+- Which modes apply to this cover, and each mode's target position: fixed integer (0-100), `auto` (no fixed position; on a behavior mode this means "computed"), or an entity ID read at runtime. Also editable cell by cell in the matrix.
 
-### Mode selection and configuration
-- Choose which modes apply to this cover.
-- For each mode, set the target position: fixed integer (0–100), `auto` (no fixed position, used with behavior modes), or an entity ID read at runtime.
-
-### Automation step *(only when no template)*
-All shade and solar-gain parameters for this cover:
+### Geometry, detection, shading, solar gain
+All shade and solar-gain parameters for this cover. With a template, the template's values show as the effective baseline and the cover only stores its deviations:
 
 **Shade (`shade`):**
 
@@ -425,6 +449,8 @@ Behavior:
                                      │ Store target in memory  │
                                      └─────────────────────────┘
 ```
+
+Note: on a behavior mode (`auto_shade` / `solar_gain`), a cover that carries its own fixed or entity position for that mode skips the behavior entirely - its automation switches stay off and the flow above runs as for a plain position mode.
 # 🔐 Lock System (Actual Behavior)
 ```
             ┌──────────────────────────┐

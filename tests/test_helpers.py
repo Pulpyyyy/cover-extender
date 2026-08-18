@@ -9,6 +9,7 @@ from custom_components.cover_extender.helpers import (
     build_extra_attrs,
     cover_object_id,
     cover_stable_key,
+    effective_behavior,
     helper_unique_id,
     resolve_helper_entity,
     resolve_mode_position,
@@ -44,6 +45,27 @@ def test_resolve_mode_position_entity_missing(hass):
 def test_resolve_mode_position_entity_non_numeric(hass):
     hass.states.set("input_number.pos", "unavailable")
     assert resolve_mode_position(hass, "input_number.pos") is None
+
+
+# ── effective_behavior ────────────────────────────────────────────────────────
+
+def test_effective_behavior_no_override_keeps_behavior():
+    assert effective_behavior("auto_shade", None) == "auto_shade"
+    assert effective_behavior("solar_gain", None) == "solar_gain"
+
+
+def test_effective_behavior_fixed_override_neutralises():
+    assert effective_behavior("auto_shade", 30) is None
+    assert effective_behavior("solar_gain", 0) is None  # 0 is a position, not "no value"
+
+
+def test_effective_behavior_entity_override_neutralises():
+    assert effective_behavior("auto_shade", "input_number.pos") is None
+
+
+def test_effective_behavior_plain_mode_unaffected():
+    assert effective_behavior(None, 30) is None
+    assert effective_behavior(None, None) is None
 
 
 # ── build_extra_attrs ─────────────────────────────────────────────────────────

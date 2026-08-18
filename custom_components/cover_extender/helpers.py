@@ -102,6 +102,19 @@ def purge_helper_entity(hass: HomeAssistant, cover_entity_id: str, kind: str) ->
         er.async_get(hass).async_remove(entity_id)
 
 
+def effective_behavior(behavior: str | None, stored_position: Any) -> str | None:
+    """Behavior actually driving a cover in a mode, override taken into account.
+
+    A per-cover stored position (fixed int or entity id, i.e. anything but
+    None) overrides a computing behavior for that cover: the mode then acts
+    as a plain position mode - auto switches stay off, lock and memory follow
+    the mode's own lock flag.
+    """
+    if behavior is not None and stored_position is not None:
+        return None
+    return behavior
+
+
 def resolve_mode_position(hass: HomeAssistant, raw: Any) -> int | None:
     """Resolve a mode position value to an integer.
 

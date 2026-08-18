@@ -61,7 +61,12 @@ from .const import (
     OPT_CONFIG,
     SECTION_COVER,
 )
-from .helpers import build_extra_attrs, resolve_helper_entity, resolve_mode_position
+from .helpers import (
+    build_extra_attrs,
+    effective_behavior,
+    resolve_helper_entity,
+    resolve_mode_position,
+)
 from .shade import compute_sun_facing, compute_shade_sync
 from .schemas import build_profiles_from_options
 
@@ -435,8 +440,18 @@ class CoverExtenderCoordinator:
             current_pos = cover_state.attributes.get("current_position") if cover_state else None
             old_memory  = self._get_memory(entity_id)
 
-            from_behavior = from_mode_cfg.get("behavior")  # "auto_shade", "solar_gain", or None
-            to_behavior   = to_mode_cfg.get("behavior")
+            # "auto_shade", "solar_gain", or None - a per-cover stored position
+            # overrides a computing behavior (see effective_behavior). Applied
+            # to both sides so entering AND leaving an overridden mode use the
+            # same semantics.
+            cover_modes   = cfg.get(CONF_MODES, {})
+            from_behavior = effective_behavior(
+                from_mode_cfg.get("behavior"),
+                cover_modes.get(from_mode) if from_mode else None,
+            )
+            to_behavior   = effective_behavior(
+                to_mode_cfg.get("behavior"), cover_modes.get(mode)
+            )
             # Effective lock: a behavior forces the lock switch on regardless of the
             # mode's own lock flag — memory save/restore must follow the same rule,
             # otherwise entering a lock=False behavior mode loses the user's position.
@@ -477,7 +492,7 @@ class CoverExtenderCoordinator:
             # 4. Position (skipped when solar_gain active — _apply_solar_gain determines position)
             target_position: int | None = None
             if to_behavior != "solar_gain":
-                fixed_position = cfg.get(CONF_MODES, {}).get(mode)
+                fixed_position = cover_modes.get(mode)
                 if fixed_position is not None:
                     target_position = resolve_mode_position(self.hass, fixed_position)
                     consume_memory  = False

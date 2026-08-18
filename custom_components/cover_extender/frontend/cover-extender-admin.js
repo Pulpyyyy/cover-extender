@@ -88,8 +88,12 @@ const WORDS = {
     segFixed: "Fixed",
     segEntity: "Entity",
     segNone: "None",
+    segAuto: "Auto",
     noneHint: "No position forced: the cover stays where it is (locked if the mode locks).",
     entityHint: "The entity's value drives the position live.",
+    autoHint: "Default: the position is computed for this cover.",
+    overrideHint: "Override: this cover ignores the computed position while in this mode.",
+    overrideTitle: "Overrides the computed position",
     applyFacade: (n, f) => `Apply to the ${n} other covers on the ${f} facade too`,
     applyFacadeOne: (f) => `Apply to the other cover on the ${f} facade too`,
     unlink: "Unlink",
@@ -157,7 +161,7 @@ const WORDS = {
     color: "Color",
     behavior: "Behavior",
     behaviorNone: "None — fixed position per cover",
-    behaviorHint: "Per-cover positions no longer apply: they are computed.",
+    behaviorHint: "Positions are computed; the matrix can still override them cover by cover (fixed or entity).",
     lockField: "Lock the covers",
     lockHint: "Blocks every manual command while the mode is on.",
     hiddenField: "Hide from the selector",
@@ -247,8 +251,12 @@ const WORDS = {
     segFixed: "Fixe",
     segEntity: "Entité",
     segNone: "Aucune",
+    segAuto: "Auto",
     noneHint: "Pas de position forcée : le volet reste en place (verrouille si mode verrou).",
     entityHint: "La valeur de l'entité pilote la position en direct.",
+    autoHint: "Par défaut : la position est calculée pour ce volet.",
+    overrideHint: "Surcharge : ce volet ignore la position calculée dans ce mode.",
+    overrideTitle: "Surcharge la position calculée",
     applyFacade: (n, f) => `Appliquer aussi aux ${n} autres volets de la façade ${f}`,
     applyFacadeOne: (f) => `Appliquer aussi à l'autre volet de la façade ${f}`,
     unlink: "Délier",
@@ -313,7 +321,7 @@ const WORDS = {
     color: "Couleur",
     behavior: "Comportement",
     behaviorNone: "Aucun — position fixe par volet",
-    behaviorHint: "Les positions par volet ne s'appliquent plus : elles sont calculées.",
+    behaviorHint: "Les positions sont calculées ; la matrice peut les surcharger volet par volet (fixe ou entité).",
     lockField: "Verrouiller les volets",
     lockHint: "Empêche toute commande manuelle tant que le mode est actif.",
     hiddenField: "Masquer du sélecteur",
@@ -1182,11 +1190,12 @@ class CoverExtenderPanel extends HTMLElement {
       fill.style.width = `${cfg.value}%`;
       gauge.append(fill);
       cv.append(gauge, document.createTextNode(String(cfg.value)), el("small", "pct", "%"));
+      if (mode.behavior) cv.title = T.overrideTitle;
     } else if (kind === "entity") {
       cv = el("div", "cv entity");
       cv.append(icon("mdi:link-variant"),
         document.createTextNode(String(cfg.value).split(".").pop().slice(0, 12)));
-      cv.title = cfg.value;
+      cv.title = mode.behavior ? `${T.overrideTitle}\n${cfg.value}` : cfg.value;
     } else {
       // Three different meanings shared one primary blue: "no forced position"
       // (plain mode), "computed by shading", "computed by solar gain". The tint
@@ -1285,55 +1294,60 @@ class CoverExtenderPanel extends HTMLElement {
 
     const renderBody = () => {
       body.replaceChildren();
-      if (isBehavior) {
-        body.append(el("p", "sub", T.behaviorSub[mode.behavior]));
+      body.append(el("p", "sub", isBehavior ? T.behaviorSub[mode.behavior] : T.posSub));
+      const seg = el("div", "seg");
+      // On a behavior mode the "no value" choice does not mean "no position"
+      // but "computed" - same stored shape ({type:"auto"}), other label, and it
+      // comes first because it is the default. Fixed/entity become a per-cover
+      // override of the computation.
+      const segs = isBehavior
+        ? [["none", T.segAuto], ["fixed", T.segFixed], ["entity", T.segEntity]]
+        : [["fixed", T.segFixed], ["entity", T.segEntity], ["none", T.segNone]];
+      for (const [key, label] of segs) {
+        const b = el("button", state.choice === key ? "on" : "", label);
+        b.addEventListener("click", () => { state.choice = key; renderBody(); });
+        seg.append(b);
+      }
+      body.append(seg);
+
+      if (isBehavior && state.choice !== "none") {
+        body.append(el("p", "hint", T.overrideHint));
+      }
+      if (state.choice === "fixed") {
+        const row = el("div", "pos-slider");
+        const range = document.createElement("input");
+        range.type = "range"; range.min = "0"; range.max = "100"; range.value = String(state.fixed);
+        const val = el("span", "val", `${state.fixed} %`);
+        range.addEventListener("input", () => {
+          state.fixed = Number(range.value);
+          val.textContent = `${state.fixed} %`;
+        });
+        row.append(range, val);
+        body.append(row);
+      } else if (state.choice === "entity") {
+        body.append(el("p", "hint", T.entityHint));
+        const sel = document.createElement("ha-selector");
+        sel.hass = this._hass;
+        sel.selector = { entity: { domain: ["input_number", "number"] } };
+        sel.value = state.entity || undefined;
+        sel.addEventListener("value-changed", (e) => { state.entity = e.detail.value; });
+        state.selectorEl = sel;
+        body.append(sel);
       } else {
-        body.append(el("p", "sub", T.posSub));
-        const seg = el("div", "seg");
-        const segs = [["fixed", T.segFixed], ["entity", T.segEntity], ["none", T.segNone]];
-        for (const [key, label] of segs) {
-          const b = el("button", state.choice === key ? "on" : "", label);
-          b.addEventListener("click", () => { state.choice = key; renderBody(); });
-          seg.append(b);
-        }
-        body.append(seg);
+        body.append(el("p", "hint", isBehavior ? T.autoHint : T.noneHint));
+      }
 
-        if (state.choice === "fixed") {
-          const row = el("div", "pos-slider");
-          const range = document.createElement("input");
-          range.type = "range"; range.min = "0"; range.max = "100"; range.value = String(state.fixed);
-          const val = el("span", "val", `${state.fixed} %`);
-          range.addEventListener("input", () => {
-            state.fixed = Number(range.value);
-            val.textContent = `${state.fixed} %`;
-          });
-          row.append(range, val);
-          body.append(row);
-        } else if (state.choice === "entity") {
-          body.append(el("p", "hint", T.entityHint));
-          const sel = document.createElement("ha-selector");
-          sel.hass = this._hass;
-          sel.selector = { entity: { domain: ["input_number", "number"] } };
-          sel.value = state.entity || undefined;
-          sel.addEventListener("value-changed", (e) => { state.entity = e.detail.value; });
-          state.selectorEl = sel;
-          body.append(sel);
-        } else {
-          body.append(el("p", "hint", T.noneHint));
-        }
-
-        if (facadeMates.length) {
-          const lbl = el("label", "apply-row");
-          const cb = document.createElement("input");
-          cb.type = "checkbox";
-          cb.addEventListener("change", () => { state.applyFacade = cb.checked; });
-          lbl.append(cb, document.createTextNode(
-            facadeMates.length === 1
-              ? T.applyFacadeOne(cover.facade)
-              : T.applyFacade(facadeMates.length, cover.facade)
-          ));
-          body.append(lbl);
-        }
+      if (facadeMates.length) {
+        const lbl = el("label", "apply-row");
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.addEventListener("change", () => { state.applyFacade = cb.checked; });
+        lbl.append(cb, document.createTextNode(
+          facadeMates.length === 1
+            ? T.applyFacadeOne(cover.facade)
+            : T.applyFacade(facadeMates.length, cover.facade)
+        ));
+        body.append(lbl);
       }
       // Switching segment changes the height a lot (the entity picker is tall):
       // re-clamp so the popover never overflows the viewport. No-op before mount.
@@ -1341,7 +1355,7 @@ class CoverExtenderPanel extends HTMLElement {
     };
 
     // ha-selector needs the editor chunk; load it before first entity render.
-    if (!isBehavior) await loadHaForm();
+    await loadHaForm();
     renderBody();
 
     const actions = el("div", "actions");
@@ -1356,7 +1370,7 @@ class CoverExtenderPanel extends HTMLElement {
     const save = el("button", "btn primary", linked || !isBehavior ? T.save : T.link);
     save.addEventListener("click", () => {
       let value;
-      if (isBehavior || state.choice === "none") value = { type: "auto" };
+      if (state.choice === "none") value = { type: "auto" };
       else if (state.choice === "fixed") value = { type: "fixed", value: Math.round(state.fixed) };
       else if (state.entity) value = { type: "entity", value: state.entity };
       else value = { type: "auto" };

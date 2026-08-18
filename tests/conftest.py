@@ -147,6 +147,31 @@ except ImportError:
     helpers_mod.storage = storage
     ha.helpers = helpers_mod
 
+    # homeassistant.components.websocket_api — decorator passthroughs, so the
+    # command handlers import cleanly; the tests only exercise the validators.
+    components = _module("homeassistant.components")
+    ws_mod = _module("homeassistant.components.websocket_api")
+    ws_mod.require_admin = lambda func: func
+    ws_mod.async_response = lambda func: func
+    ws_mod.websocket_command = lambda schema: (lambda func: func)
+
+    class ActiveConnection:  # type-hint placeholder
+        pass
+
+    ws_mod.ActiveConnection = ActiveConnection
+    ws_mod.async_register_command = lambda hass, func: None
+    components.websocket_api = ws_mod
+    ha.components = components
+
+    # homeassistant.loader
+    loader = _module("homeassistant.loader")
+
+    async def _async_get_integration(hass, domain):
+        raise RuntimeError("integration metadata not available in tests")
+
+    loader.async_get_integration = _async_get_integration
+    ha.loader = loader
+
 
 # ── Lightweight fakes shared by the tests ─────────────────────────────────────
 

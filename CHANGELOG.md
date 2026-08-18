@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-08-18
+
+### Added
+- **Per-cover override of automatic modes.** In the matrix, a mode with an `auto_shade` or `solar_gain` behavior now offers the same three choices as any other mode: **Auto** (computed, the default), **Fixed** or **Entity**. Choosing Fixed or Entity overrides the computation for that cover only - the auto switches stay off for it, the stored position is applied, and lock/memory follow the mode's own lock flag instead of being forced. Every other cover linked to the mode keeps the computed position. Overridden cells carry a tooltip in the matrix.
+- Screenshot harness (`docs/screenshot-harness.html`): renders the real panel JS against a faked `hass` and websocket payload, for reproducible README screenshots (light/dark, every tab, popover states) via headless Chromium/Edge.
+- The test suite now covers the panel's server-side validation (`websocket_api.py`, the sole writer of the configuration since 3.0.0): item validators, template flatten/pack round trip, per-cover mode configs (overrides on behavior modes included), the picture host-relative guard, template-value stripping, the deletion guard and the rename cascade. `tests/test_schemas.py` was rewritten for the options-based builder that replaced the subentry one.
+
 ## [3.0.0] - 2026-08-16
 
 ### Breaking

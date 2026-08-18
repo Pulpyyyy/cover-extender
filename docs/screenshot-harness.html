@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>cover-extender harness</title>
+<style>
+  :root {
+    --primary-color: #03a9f4;
+    --accent-color: #ff9800;
+    --error-color: #db4437;
+    --warning-color: #ffa726;
+    --success-color: #43a047;
+    --info-color: #039be5;
+    --ha-card-border-radius: 12px;
+    --mdc-icon-size: 24px;
+  }
+  body[data-theme="light"] {
+    --card-background-color: #ffffff;
+    --ha-card-background: #ffffff;
+    --primary-background-color: #f4f5f7;
+    --secondary-background-color: #f0f2f4;
+    --primary-text-color: #212121;
+    --secondary-text-color: #6f6f6f;
+    --divider-color: rgba(0, 0, 0, .12);
+    --ha-card-border-color: #e6e8ea;
+    --ha-card-box-shadow: 0 2px 10px rgba(0, 0, 0, .08);
+    --disabled-text-color: #bdbdbd;
+    --app-header-background-color: #ffffff;
+    --app-header-text-color: #212121;
+  }
+  body[data-theme="dark"] {
+    --card-background-color: #1d1e21;
+    --ha-card-background: #1d1e21;
+    --primary-background-color: #101114;
+    --secondary-background-color: #2a2c30;
+    --primary-text-color: #e4e4e6;
+    --secondary-text-color: #9d9fa4;
+    --divider-color: rgba(255, 255, 255, .12);
+    --ha-card-border-color: #2a2c30;
+    --ha-card-box-shadow: 0 2px 10px rgba(0, 0, 0, .4);
+    --disabled-text-color: #6f6f6f;
+    --app-header-background-color: #1d1e21;
+    --app-header-text-color: #e4e4e6;
+  }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    background: var(--primary-background-color);
+    color: var(--primary-text-color);
+    font-family: Roboto, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  #stage, cover-extender-panel { display: block; height: 100%; }
+</style>
+</head>
+<body data-theme="light"><script>window.addEventListener('error', e => { if (document.title.startsWith('JSERROR')) return; document.title = 'JSERROR: ' + e.message + ' @ ' + (e.filename||'').split('/').pop() + ':' + e.lineno; });</script>
+<div id="stage"></div>
+<script>
+  // ---- minimal Home Assistant element stubs (same trick as tyre_tracker) ----
+  const MDI_CACHE = {};
+  class HaIcon extends HTMLElement {
+    static get observedAttributes() { return ["icon"]; }
+    connectedCallback() { this.#render(); }
+    attributeChangedCallback() { this.#render(); }
+    set icon(value) { this.setAttribute("icon", value); }
+    get icon() { return this.getAttribute("icon"); }
+    async #render() {
+      if (!this.shadowRoot) {
+        this.attachShadow({ mode: "open" });
+        this.shadowRoot.innerHTML =
+          "<style>:host{display:inline-flex;align-items:center;justify-content:center;" +
+          "width:var(--mdc-icon-size,24px);height:var(--mdc-icon-size,24px);flex-shrink:0}" +
+          "svg{width:100%;height:100%;fill:currentColor;display:block}</style><span></span>";
+      }
+      const name = (this.getAttribute("icon") || "").replace(/^mdi:/, "");
+      if (!name) return;
+      try {
+        MDI_CACHE[name] ??= fetch(
+          "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/" + name + ".svg"
+        ).then((r) => (r.ok ? r.text() : ""));
+        const svg = await MDI_CACHE[name];
+        if ((this.getAttribute("icon") || "").replace(/^mdi:/, "") === name) {
+          this.shadowRoot.querySelector("span").innerHTML = svg;
+        }
+      } catch (e) { /* icon stays empty */ }
+    }
+  }
+  customElements.define("ha-icon", HaIcon);
+
+  // ha-selector: a static look-alike - label above, value in a bordered box.
+  class HaSelector extends HTMLElement {
+    set hass(_) {}
+    set selector(_) {}
+    set required(_) {}
+    set disabled(_) {}
+    set value(v) { this._v = v; this.#paint(); }
+    set label(l) { this._l = l; this.#paint(); }
+    connectedCallback() { this.#paint(); }
+    #paint() {
+      if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+      this.shadowRoot.innerHTML =
+        "<style>:host{display:block}.b{border:1px solid var(--divider-color);border-radius:8px;" +
+        "padding:10px 12px;font-size:14px;background:var(--card-background-color);color:var(--primary-text-color)}" +
+        ".l{display:block;font-size:11px;color:var(--secondary-text-color);margin-bottom:2px}</style>" +
+        `<div class="b"><span class="l">${this._l ?? ""}</span>${this._v ?? "—"}</div>`;
+    }
+  }
+  customElements.define("ha-selector", HaSelector);
+</script>
+<script type="module" src="../custom_components/cover_extender/frontend/cover-extender-admin.js"></script>
+<script type="module">
+  const params = new URLSearchParams(location.search);
+  const LANG = params.get("lang") === "fr" ? "fr" : "en";
+  document.documentElement.lang = LANG;
+  document.body.dataset.theme = params.get("theme") === "dark" ? "dark" : "light";
+
+  // ---- demo configuration, in ws_config_get's exact shape -------------------
+  const FR = LANG === "fr";
+  const facades = [
+    { name: FR ? "Sud" : "South", azimuth: 158 },
+    { name: FR ? "Ouest" : "West", azimuth: 248 },
+    { name: FR ? "Est" : "East", azimuth: 68 },
+    { name: FR ? "Nord" : "North", azimuth: 338 },
+  ];
+  const M = {
+    day:    FR ? "Jour" : "Day",
+    night:  FR ? "Nuit" : "Night",
+    shade:  FR ? "Ombre" : "Shade",
+    helio:  FR ? "Héliotropie" : "Heliotropy",
+    away:   FR ? "Absent" : "Away",
+    custom: FR ? "Perso" : "Custom",
+  };
+  const modes = [
+    { name: M.day,    icon: "mdi:white-balance-sunny", color: "#FFB300", lock: false, behavior: null, hidden: false },
+    { name: M.night,  icon: "mdi:weather-night",       color: "#3F51B5", lock: false, behavior: null, hidden: false },
+    { name: M.shade,  icon: "mdi:blinds",              color: "#FF7043", lock: false, behavior: "auto_shade", hidden: false },
+    { name: M.helio,  icon: "mdi:sun-thermometer",     color: "#E91E63", lock: false, behavior: "solar_gain", hidden: false },
+    { name: M.away,   icon: "mdi:lock",                color: "#F44336", lock: true,  behavior: null, hidden: false },
+    { name: M.custom, icon: "mdi:tune-variant",        color: "#4CAF50", lock: false, behavior: null, hidden: true },
+  ];
+  const TPL = FR ? "Grande baie" : "Large bay";
+  const templates = [{
+    name: TPL, angle_left: 60, angle_right: 70,
+    shade_distance: 1.2, shade_max_height: 2.4, shade_min_height: 0.0,
+    shade_degrees: 90, shade_min_elevation: 5, shade_max_elevation: 90,
+    shade_minimum_position: 15, shade_default_position: 100,
+    shade_change_threshold: 5, shade_time_out: 2,
+    solar_gain_position_solar: 100, solar_gain_position_cold: 0,
+  }];
+
+  // Mode cfg shorthands: f(n) fixed, ent(id) entity-driven, A computed/none.
+  const f = (n) => ({ type: "fixed", value: n });
+  const ent = (id) => ({ type: "entity", value: id });
+  const A = { type: "auto" };
+
+  const cover = (id, facade, extra) => ({
+    entity_id: "cover." + id,
+    entity_registry_id: "reg_" + id,
+    facade, exclusion: [], modes: {}, ...extra,
+  });
+  const covers = [
+    cover("living_room", facades[0].name, {
+      template: TPL, shade_enable: true, solar_gain_enable: true,
+      modes: { [M.day]: f(100), [M.night]: f(0), [M.shade]: A, [M.helio]: A, [M.away]: f(0) },
+    }),
+    cover("dining_room", facades[0].name, {
+      template: TPL, shade_enable: true, solar_gain_enable: true,
+      modes: { [M.day]: f(100), [M.night]: f(0), [M.shade]: A, [M.helio]: A, [M.away]: f(0) },
+    }),
+    cover("office", facades[1].name, {
+      shade_enable: true, angle_left: 80, angle_right: 45,
+      // The override showcased in the README: Shade computes everywhere but
+      // holds a fixed 30 % on this one cover.
+      modes: { [M.day]: f(100), [M.night]: f(20), [M.shade]: f(30), [M.away]: f(0) },
+    }),
+    cover("kitchen", facades[1].name, {
+      shade_enable: true,
+      modes: { [M.day]: f(100), [M.night]: f(0), [M.shade]: A, [M.custom]: ent("input_number.kitchen_pos") },
+    }),
+    cover("bedroom", facades[2].name, {
+      modes: { [M.day]: f(85), [M.night]: f(0), [M.away]: f(0) },
+    }),
+    cover("bathroom", facades[3].name, {
+      modes: { [M.day]: f(100), [M.night]: f(0) },
+    }),
+  ];
+
+  const BEHAVIOR_FIELDS = {
+    angle_left:                { default: 85,   min: 0, max: 90,  step: 1,    unit: "°", type: "number" },
+    angle_right:               { default: 85,   min: 0, max: 90,  step: 1,    unit: "°", type: "number" },
+    shade_distance:            { default: 0.4,  min: 0, max: 3,   step: 0.1,  unit: "m", type: "number" },
+    shade_max_height:          { default: 1.8,  min: 0, max: 3,   step: 0.1,  unit: "m", type: "number" },
+    shade_min_height:          { default: 0.0,  min: 0, max: 3,   step: 0.1,  unit: "m", type: "number" },
+    shade_degrees:             { default: 90,   min: 0, max: 180, step: 1,    unit: "°", type: "number" },
+    shade_min_elevation:       { default: 5,    min: 0, max: 90,  step: 1,    unit: "°", type: "number" },
+    shade_max_elevation:       { default: 90,   min: 0, max: 90,  step: 1,    unit: "°", type: "number" },
+    shade_minimum_position:    { default: 15,   min: 0, max: 100, step: 1,    unit: "%", type: "number" },
+    shade_default_position:    { default: 100,  min: 0, max: 100, step: 1,    unit: "%", type: "number" },
+    shade_change_threshold:    { default: 5,    min: 0, max: 50,  step: 1,    unit: "%", type: "number" },
+    shade_time_out:            { default: 2,    min: 0, max: 60,  step: 1,    unit: "min", type: "number" },
+    solar_gain_position_solar: { default: 100,  min: 0, max: 100, step: 1,    unit: "%", type: "number" },
+    solar_gain_position_cold:  { default: 0,    min: 0, max: 100, step: 1,    unit: "%", type: "number" },
+    shade_enable:              { default: false, min: null, max: null, step: null, unit: "", type: "boolean" },
+    solar_gain_enable:         { default: false, min: null, max: null, step: null, unit: "", type: "boolean" },
+  };
+  const SECTIONS = [
+    { key: "geometry",   fields: ["shade_distance", "shade_max_height", "shade_min_height"] },
+    { key: "detection",  fields: ["angle_left", "angle_right", "shade_degrees", "shade_min_elevation", "shade_max_elevation"] },
+    { key: "shading",    fields: ["shade_enable", "shade_minimum_position", "shade_default_position", "shade_change_threshold", "shade_time_out"] },
+    { key: "solar_gain", fields: ["solar_gain_enable", "solar_gain_position_solar", "solar_gain_position_cold"] },
+  ];
+  const TEMPLATE_SECTIONS = SECTIONS.map((s) => ({
+    key: s.key,
+    fields: s.fields.filter((n) => n !== "shade_enable" && n !== "solar_gain_enable"),
+  }));
+
+  const PANEL_CFG = {
+    version: "3.1.0",
+    facades, modes, templates, covers,
+    global: {
+      command_interval: 150,
+      show_sun_facing: true, show_auto_shade: true, show_solar_gain: false,
+      sg_temperature_entity: "sensor.living_room_temperature",
+      sg_temperature_threshold: 19.5,
+      sg_weather_entity: "weather.home",
+      sg_good_conditions: ["sunny", "partlycloudy"],
+    },
+    behavior: { sections: SECTIONS, template_sections: TEMPLATE_SECTIONS, fields: BEHAVIOR_FIELDS },
+    weather_conditions: [
+      "clear-night", "cloudy", "exceptional", "fog", "hail", "lightning",
+      "lightning-rainy", "partlycloudy", "pouring", "rainy", "snowy",
+      "snowy-rainy", "sunny", "windy", "windy-variant",
+    ],
+    defaults: { command_interval: 150 },
+  };
+
+  // ---- hass fake ------------------------------------------------------------
+  const NAMES = FR
+    ? { living_room: "Volet Salon", dining_room: "Volet SAM", office: "Volet Bureau",
+        kitchen: "Baie Cuisine", bedroom: "Volet Chambre", bathroom: "Volet SDB" }
+    : { living_room: "Living room", dining_room: "Dining room", office: "Office",
+        kitchen: "Kitchen bay", bedroom: "Bedroom", bathroom: "Bathroom" };
+  const states = {};
+  const entities = {};
+  for (const c of covers) {
+    const id = c.entity_id.split(".")[1];
+    states[c.entity_id] = {
+      entity_id: c.entity_id, state: "open",
+      attributes: { friendly_name: NAMES[id] || id, current_position: 100 },
+    };
+    entities["select.mode_" + id] = { platform: "cover_extender" };
+    entities["switch." + id + "_lock"] = { platform: "cover_extender" };
+    entities["switch." + id + "_auto_shade"] = { platform: "cover_extender" };
+    entities["switch." + id + "_auto_solar_gain"] = { platform: "cover_extender" };
+    entities["binary_sensor." + id + "_sun_facing"] = { platform: "cover_extender" };
+    entities["binary_sensor." + id + "_auto_shade"] = { platform: "cover_extender" };
+  }
+  entities["select.cover_extender_modes"] = { platform: "cover_extender" };
+
+  const hass = {
+    language: LANG,
+    locale: { language: LANG },
+    states, entities,
+    connection: {
+      sendMessagePromise: async (msg) =>
+        msg.type === "cover_extender/config/get" ? PANEL_CFG : { saved: true },
+    },
+  };
+
+  // ---- mount ----------------------------------------------------------------
+  const stage = document.getElementById("stage");
+  const panel = document.createElement("cover-extender-panel");
+  panel.narrow = false;
+  stage.appendChild(panel);
+  panel.hass = hass;
+
+  // Wait until the async config/get render put content into the shadow tree.
+  const until = (probe, then, tries = 100) => {
+    const found = probe();
+    if (found) then(found);
+    else if (tries > 0) setTimeout(() => until(probe, then, tries - 1), 50);
+    else document.title = "JSERROR: harness probe timed out";
+  };
+
+  const tab = params.get("tab") || "matrice";
+  until(() => panel.shadowRoot?.querySelector(".tabs"), () => {
+    if (tab !== "matrice") {
+      const idx = { volets: 0, matrice: 1, modes: 2, reglages: 3 }[tab] ?? 1;
+      panel.shadowRoot.querySelectorAll(".tabs .tab")[idx]?.click();
+    }
+    // ?pop=override : open the matrix popover on the overridden Shade cell and
+    // land on the "Fixed" segment - the README shot for the override feature.
+    // ?pop=auto : open it on a computed Shade cell (default "Auto" choice).
+    const pop = params.get("pop");
+    if (!pop) return;
+    const coverIdx = pop === "override" ? 2 : 0;   // office : living_room
+    const modeIdx = 2;                             // the Shade column
+    until(() => {
+      const rows = panel.shadowRoot.querySelectorAll("tbody tr");
+      const row = [...rows].find((r) =>
+        r.querySelector("th")?.textContent.includes(NAMES[covers[coverIdx].entity_id.split(".")[1]]));
+      return row?.querySelectorAll("td .cv")[modeIdx];
+    }, (cell) => {
+      cell.click();
+      until(() => panel.shadowRoot.querySelector(".pop .seg"), (seg) => {
+        if (pop === "override") seg.children[1]?.click(); // Fixed
+      });
+    });
+  });
+</script>
+</body>
+</html>
