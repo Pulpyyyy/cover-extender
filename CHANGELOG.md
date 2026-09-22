@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] - 2026-09-22
+
+### Fixed
+- **No more `Referenced entities switch.<cover>_auto_shade are missing` warnings at every mode change.** `_apply_mode_core` called `switch.turn_off` on the `auto_shade` and `auto_solar_gain` helpers of every cover, including those that do not enable shade or solar gain and therefore have no such switch (`resolve_helper_entity` falls back to a conventional entity_id when the helper is not registered). Each helper is now checked against the state machine first, as the lock path already did: a missing helper that should stay off is skipped silently, and one that should be turned on logs an explicit warning naming the cover and the mode. The log stops being flooded, so a genuine switch failure stays visible.
+
 ## [3.1.0] - 2026-08-18
 
 ### Added

@@ -465,23 +465,33 @@ class CoverExtenderCoordinator:
             # 2+3+3b. Apply lock, auto_shade, and auto_solar_gain in parallel.
             # Behaviors auto_shade and solar_gain are mutually exclusive.
             solar_gain_id = resolve_helper_entity(self.hass, entity_id, "auto_solar_gain")
-            switch_results = await asyncio.gather(
-                self.hass.services.async_call(
-                    "switch", "turn_on" if to_locked else "turn_off",
-                    {"entity_id": lock_id},
-                ),
-                self.hass.services.async_call(
-                    "switch", "turn_on" if to_behavior == "auto_shade" else "turn_off",
-                    {"entity_id": shading_id},
-                ),
-                self.hass.services.async_call(
-                    "switch", "turn_on" if to_behavior == "solar_gain" else "turn_off",
-                    {"entity_id": solar_gain_id},
-                ),
-                # One failed switch call must not abort the mode change mid-way
-                # (position would never be applied) — log and continue instead.
-                return_exceptions=True,
-            )
+            switch_calls = []
+            for helper_id, turn_on in (
+                (lock_id, to_locked),
+                (shading_id, to_behavior == "auto_shade"),
+                (solar_gain_id, to_behavior == "solar_gain"),
+            ):
+                # auto_shade / auto_solar_gain switches only exist for covers that
+                # enable them, and resolve_helper_entity still returns a conventional
+                # entity_id for the others — calling a service on one of those would
+                # only log "Referenced entities ... are missing" at every mode change.
+                if self.hass.states.get(helper_id) is None:
+                    if turn_on:
+                        _LOGGER.warning(
+                            "_apply_mode_core '%s' → %s: helper %s does not exist, "
+                            "not applied",
+                            mode, entity_id, helper_id,
+                        )
+                    continue
+                switch_calls.append(
+                    self.hass.services.async_call(
+                        "switch", "turn_on" if turn_on else "turn_off",
+                        {"entity_id": helper_id},
+                    )
+                )
+            # One failed switch call must not abort the mode change mid-way
+            # (position would never be applied) — log and continue instead.
+            switch_results = await asyncio.gather(*switch_calls, return_exceptions=True)
             for res in switch_results:
                 if isinstance(res, Exception):
                     _LOGGER.warning(
