@@ -2,20 +2,147 @@
 
 🇬🇧 [English version](README.md) (référence complète : entités, actions, événements)
 
-Cover Extender est une intégration Home Assistant qui ajoute des **modes**, un **verrou**, une **mémoire de position** et de l'**automatisation solaire** (ombrage et héliotropie) aux volets que vous avez déjà. Elle ne remplace jamais vos entités `cover.*` : elle travaille autour d'elles, et tout se configure depuis son propre panneau d'administration.
+Cover Extender est une intégration Home Assistant qui ajoute des [modes](#modes), un [verrou avec mémoire de position](#verrou-et-mémoire), des [exclusions](#exclusions) et de l'automatisation solaire ([ombrage](#ombrage-automatique), [héliotropie](#héliotropie)) aux volets que vous avez déjà, le tout configuré depuis un panneau d'administration avec une matrice modes × volets, en français ou en anglais.
 
 [![Ouvrir ce dépôt dans HACS sur votre Home Assistant.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Pulpyyyy&repository=cover-extender&category=integration)
 
-![Onglet Matrice](docs/panel-matrix.png)
+![Onglet Matrice](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-matrix.png)
 
-**Ce que vous obtenez :**
+---
 
-- **Des modes** comme *Jour*, *Nuit*, *Ombre* ou *Absence*, chacun avec sa position pour chaque volet, changés depuis un sélecteur par volet ou depuis vos automatisations.
-- **Un verrou** : tant qu'un mode verrouillant est actif, les positions demandées via Cover Extender sont mémorisées au lieu de bouger le volet, puis appliquées au déverrouillage.
-- **Des exclusions** : une fenêtre ouverte (ou n'importe quelle entité à `on` de votre choix) bloque tout mouvement que Cover Extender ferait sur ce volet.
-- **L'ombrage automatique** : le volet suit le soleil pour que la lumière directe n'entre pas plus loin dans la pièce que ce que vous avez décidé.
-- **L'héliotropie** : par temps froid, ouvrir quand le soleil fait face à la fenêtre, fermer sinon.
-- **Un panneau d'administration** avec une matrice modes × volets, des gabarits partagés par les fenêtres identiques, un rechargement à chaud à chaque enregistrement, en français et en anglais.
+## Philosophie
+
+Cover Extender repose sur une idée simple : **l'automatisation doit renforcer le contrôle, pas le remplacer**.
+
+### 🎯 L'intention d'abord, la mécanique ensuite
+
+Les automatisations classiques lient souvent **des conditions directement à des actions** :
+
+> *Si l'élévation du soleil > X → mettre le volet à Y*
+
+Efficace, mais cette approche devient vite difficile à comprendre, à contourner ou à déboguer.
+
+Cover Extender prend un autre chemin :
+
+- Vous exprimez une **intention** avec des **modes**
+- Chaque mode définit un *contexte* (verrou, comportement, stratégie)
+- La logique d'automatisation ne tourne **que lorsqu'elle est explicitement autorisée**
+
+Un mode répond à la question :
+
+> *« Que doit faire ce volet en ce moment ? »*
+
+Et non :
+
+> *« Quelle automatisation s'est déclenchée ? »*
+
+### 🧩 Non destructif par conception
+
+Cover Extender suit une règle stricte :
+
+> **Il ne remplace, ne clone et ne s'approprie jamais vos volets.**
+
+Plutôt que de cacher votre matériel derrière une logique opaque, il **étend ce qui existe déjà** : vos entités `cover.*` restent la seule source de vérité, et l'intégration ajoute de l'intelligence *autour* d'elles, jamais *par-dessus*. Il :
+
+- ajoute des attributs
+- crée des entités d'assistance (sélecteurs, interrupteurs, capteurs)
+- orchestre les commandes à travers une couche maîtrisée
+
+À tout moment :
+
+- Vous pouvez contourner Cover Extender et piloter le volet à la main
+- Un redémarrage ou un rechargement ne corrompt jamais l'état natif du volet
+- Supprimer l'intégration rend un système propre
+
+Votre matériel reste autonome. Cover Extender est une intelligence optionnelle.
+
+### 🔐 La sécurité avant la surprise
+
+Un mouvement physique non voulu est l'une des frustrations les plus courantes avec les automatisations de volets.
+
+Cover Extender en fait une **préoccupation de premier plan** :
+
+- Le **verrou** retient les commandes passées par Cover Extender et les mémorise à la place
+- Les **entités d'exclusion** (par ex. une fenêtre ouverte) bloquent tout mouvement que Cover Extender ferait
+- Rien ne se rattrape plus tard que vous n'ayez demandé
+
+Si un volet ne bouge pas, ce n'est jamais un mystère :
+
+> *Il est soit verrouillé, soit exclu, soit en attente en mémoire.*
+
+### 🧠 La mémoire plutôt que les suppositions
+
+Quand l'automatisation est en pause, beaucoup de systèmes abandonnent, tout simplement.
+
+Pas Cover Extender.
+
+- Chaque passage à un mode verrouillé mémorise la position actuelle
+- Les mouvements bloqués sont mémorisés volontairement
+- Le déverrouillage n'applique la mémoire que lorsque le mouvement est sûr
+
+Cela crée une **continuité d'intention** :
+
+> *« Je voulais cette position : applique-la dès que possible. »*
+
+Et non :
+
+> *« L'automatisation a échoué, état perdu. »*
+
+### 🌞 Le soleil comme stratégie, pas comme réflexe
+
+La logique solaire de Cover Extender est **délibérée, pas réactive**.
+
+- Les données solaires sont toujours calculées
+- Mais les actions n'ont lieu que lorsque :
+  - l'interrupteur d'automatisation correspondant est allumé
+  - en général activé par un mode
+
+Aucun processus en arrière-plan ne lutte en permanence contre l'utilisateur. L'automatisation solaire est :
+
+- délimitée
+- réversible
+- visible
+
+C'est vous qui décidez *quand* le soleil compte.
+
+### 🔍 L'explicite plutôt que l'astucieux
+
+Cover Extender évite volontairement :
+
+- les hypothèses cachées
+- les enchaînements de comportements implicites
+- les actions « intelligentes » sans déclencheur clair
+
+Il privilégie plutôt :
+
+- des modes explicites
+- des interrupteurs visibles
+- des changements d'état déterministes
+- des événements Home Assistant pour l'orchestration externe
+
+Tout ce qu'il fait est :
+
+- observable
+- débogable
+- réversible
+
+### 🤝 Un bon citoyen Home Assistant
+
+Cover Extender respecte l'écosystème de Home Assistant :
+
+- Configuration entièrement dans l'interface, via un panneau d'administration intégré
+- Rechargement à chaud, sans redémarrage
+- Entités, services et événements natifs
+- S'intègre aux tableaux de bord et aux automatisations
+- Pas de cloud, pas de bidouille par interrogation périodique
+
+Il se veut :
+
+> *« Ce que Home Assistant aurait pu livrer, si les volets connaissaient les modes. »*
+
+### ✅ En une phrase
+
+**Cover Extender n'automatise pas vos volets à votre place : il vous donne les outils pour exprimer une intention, en toute sécurité, de façon prévisible, et selon vos propres règles.**
 
 ---
 
@@ -56,14 +183,12 @@ Ou **Paramètres → Appareils et services → Ajouter une intégration**, puis 
 
 Ce parcours configure un volet avec deux modes, *Jour* (ouvert) et *Nuit* (fermé). Comptez cinq minutes.
 
-1. **Ouvrez le panneau.** Cliquez sur **Cover Extender** dans la barre latérale, ou sur le bouton de la page de l'intégration, ou allez sur `http://<votre-ha>:8123/cover-extender`. Le panneau est réservé aux administrateurs.
+1. **Ouvrez le panneau.** Cliquez sur **Cover Extender** dans la barre latérale, ou sur le bouton de la page de l'intégration, ou allez sur `http://<votre-ha>:8123/cover-extender`.
 2. **Créez une façade.** Dans **Réglages → Façades**, cliquez sur **Ajouter une façade**. Nommez-la (par ex. *Sud*) et réglez son **azimut**, la direction vers laquelle regardent les fenêtres : 0° = nord, 90° = est, 180° = sud, 270° = ouest. Une application boussole posée à plat contre la fenêtre, en regardant dehors, donne la valeur.
 3. **Créez deux modes.** Dans **Modes**, cliquez deux fois sur **Ajouter un mode** : *Jour* et *Nuit*. Laissez **Comportement** sur *Aucun* pour les deux. Cochez **Verrouiller les volets** sur *Nuit* si vous voulez que les commandes passées par Cover Extender attendent le matin.
 4. **Ajoutez votre volet.** Dans **Volets**, cliquez sur **Ajouter un volet**, choisissez l'entité `cover.*` et la façade *Sud*, puis **Enregistrer**.
 5. **Réglez les positions.** Dans **Matrice**, cliquez sur la cellule vide *Jour* de votre volet : cela lie le mode. Choisissez **Fixe** et 100 %. Faites de même pour *Nuit* à 0 %, puis **Enregistrer**. Les positions suivent la convention de Home Assistant : **0 = fermé, 100 = ouvert**.
 6. **Essayez.** Une nouvelle entité `select.mode_<votre_volet>` est apparue. Passez-la de *Jour* à *Nuit* : le volet se ferme.
-
-Chaque enregistrement recharge l'intégration à chaud : jamais de redémarrage.
 
 ### Ensuite
 

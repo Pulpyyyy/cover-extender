@@ -6,25 +6,17 @@
 
 🇫🇷 [Lire en français](https://github.com/Pulpyyyy/cover-extender/blob/main/README.fr.md)
 
-Cover Extender is a Home Assistant integration that adds **modes**, a **lock**, a **position memory** and **sun automation** (shading and solar gain) to the covers you already have. It never replaces your `cover.*` entities: it works around them, and everything is configured from its own admin panel.
+Cover Extender is a Home Assistant integration that adds [modes](#modes), a [lock with position memory](#lock-and-memory), [exclusions](#exclusions) and sun automation ([shading](#autonomous-shading), [solar gain](#solar-gain)) to the covers you already have, all configured from an [admin panel](#the-admin-panel) with a modes × covers matrix, in English or French.
 
 [![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Pulpyyyy&repository=cover-extender&category=integration)
 
 ![Matrix tab](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-matrix.png)
 
-**What you get:**
-
-- **Modes** such as *Day*, *Night*, *Shade* or *Away*, each with its own position for each cover, switched from one selector per cover or from your automations.
-- **Lock**: while a locking mode is on, positions requested through Cover Extender are memorized instead of moving the cover, and applied when you unlock.
-- **Exclusions**: an open window (or any `on` entity you pick) blocks every move Cover Extender would make on that cover.
-- **Autonomous shading**: the cover follows the sun so that direct sunlight does not reach further into the room than you decide.
-- **Solar gain**: in cold weather, open when the sun faces the window, close otherwise.
-- **An admin panel** with a modes × covers matrix, templates shared by similar windows, hot reload on every save, and English and French UI.
-
 ---
 
 ## Contents
 
+- [Design philosophy](#design-philosophy)
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [Key concepts](#key-concepts)
@@ -33,8 +25,143 @@ Cover Extender is a Home Assistant integration that adds **modes**, a **lock**, 
 - [How it works](#how-it-works)
 - [FAQ and troubleshooting](#faq-and-troubleshooting)
 - [Uninstall](#uninstall)
-- [Design philosophy](#design-philosophy)
 - [Support and contributing](#support-and-contributing)
+
+---
+
+## Design philosophy
+
+Cover Extender is built on a simple idea: **automation should enhance control, not replace it**.
+
+### 🎯 Intention first, mechanics second
+
+Traditional automations often bind **conditions directly to actions**:
+
+> *If sun elevation > X → move cover to Y*
+
+While effective, this approach quickly becomes hard to reason about, override, or debug.
+
+Cover Extender takes a different path:
+
+- You express **intent** using **modes**
+- Each mode defines *context* (lock, behavior, strategy)
+- Automation logic only runs **when explicitly allowed**
+
+A mode answers the question:
+
+> *"What is this cover supposed to do right now?"*
+
+Not:
+
+> *"Which automation happens to fire?"*
+
+### 🧩 Non-destructive by design
+
+Cover Extender follows a strict rule:
+
+> **It never replaces, clones, or takes ownership of your covers.**
+
+Rather than abstracting your hardware behind opaque logic, it **extends what already exists**: your `cover.*` entities remain the single source of truth, and the integration adds intelligence *around* them, never *over* them. It:
+
+- injects attributes
+- creates helper entities (selects, switches, sensors)
+- orchestrates commands through a controlled layer
+
+At any moment:
+
+- You can bypass Cover Extender and control the cover manually
+- A reboot or reload never corrupts native cover state
+- Removing the integration restores a clean system
+
+Your hardware remains autonomous. Cover Extender is optional intelligence.
+
+### 🔐 Safety over surprise
+
+Unintended physical movement is one of the most common frustrations with cover automations.
+
+Cover Extender treats this as a **first-class concern**:
+
+- **Lock** holds back the commands sent through Cover Extender and remembers them instead
+- **Exclusion entities** (e.g. open windows) block every move Cover Extender would make
+- Nothing catches up later that you did not ask for
+
+If a cover does not move, it is never a mystery:
+
+> *It is either locked, excluded, or waiting in memory.*
+
+### 🧠 Memory instead of guesswork
+
+When automation is paused, many systems simply… give up.
+
+Cover Extender does not.
+
+- Every change to a locked mode saves the current position
+- Blocked movements are intentionally memorized
+- Unlocking applies memory only when movement is safe
+
+This creates **continuity of intent**:
+
+> *"I wanted this position: apply it when possible."*
+
+Not:
+
+> *"Automation failed, state lost."*
+
+### 🌞 Sun automation as a strategy, not a reflex
+
+Solar logic in Cover Extender is **deliberate, not reactive**.
+
+- Sun data is always computed
+- But actions only occur when:
+  - the corresponding automation switch is on
+  - usually enabled by a mode
+
+There is no background process constantly fighting the user. Sun automation is:
+
+- scoped
+- reversible
+- visible
+
+You decide *when* the sun matters.
+
+### 🔍 Explicit is better than clever
+
+Cover Extender intentionally avoids:
+
+- hidden assumptions
+- implicit behavior chains
+- "smart" actions with no clear trigger
+
+Instead, it favors:
+
+- explicit modes
+- visible switches
+- deterministic state changes
+- Home Assistant events for external orchestration
+
+Everything it does is:
+
+- observable
+- debuggable
+- reversible
+
+### 🤝 A good Home Assistant citizen
+
+Cover Extender respects Home Assistant's ecosystem:
+
+- Full UI configuration via an embedded admin panel
+- Hot reload, no restart required
+- Native entities, services, and events
+- Plays well with dashboards and automations
+- No cloud, no polling hacks
+
+It aims to feel like:
+
+> *"Something Home Assistant could have shipped, if covers were mode-aware."*
+
+### ✅ In one sentence
+
+**Cover Extender does not automate covers for you: it gives you the tools to express intent, safely, predictably, and on your own terms.**
 
 ---
 
@@ -75,14 +202,12 @@ Or go to **Settings → Devices & services → Add integration** and search for 
 
 This walk-through sets up one cover with two modes, *Day* (open) and *Night* (closed). It takes about five minutes.
 
-1. **Open the panel.** Click **Cover Extender** in the sidebar, or the button on the integration page, or go to `http://<your-ha>:8123/cover-extender`. The panel is for administrators; each user can show or hide the sidebar entry from Home Assistant's sidebar editor.
+1. **Open the panel.** Click **Cover Extender** in the sidebar, or the button on the integration page, or go to `http://<your-ha>:8123/cover-extender`.
 2. **Create a facade.** In **Settings → Facades**, click **Add a facade**. Name it (e.g. *South*) and set its **azimuth**, the direction the windows face: 0° = north, 90° = east, 180° = south, 270° = west. A compass app held flat against the window, looking out, gives you the value.
 3. **Create two modes.** In **Modes**, click **Add a mode** twice: *Day* and *Night*. Leave **Behavior** on *None* for both. Tick **Lock the covers** on *Night* if you want remote commands made through Cover Extender to wait until morning.
 4. **Add your cover.** In **Covers**, click **Add a cover**, pick the `cover.*` entity and the *South* facade, then **Save**.
 5. **Set the positions.** In **Matrix**, click the empty *Day* cell on your cover: it links the mode. Choose **Fixed** and 100 %. Do the same for *Night* at 0 %, then **Save**. Positions follow Home Assistant's convention: **0 = closed, 100 = open**.
 6. **Try it.** A new entity `select.mode_<your_cover>` appeared. Change it from *Day* to *Night*: the cover closes.
-
-Every save hot-reloads the integration: no restart, ever.
 
 ### Next steps
 
@@ -251,7 +376,7 @@ Covers that are not linked to the chosen mode are left alone.
 
 ## The admin panel
 
-All configuration lives in the panel at `/cover-extender`. Every value is checked by the server before it is saved, and each save reloads the integration. The panel follows your Home Assistant theme ([dark version](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-matrix-dark.png)) and each administrator reads it in their own language (English and French).
+All configuration lives in the panel at `/cover-extender`. Every value is checked by the server before it is saved. The panel follows your Home Assistant theme ([dark version](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-matrix-dark.png)) and each administrator reads it in their own language (English and French).
 
 | Tab | What it edits |
 |---|---|
@@ -432,8 +557,6 @@ triggers:
                                      └───────────────────────────┘
 ```
 
-On a *Shading* or *Solar gain* mode, a cover that has its own Fixed or Entity position for that mode skips the behavior: its automatic switches stay off and the flow above runs as for a plain mode.
-
 ### Turning the lock off by hand
 
 ```
@@ -491,19 +614,6 @@ Each decision (lock, exclusion, threshold, time-out) is logged with its reason.
 
 1. **Settings → Devices & services → Cover Extender → ⋮ → Delete.** The helper entities, the added attributes and the stored memory are removed. Your covers are untouched.
 2. Remove the integration from HACS (or delete `custom_components/cover_extender/`), then restart Home Assistant.
-
----
-
-## Design philosophy
-
-Cover Extender is built on one idea: **automation should enhance control, not replace it.**
-
-- **Intention first.** You express *what a cover should be doing* with a mode, instead of chaining conditions to movements. A mode answers "what is this cover supposed to do right now?", not "which automation happened to fire?".
-- **Non-destructive.** Your `cover.*` entities stay the single source of truth. Cover Extender adds attributes and helper entities around them, never a replacement cover. You can always bypass it, and removing it leaves a clean system.
-- **Safety over surprise.** Unwanted movement is the most common frustration with cover automations. The lock memorizes instead of moving, exclusions block moves, and when a cover does not move, it is never a mystery: it is locked, excluded, or waiting for its turn.
-- **Memory instead of guesswork.** A paused automation does not lose what you asked for: *"I wanted this position, apply it when possible."*
-- **The sun as a strategy, not a reflex.** Sun data is always computed, but shading and solar gain only act when a mode, or you, turned them on.
-- **Explicit over clever.** Visible switches, deterministic changes, events on the Home Assistant bus: everything it does can be observed and reversed.
 
 ---
 
