@@ -1,0 +1,15 @@
+name: Feature request
+description: Suggest an idea. Français accepté.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What would you like to do?
+      description: Describe the situation and the need rather than the solution. Vous pouvez écrire en français.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How do you picture it?

@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation / Documentation en français
+    url: https://github.com/Pulpyyyy/cover-extender/blob/main/README.fr.md
+    about: Quick start, concepts and FAQ in French.
