@@ -4,11 +4,13 @@
 [![Release](https://img.shields.io/github/v/release/Pulpyyyy/cover-extender)](https://github.com/Pulpyyyy/cover-extender/releases)
 ![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2026.1%2B-blue)
 
-🇫🇷 [Lire en français](README.fr.md)
+🇫🇷 [Lire en français](https://github.com/Pulpyyyy/cover-extender/blob/main/README.fr.md)
 
 Cover Extender is a Home Assistant integration that adds **modes**, a **lock**, a **position memory** and **sun automation** (shading and solar gain) to the covers you already have. It never replaces your `cover.*` entities: it works around them, and everything is configured from its own admin panel.
 
-![Matrix tab](docs/panel-matrix.png)
+[![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Pulpyyyy&repository=cover-extender&category=integration)
+
+![Matrix tab](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-matrix.png)
 
 **What you get:**
 
@@ -147,9 +149,11 @@ In the cover editor, **Exclusion entities** lists entities that block the cover 
 
 While an exclusion is on:
 
-- a mode change or a Cover Extender action stores its target position in memory instead of moving the cover (applied at the next unlock, or with [`apply_memory`](#cover_extenderapply_memory));
-- shading and solar gain skip the cover, and resume at the next sun, temperature or weather update once the exclusion is off;
+- a mode change or a Cover Extender action does not move the cover: its position **waits, and is applied as soon as the last exclusion turns off**. Close the window and the *Night* mode you chose meanwhile closes the cover;
+- shading and solar gain skip the cover, and catch up as soon as the last exclusion turns off;
 - turning the lock off does not apply the memory.
+
+Only the latest request waits: a new mode replaces it. If the cover got locked meanwhile, an action's position stays in memory until the unlock, as any command made while locked. A pending position does not survive a restart of Home Assistant.
 
 ### Facades and orientation
 
@@ -247,7 +251,7 @@ Covers that are not linked to the chosen mode are left alone.
 
 ## The admin panel
 
-All configuration lives in the panel at `/cover-extender`. Every value is checked by the server before it is saved, and each save reloads the integration. The panel follows your Home Assistant theme ([dark version](docs/panel-matrix-dark.png)) and each administrator reads it in their own language (English and French).
+All configuration lives in the panel at `/cover-extender`. Every value is checked by the server before it is saved, and each save reloads the integration. The panel follows your Home Assistant theme ([dark version](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-matrix-dark.png)) and each administrator reads it in their own language (English and French).
 
 | Tab | What it edits |
 |---|---|
@@ -262,15 +266,15 @@ Each cell is the position of one mode on one cover. Click a cell to edit it, or 
 
 On a *Shading* or *Solar gain* mode, cells show `auto`. The same popover can **override the computation for a single cover** with a Fixed or Entity position. Below, *Shade* computes everywhere except on *Office*, pinned at 30 %:
 
-![Overriding an automatic mode for one cover](docs/matrix-override.png)
+![Overriding an automatic mode for one cover](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/matrix-override.png)
 
 ### The other tabs
 
 | | |
 |---|---|
-| ![Covers tab](docs/panel-covers.png) | ![Modes tab](docs/panel-modes.png) |
+| ![Covers tab](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-covers.png) | ![Modes tab](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-modes.png) |
 
-![Settings tab](docs/panel-settings.png)
+![Settings tab](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-settings.png)
 
 ---
 
@@ -423,8 +427,9 @@ triggers:
                    ▼                          ▼
         ┌────────────────────────┐   ┌───────────────────────────┐
         │ Send cover command     │   │ Do NOT move the cover     │
-        │ (throttled queue)      │   │ Store target in memory    │
-        └────────────────────────┘   └───────────────────────────┘
+        │ (throttled queue)      │   │ Apply it once the last    │
+        └────────────────────────┘   │ exclusion turns off       │
+                                     └───────────────────────────┘
 ```
 
 On a *Shading* or *Solar gain* mode, a cover that has its own Fixed or Entity position for that mode skips the behavior: its automatic switches stay off and the flow above runs as for a plain mode.
@@ -495,7 +500,7 @@ Cover Extender is built on one idea: **automation should enhance control, not re
 
 - **Intention first.** You express *what a cover should be doing* with a mode, instead of chaining conditions to movements. A mode answers "what is this cover supposed to do right now?", not "which automation happened to fire?".
 - **Non-destructive.** Your `cover.*` entities stay the single source of truth. Cover Extender adds attributes and helper entities around them, never a replacement cover. You can always bypass it, and removing it leaves a clean system.
-- **Safety over surprise.** Unwanted movement is the most common frustration with cover automations. The lock memorizes instead of moving, exclusions block moves, and when a cover does not move, it is never a mystery: it is locked, excluded, or waiting in memory.
+- **Safety over surprise.** Unwanted movement is the most common frustration with cover automations. The lock memorizes instead of moving, exclusions block moves, and when a cover does not move, it is never a mystery: it is locked, excluded, or waiting for its turn.
 - **Memory instead of guesswork.** A paused automation does not lose what you asked for: *"I wanted this position, apply it when possible."*
 - **The sun as a strategy, not a reflex.** Sun data is always computed, but shading and solar gain only act when a mode, or you, turned them on.
 - **Explicit over clever.** Visible switches, deterministic changes, events on the Home Assistant bus: everything it does can be observed and reversed.
@@ -505,5 +510,5 @@ Cover Extender is built on one idea: **automation should enhance control, not re
 ## Support and contributing
 
 - Bugs and feature requests: [GitHub issues](https://github.com/Pulpyyyy/cover-extender/issues). Please include your Home Assistant and Cover Extender versions and the debug logs.
-- What changed in each version: [CHANGELOG](CHANGELOG.md).
-- License: [LICENSE](LICENSE).
+- What changed in each version: [CHANGELOG](https://github.com/Pulpyyyy/cover-extender/blob/main/CHANGELOG.md).
+- License: [LICENSE](https://github.com/Pulpyyyy/cover-extender/blob/main/LICENSE).

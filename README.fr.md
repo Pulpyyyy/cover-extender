@@ -4,6 +4,8 @@
 
 Cover Extender est une intégration Home Assistant qui ajoute des **modes**, un **verrou**, une **mémoire de position** et de l'**automatisation solaire** (ombrage et héliotropie) aux volets que vous avez déjà. Elle ne remplace jamais vos entités `cover.*` : elle travaille autour d'elles, et tout se configure depuis son propre panneau d'administration.
 
+[![Ouvrir ce dépôt dans HACS sur votre Home Assistant.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Pulpyyyy&repository=cover-extender&category=integration)
+
 ![Onglet Matrice](docs/panel-matrix.png)
 
 **Ce que vous obtenez :**
@@ -128,9 +130,11 @@ Dans l'éditeur du volet, **Entités d'exclusion** liste les entités qui bloque
 
 Tant qu'une exclusion est active :
 
-- un changement de mode ou une action Cover Extender mémorise sa position cible au lieu de bouger le volet (appliquée au prochain déverrouillage, ou avec `cover_extender.apply_memory`) ;
-- l'ombrage et l'héliotropie ignorent le volet, et reprennent à la prochaine mise à jour du soleil, de la température ou de la météo une fois l'exclusion retombée ;
+- un changement de mode ou une action Cover Extender ne bouge pas le volet : sa position **attend, et s'applique dès que la dernière exclusion repasse à `off`**. Refermez la fenêtre et le mode *Nuit* choisi entre-temps ferme le volet ;
+- l'ombrage et l'héliotropie ignorent le volet, et se recalent dès que la dernière exclusion repasse à `off` ;
 - éteindre le verrou n'applique pas la mémoire.
+
+Seule la dernière demande attend : un nouveau mode la remplace. Si le volet a été verrouillé entre-temps, la position d'une action reste en mémoire jusqu'au déverrouillage, comme toute commande passée sous verrou. Une position en attente ne survit pas à un redémarrage de Home Assistant.
 
 ### Façades et orientation
 
