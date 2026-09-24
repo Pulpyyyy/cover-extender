@@ -295,6 +295,13 @@ class CoverExtenderCoordinator:
             {"entity_id": entity_id, "position": value},
         )
 
+    # ── Exclusion ──────────────────────────────────────────────────────────────
+
+    def _is_excluded(self, entity_id: str) -> bool:
+        """True when one of the cover's exclusion entities (e.g. an open window) is on."""
+        exclusion: list[str] = self._profiles.get(entity_id, {}).get(CONF_EXCLUSION, [])
+        return any(self.hass.states.is_state(e, "on") for e in exclusion)
+
     # ── Autonomous shade / solar gain ──────────────────────────────────────────
 
     @callback
@@ -309,6 +316,11 @@ class CoverExtenderCoordinator:
         )
         if not auto_sw or auto_sw.state != "on":
             _LOGGER.debug("auto_shade %s: switch missing or off → skipped", entity_id)
+            return
+        # Nothing is memorized: the computation resumes at the next sun update
+        # once the exclusion clears, and the memory keeps the pre-mode position.
+        if self._is_excluded(entity_id):
+            _LOGGER.debug("auto_shade %s: exclusion active → skipped", entity_id)
             return
         position, should_update = compute_shade_sync(
             self.hass, entity_id, cfg, self._last_move.get(entity_id)
@@ -328,6 +340,7 @@ class CoverExtenderCoordinator:
 
         - cover unavailable    → skipped
         - switch off           → skipped
+        - exclusion active     → skipped
         - temp >= threshold    → no action
         - sun_facing + weather → position_solar
         - else                 → position_cold
@@ -341,6 +354,9 @@ class CoverExtenderCoordinator:
         )
         if not solar_gain_sw or solar_gain_sw.state != "on":
             _LOGGER.debug("auto_solar_gain %s: switch missing or off → skipped", entity_id)
+            return
+        if self._is_excluded(entity_id):
+            _LOGGER.debug("auto_solar_gain %s: exclusion active → skipped", entity_id)
             return
 
         solar_gain_cfg = cfg.get(CONF_SOLAR_GAIN, {})
@@ -517,8 +533,7 @@ class CoverExtenderCoordinator:
                     consume_memory = False
 
                 if target_position is not None:
-                    exclusion: list[str] = cfg.get(CONF_EXCLUSION, [])
-                    if any(self.hass.states.is_state(e, "on") for e in exclusion):
+                    if self._is_excluded(entity_id):
                         _LOGGER.debug(
                             "_apply_mode_core '%s' → %s: exclusion active, memory ← %d%%",
                             mode, entity_id, target_position,
@@ -540,7 +555,14 @@ class CoverExtenderCoordinator:
             #     Bypass the switch-state check in _apply_shade (the switch was just
             #     turned on above so its HA state hasn't settled yet) and the time_out
             #     throttle (last_move=None): selecting the mode is an explicit request.
-            if to_behavior == "auto_shade":
+            #     The exclusion is not bypassed: an open window blocks it, as it
+            #     blocks every other move.
+            if to_behavior == "auto_shade" and self._is_excluded(entity_id):
+                _LOGGER.debug(
+                    "_apply_mode_core '%s' → %s: exclusion active, shade skipped",
+                    mode, entity_id,
+                )
+            elif to_behavior == "auto_shade":
                 shade_pos, shade_should_update = compute_shade_sync(self.hass, entity_id, cfg)
                 if shade_should_update:
                     self._enqueue_cover(
@@ -881,9 +903,7 @@ class CoverExtenderCoordinator:
             self._suspend_lock_off.discard(cover_id)
             _LOGGER.debug("lock released %s → suspended (mode-driven), handled by _apply_mode_core", cover_id)
             return
-        cfg: dict = self._profiles.get(cover_id, {})
-        exclusion: list[str] = cfg.get(CONF_EXCLUSION, [])
-        if any(self.hass.states.is_state(e, "on") for e in exclusion):
+        if self._is_excluded(cover_id):
             _LOGGER.debug("lock released %s → blocked by exclusion", cover_id)
             return
         position = self._get_memory(cover_id)
@@ -912,8 +932,7 @@ class CoverExtenderCoordinator:
             if not select_state or select_state.state != mode_name:
                 continue
             # Respect exclusion, like _apply_mode_core and _handle_lock_off do
-            exclusion: list[str] = self._profiles.get(cover_id, {}).get(CONF_EXCLUSION, [])
-            if any(self.hass.states.is_state(e, "on") for e in exclusion):
+            if self._is_excluded(cover_id):
                 _LOGGER.debug(
                     "mode entity '%s' → %s: blocked by exclusion", ref_entity, cover_id
                 )
@@ -1077,7 +1096,7 @@ class CoverExtenderCoordinator:
         return {"position": position, "should_update": should_update}
 
     async def _set_cover_position_impl(self, entity_ids: list[str], position: int) -> None:
-        """Move or store in memory depending on lock state."""
+        """Move, or store in memory when the lock or an exclusion blocks the move."""
         for entity_id in entity_ids:
             lock_state = self.hass.states.get(
                 resolve_helper_entity(self.hass, entity_id, "lock")
@@ -1085,6 +1104,12 @@ class CoverExtenderCoordinator:
             if lock_state and lock_state.state == "on":
                 _LOGGER.debug(
                     "set_cover_position %s: lock active → writing memory (%d%%)",
+                    entity_id, position,
+                )
+                await self._set_memory(entity_id, position)
+            elif self._is_excluded(entity_id):
+                _LOGGER.debug(
+                    "set_cover_position %s: exclusion active → writing memory (%d%%)",
                     entity_id, position,
                 )
                 await self._set_memory(entity_id, position)

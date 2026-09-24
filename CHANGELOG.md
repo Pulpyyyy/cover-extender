@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.2] - 2026-09-24
+
+### Fixed
+- **Exclusion entities now block every move Cover Extender makes.** They were only checked on mode changes, on unlock and for entity-driven positions: autonomous shading (periodic and on entering a shading mode), solar gain and the `set_cover_position` / `open_cover` / `close_cover` actions moved the cover even with the window open. Shading and solar gain now skip an excluded cover and resume at the next sun, temperature or weather update once the exclusion clears; the actions store the position in memory, as a mode change already did.
+- Panel: the lock hint no longer claims to block every manual command (a remote or a native `cover.*` call still moves the cover; only commands made through Cover Extender are memorized), and the "Automatic shading" / "Solar gain" display options are labelled as the binary sensors they create, not switches.
+
+### Documentation
+- README rewritten for new users: HACS installation, a step-by-step quick start, key concepts (lock and memory, exclusions, orientation, shading settings explained), the global mode selector and the automation that drives it, action parameters, FAQ and troubleshooting, uninstall.
+- French guide (`README.fr.md`) and GitHub issue templates.
+
 ## [3.1.1] - 2026-09-22
 
 ### Fixed
