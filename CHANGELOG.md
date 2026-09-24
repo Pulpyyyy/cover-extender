@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.1.2] - 2026-09-24
 
+### Added
+- **A position blocked by an exclusion is applied when the exclusion clears.** Choose *Night* with the window open, close the window: the cover closes. The pending position is tracked apart from the memory (which may still hold a position from an older locked period and must not come back), only the latest request waits (a new mode replaces it), and an action's position on a cover locked meanwhile stays in memory until the unlock. A locked mode chosen while excluded no longer overwrites the memory, so the position saved on entering the mode is still restored when leaving it. Shading and solar gain also catch up immediately instead of waiting for the next sun update. Position changes of a mode's entity made while excluded now wait too, instead of being dropped.
+
 ### Fixed
 - **Exclusion entities now block every move Cover Extender makes.** They were only checked on mode changes, on unlock and for entity-driven positions: autonomous shading (periodic and on entering a shading mode), solar gain and the `set_cover_position` / `open_cover` / `close_cover` actions moved the cover even with the window open. Shading and solar gain now skip an excluded cover and resume at the next sun, temperature or weather update once the exclusion clears; the actions store the position in memory, as a mode change already did.
 - Panel: the lock hint no longer claims to block every manual command (a remote or a native `cover.*` call still moves the cover; only commands made through Cover Extender are memorized), and the "Automatic shading" / "Solar gain" display options are labelled as the binary sensors they create, not switches.

@@ -109,6 +109,15 @@ class CoverExtenderCoordinator:
         self._last_move: dict[str, datetime] = {}
         # Reverse map switch.<cover>_auto_solar_gain → cover (rebuilt on reload)
         self._sg_switch_to_cover: dict[str, str] = {}
+        # Reverse map exclusion entity → covers it blocks (rebuilt on reload)
+        self._exclusion_to_covers: dict[str, list[str]] = {}
+        # Position requested while the cover was excluded, applied once the last
+        # exclusion clears: cover → (position, respect_lock). Kept apart from the
+        # memory on purpose - the memory may still hold a position from an older
+        # locked period, which must not come back when a window is closed.
+        # respect_lock: an action's position waits for the unlock if the cover
+        # got locked meanwhile; a mode's own position applies regardless.
+        self._exclusion_pending: dict[str, tuple[int, bool]] = {}
         # Attribute keys injected per cover — used to strip them when a cover
         # is removed from the config (otherwise they linger until restart).
         # Only tracks the direct-write (fallback) covers; reader covers carry
@@ -302,6 +311,52 @@ class CoverExtenderCoordinator:
         exclusion: list[str] = self._profiles.get(entity_id, {}).get(CONF_EXCLUSION, [])
         return any(self.hass.states.is_state(e, "on") for e in exclusion)
 
+    def _is_locked(self, entity_id: str) -> bool:
+        """True when the cover's lock switch is on."""
+        lock_state = self.hass.states.get(
+            resolve_helper_entity(self.hass, entity_id, "lock")
+        )
+        return bool(lock_state and lock_state.state == "on")
+
+    @callback
+    def _handle_exclusion_change(self, event: Event) -> None:
+        """Resume a cover when its last active exclusion turns off."""
+        new_state = event.data.get("new_state")
+        old_state = event.data.get("old_state")
+        if not new_state or not old_state:
+            return
+        if old_state.state != "on" or new_state.state == "on":
+            return
+        for cover_id in self._exclusion_to_covers.get(event.data.get("entity_id"), []):
+            if self._is_excluded(cover_id):
+                continue  # another exclusion of this cover is still on
+            self.hass.async_create_task(self._resume_after_exclusion(cover_id))
+
+    async def _resume_after_exclusion(self, cover_id: str) -> None:
+        """Apply the position requested while excluded, then let shading and
+        solar gain catch up instead of waiting for the next sun update."""
+        cfg = self._profiles.get(cover_id)
+        if not cfg:
+            self._exclusion_pending.pop(cover_id, None)
+            return
+        if (pending := self._exclusion_pending.pop(cover_id, None)) is not None:
+            position, respect_lock = pending
+            if respect_lock and self._is_locked(cover_id):
+                _LOGGER.debug(
+                    "exclusion cleared %s: locked → %d%% stays in memory", cover_id, position
+                )
+            else:
+                _LOGGER.debug("exclusion cleared %s → applying %d%%", cover_id, position)
+                self._enqueue_cover(
+                    "set_cover_position", {"entity_id": cover_id, "position": position}
+                )
+                if self._get_memory(cover_id) == position:
+                    await self._set_memory(cover_id, None)
+        if cfg.get(CONF_SHADING, {}).get("enable", False):
+            self._apply_shade(cover_id, cfg)
+        if cfg.get(CONF_SOLAR_GAIN, {}).get("enable", False):
+            self._apply_solar_gain(cover_id, cfg)
+
     # ── Autonomous shade / solar gain ──────────────────────────────────────────
 
     @callback
@@ -445,6 +500,8 @@ class CoverExtenderCoordinator:
             if not cfg or mode not in cfg.get(CONF_MODES, {}):
                 _LOGGER.debug("_apply_mode_core: mode '%s' not configured for %s", mode, entity_id)
                 return
+            # A new mode replaces whatever was waiting for the exclusion to clear.
+            self._exclusion_pending.pop(entity_id, None)
 
             lock_id    = resolve_helper_entity(self.hass, entity_id, "lock")
             shading_id = resolve_helper_entity(self.hass, entity_id, "auto_shade")
@@ -535,10 +592,14 @@ class CoverExtenderCoordinator:
                 if target_position is not None:
                     if self._is_excluded(entity_id):
                         _LOGGER.debug(
-                            "_apply_mode_core '%s' → %s: exclusion active, memory ← %d%%",
+                            "_apply_mode_core '%s' → %s: exclusion active, %d%% pending",
                             mode, entity_id, target_position,
                         )
-                        await self._set_memory(entity_id, target_position)
+                        self._exclusion_pending[entity_id] = (target_position, False)
+                        # A locked mode keeps the position saved on entry (step
+                        # 1) in memory, to restore it when leaving the mode.
+                        if not to_locked:
+                            await self._set_memory(entity_id, target_position)
                     else:
                         self._enqueue_cover(
                             "set_cover_position",
@@ -769,6 +830,19 @@ class CoverExtenderCoordinator:
                 )
             )
 
+        new_exclusion_to_covers: dict[str, list[str]] = {}
+        for cover_id, cfg in profiles.items():
+            for excl in cfg.get(CONF_EXCLUSION, []):
+                new_exclusion_to_covers.setdefault(excl, []).append(cover_id)
+        if new_exclusion_to_covers:
+            new_unsubs.append(
+                async_track_state_change_event(
+                    self.hass,
+                    list(new_exclusion_to_covers.keys()),
+                    self._handle_exclusion_change,
+                )
+            )
+
         # ── Atomic swap: cancel old → assign new ─────────────────────────────
         for unsub in self._unsubs:
             unsub()
@@ -777,6 +851,7 @@ class CoverExtenderCoordinator:
         self._lock_to_cover       = new_lock_to_cover
         self._entity_mode_map     = new_entity_mode_map
         self._sg_switch_to_cover  = new_sg_switch_to_cover
+        self._exclusion_to_covers = new_exclusion_to_covers
         self._unsubs              = new_unsubs
 
         # ── Strip injected attributes from covers removed from the config ─────
@@ -931,12 +1006,7 @@ class CoverExtenderCoordinator:
             )
             if not select_state or select_state.state != mode_name:
                 continue
-            # Respect exclusion, like _apply_mode_core and _handle_lock_off do
-            if self._is_excluded(cover_id):
-                _LOGGER.debug(
-                    "mode entity '%s' → %s: blocked by exclusion", ref_entity, cover_id
-                )
-                continue
+            # Lock and exclusion are handled by _set_cover_position_impl.
             _LOGGER.debug(
                 "mode entity '%s' → %d%% : applying to %s (mode=%s)",
                 ref_entity, new_position, cover_id, mode_name,
@@ -1096,22 +1166,25 @@ class CoverExtenderCoordinator:
         return {"position": position, "should_update": should_update}
 
     async def _set_cover_position_impl(self, entity_ids: list[str], position: int) -> None:
-        """Move, or store in memory when the lock or an exclusion blocks the move."""
+        """Move, or store in memory when the lock or an exclusion blocks the move.
+
+        A position blocked by an exclusion is also kept pending and applied when
+        the exclusion clears (see _resume_after_exclusion).
+        """
         for entity_id in entity_ids:
-            lock_state = self.hass.states.get(
-                resolve_helper_entity(self.hass, entity_id, "lock")
-            )
-            if lock_state and lock_state.state == "on":
+            if self._is_locked(entity_id):
                 _LOGGER.debug(
                     "set_cover_position %s: lock active → writing memory (%d%%)",
                     entity_id, position,
                 )
+                self._exclusion_pending.pop(entity_id, None)
                 await self._set_memory(entity_id, position)
             elif self._is_excluded(entity_id):
                 _LOGGER.debug(
-                    "set_cover_position %s: exclusion active → writing memory (%d%%)",
+                    "set_cover_position %s: exclusion active → memory and pending (%d%%)",
                     entity_id, position,
                 )
+                self._exclusion_pending[entity_id] = (position, True)
                 await self._set_memory(entity_id, position)
             else:
                 self._enqueue_cover(
