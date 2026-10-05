@@ -1,7 +1,7 @@
 """Select platform for cover_extender.
 
-Automatically creates a select.mode_<cover> entity for each configured cover,
-and a global select.cover_extender_modes entity listing all defined modes.
+Automatically creates a select.<cover>_cx_mode entity for each configured cover,
+and a global select.cx_modes entity listing all defined modes.
 """
 from __future__ import annotations
 import logging
@@ -17,7 +17,11 @@ from .const import (
     DOMAIN, DATA_COVER_PROFILES, DATA_MODES, DATA_SELECT_COVER_IDS,
     CONF_MODES, SIGNAL_COVER_RELOAD,
 )
+from .entity import attach_cover_helper, hub_device_info
 from .helpers import (
+    GLOBAL_SELECT_ENTITY_ID,
+    GLOBAL_SELECT_NAME,
+    GLOBAL_SELECT_UNIQUE_ID,
     cover_stable_key,
     helper_unique_id,
     purge_helper_entity,
@@ -38,7 +42,7 @@ async def async_setup_entry(
     profiles: dict = hass.data.get(DOMAIN, {}).get(DATA_COVER_PROFILES, {})
     cover_entities = [
         CoverModeSelect(
-            cover_entity_id, cfg, modes_list, coordinator,
+            hass, cover_entity_id, cfg, modes_list, coordinator,
             cover_stable_key(hass, cover_entity_id),
         )
         for cover_entity_id, cfg in profiles.items()
@@ -65,7 +69,7 @@ async def async_setup_entry(
             new_modes_list: dict = hass.data[DOMAIN].get(DATA_MODES, {})
             async_add_entities([
                 CoverModeSelect(
-                    eid, new_profiles[eid], new_modes_list, coordinator,
+                    hass, eid, new_profiles[eid], new_modes_list, coordinator,
                     cover_stable_key(hass, eid),
                 )
                 for eid in added
@@ -86,19 +90,16 @@ class CoverModeSelect(SelectEntity, RestoreEntity):
     """Mode selector for a cover."""
 
     def __init__(
-        self, cover_entity_id: str, cfg: dict, modes_list: dict, coordinator,
-        stable_key: str,
+        self, hass: HomeAssistant, cover_entity_id: str, cfg: dict, modes_list: dict,
+        coordinator, stable_key: str,
     ) -> None:
         self._cover_entity_id = cover_entity_id
         self._coordinator = coordinator
-        cover_name = cover_entity_id.split(".")[1]
 
         # entity_id stays name-based (human-facing suggestion); the unique_id
         # uses the cover's stable key so renaming the cover breaks nothing.
-        self.entity_id = f"select.mode_{cover_name}"
+        attach_cover_helper(self, hass, cover_entity_id, "select_mode")
         self._attr_unique_id = helper_unique_id("select_mode", stable_key)
-        self._attr_has_entity_name = True
-        self._attr_translation_key = "mode"
 
         modes: dict = cfg.get(CONF_MODES, {})
         self._attr_options = list(modes)
@@ -197,10 +198,11 @@ class CoverModesGlobalSelect(SelectEntity, RestoreEntity):
     """
 
     def __init__(self, modes_list: dict) -> None:
-        self._attr_unique_id = f"{DOMAIN}_select_cover_extender_modes"
-        self.entity_id = "select.cover_extender_modes"
+        self._attr_unique_id = GLOBAL_SELECT_UNIQUE_ID
+        self.entity_id = GLOBAL_SELECT_ENTITY_ID
+        self._attr_device_info = hub_device_info()
         self._attr_has_entity_name = True
-        self._attr_translation_key = "cover_extender_modes"
+        self._attr_name = GLOBAL_SELECT_NAME
         self._attr_options = [m for m, p in modes_list.items() if not p.get("hidden", False)]
         self._attr_current_option = self._attr_options[0] if self._attr_options else None
 

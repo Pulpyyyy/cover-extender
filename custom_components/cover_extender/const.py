@@ -80,6 +80,13 @@ WEATHER_CONDITIONS = [
     "snowy-rainy", "sunny", "windy", "windy-variant",
 ]
 
+# The integration's own device (service type): hosts the global helpers, the
+# helpers of covers that have no device, and the link to the admin panel.
+HUB_IDENTIFIER = "hub"
+
+# Repairs: the 4.0 rename of the helper entity ids (see __init__._migrate_entity_ids_v4).
+ISSUE_ENTITY_IDS_RENAMED = "entity_ids_renamed"
+
 # Configurable command interval
 # UI stores the value in milliseconds (int); the coordinator uses seconds (float).
 CONF_COMMAND_INTERVAL       = "command_interval"

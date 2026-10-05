@@ -1,8 +1,9 @@
 """Switch platform for cover_extender.
 
 Automatically creates:
-  - switch.<cover>_lock        for every configured cover
-  - switch.<cover>_auto_shade  for covers with shade.enable: true
+  - switch.<cover>_cx_lock             for every configured cover
+  - switch.<cover>_cx_auto_shade       for covers with shading enabled
+  - switch.<cover>_cx_auto_solar_gain  for covers with solar gain enabled
 """
 from __future__ import annotations
 import logging
@@ -19,6 +20,7 @@ from .const import (
     DATA_SWITCH_COVER_IDS, DATA_SWITCH_AUTO_SHADE_IDS, DATA_SWITCH_AUTO_SOLAR_GAIN_IDS,
     CONF_SHADING, CONF_SOLAR_GAIN, SIGNAL_COVER_RELOAD,
 )
+from .entity import attach_cover_helper
 from .helpers import cover_stable_key, helper_unique_id, purge_helper_entity
 
 _LOGGER = logging.getLogger(__name__)
@@ -32,18 +34,18 @@ async def async_setup_entry(
     """Set up switch entities from a config entry."""
     profiles: dict = hass.data.get(DOMAIN, {}).get(DATA_COVER_PROFILES, {})
 
-    lock_entities = [CoverLockSwitch(eid, cover_stable_key(hass, eid)) for eid in profiles]
+    lock_entities = [CoverLockSwitch(hass, eid, cover_stable_key(hass, eid)) for eid in profiles]
     hass.data[DOMAIN][DATA_SWITCH_COVER_IDS] = {e._cover_entity_id for e in lock_entities}
 
     auto_shade_entities = [
-        CoverShadingAutoSwitch(eid, cover_stable_key(hass, eid))
+        CoverShadingAutoSwitch(hass, eid, cover_stable_key(hass, eid))
         for eid, cfg in profiles.items()
         if cfg.get(CONF_SHADING, {}).get("enable", False)
     ]
     hass.data[DOMAIN][DATA_SWITCH_AUTO_SHADE_IDS] = {e._cover_entity_id for e in auto_shade_entities}
 
     auto_solar_gain_entities = [
-        CoverSolarGainAutoSwitch(eid, cover_stable_key(hass, eid))
+        CoverSolarGainAutoSwitch(hass, eid, cover_stable_key(hass, eid))
         for eid, cfg in profiles.items()
         if cfg.get(CONF_SOLAR_GAIN, {}).get("enable", False)
     ]
@@ -68,7 +70,7 @@ async def async_setup_entry(
 
         if added_lock:
             async_add_entities([
-                CoverLockSwitch(eid, cover_stable_key(hass, eid)) for eid in added_lock
+                CoverLockSwitch(hass, eid, cover_stable_key(hass, eid)) for eid in added_lock
             ])
             hass.data[DOMAIN][DATA_SWITCH_COVER_IDS] = known_lock | added_lock
 
@@ -85,7 +87,7 @@ async def async_setup_entry(
 
         if added_auto_shade:
             async_add_entities([
-                CoverShadingAutoSwitch(eid, cover_stable_key(hass, eid))
+                CoverShadingAutoSwitch(hass, eid, cover_stable_key(hass, eid))
                 for eid in added_auto_shade
             ])
             hass.data[DOMAIN][DATA_SWITCH_AUTO_SHADE_IDS] = known_auto_shade | added_auto_shade
@@ -103,7 +105,7 @@ async def async_setup_entry(
 
         if added_auto_solar_gain:
             async_add_entities([
-                CoverSolarGainAutoSwitch(eid, cover_stable_key(hass, eid))
+                CoverSolarGainAutoSwitch(hass, eid, cover_stable_key(hass, eid))
                 for eid in added_auto_solar_gain
             ])
             hass.data[DOMAIN][DATA_SWITCH_AUTO_SOLAR_GAIN_IDS] = known_auto_solar_gain | added_auto_solar_gain
@@ -131,16 +133,14 @@ class _BaseCoverSwitch(SwitchEntity, RestoreEntity):
     _icon_off: str
     _suffix: str
 
-    def __init__(self, cover_entity_id: str, stable_key: str) -> None:
+    def __init__(self, hass: HomeAssistant, cover_entity_id: str, stable_key: str) -> None:
         self._cover_entity_id = cover_entity_id
-        cover_name = cover_entity_id.split(".")[1]
 
         # entity_id stays name-based (human-facing suggestion); the unique_id
         # uses the cover's stable key so renaming the cover breaks nothing.
         # (_suffix values match the helper kinds: lock / auto_shade / auto_solar_gain)
-        self.entity_id = f"switch.{cover_name}_{self._suffix}"
+        attach_cover_helper(self, hass, cover_entity_id, self._suffix)
         self._attr_unique_id = helper_unique_id(self._suffix, stable_key)
-        self._attr_has_entity_name = True
         self._attr_is_on = False
 
     async def async_added_to_hass(self) -> None:
@@ -170,7 +170,6 @@ class CoverLockSwitch(_BaseCoverSwitch):
     """Automation lock for a cover."""
 
     _suffix = "lock"
-    _attr_translation_key = "lock"
     _icon_on = "mdi:lock"
     _icon_off = "mdi:lock-open-variant"
 
@@ -183,7 +182,6 @@ class CoverShadingAutoSwitch(_BaseCoverSwitch):
     """
 
     _suffix = "auto_shade"
-    _attr_translation_key = "auto_shade"
     _icon_on = "mdi:sun-clock"
     _icon_off = "mdi:sun-clock-outline"
 
@@ -197,6 +195,5 @@ class CoverSolarGainAutoSwitch(_BaseCoverSwitch):
     """
 
     _suffix = "auto_solar_gain"
-    _attr_translation_key = "auto_solar_gain"
     _icon_on = "mdi:thermometer-check"
     _icon_off = "mdi:thermometer-off"

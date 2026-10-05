@@ -1,14 +1,11 @@
 """Binary sensor platform for cover_extender.
 
 Exposes sun_facing, auto_shade and solar_gain as binary_sensor entities,
-controlled by the show_entities: section of the YAML config file.
+controlled by the Display settings of the admin panel:
 
-  show_entities:
-    sun_facing: true    →  binary_sensor.<cover>_sun_facing
-    auto_shade: true    →  binary_sensor.<cover>_auto_shade
-    solar_gain: true    →  binary_sensor.<cover>_solar_gain
-
-All default to false — no binary_sensors are created unless explicitly enabled.
+  sun_facing  →  binary_sensor.<cover>_cx_sun_facing
+  auto_shade  →  binary_sensor.<cover>_cx_auto_shade_status
+  solar_gain  →  binary_sensor.<cover>_cx_solar_gain_status
 """
 from __future__ import annotations
 import logging
@@ -33,8 +30,10 @@ from .const import (
     ATTR_SUN_FACING,
     SIGNAL_COVER_RELOAD,
 )
+from .entity import attach_cover_helper
 from .helpers import (
     cover_stable_key,
+    helper_entity_id,
     helper_unique_id,
     purge_helper_entity,
     resolve_helper_entity,
@@ -140,14 +139,14 @@ def _build_entities(
     for cover_id, cfg in profiles.items():
         key = cover_stable_key(hass, cover_id)
         if expose_sf and cfg.get(CONF_FACADE):
-            sun_facing_entities.append(CoverSunFacingBinarySensor(cover_id, key))
+            sun_facing_entities.append(CoverSunFacingBinarySensor(hass, cover_id, key))
         if expose_as:
             auto_shade_entities.append(
-                CoverEnableAutoShadeBinarySensor(cover_id, bool(cfg.get(CONF_SHADING, {}).get("enable", False)), key)
+                CoverEnableAutoShadeBinarySensor(hass, cover_id, bool(cfg.get(CONF_SHADING, {}).get("enable", False)), key)
             )
         if expose_sg:
             solar_gain_entities.append(
-                CoverEnableSolarGainBinarySensor(cover_id, bool(cfg.get(CONF_SOLAR_GAIN, {}).get("enable", False)), key)
+                CoverEnableSolarGainBinarySensor(hass, cover_id, bool(cfg.get(CONF_SOLAR_GAIN, {}).get("enable", False)), key)
             )
 
     return sun_facing_entities, auto_shade_entities, solar_gain_entities
@@ -162,14 +161,11 @@ class CoverSunFacingBinarySensor(BinarySensorEntity):
 
     _attr_should_poll = False
 
-    def __init__(self, cover_entity_id: str, stable_key: str) -> None:
+    def __init__(self, hass: HomeAssistant, cover_entity_id: str, stable_key: str) -> None:
         self._cover_entity_id = cover_entity_id
-        cover_name = cover_entity_id.split(".")[1]
 
-        self.entity_id = f"binary_sensor.{cover_name}_sun_facing"
+        attach_cover_helper(self, hass, cover_entity_id, "bs_sun_facing")
         self._attr_unique_id = helper_unique_id("bs_sun_facing", stable_key)
-        self._attr_has_entity_name = True
-        self._attr_translation_key = "sun_facing"
         self._attr_is_on = False
 
     @property
@@ -220,20 +216,19 @@ class _BaseSwitchMirrorBinarySensor(BinarySensorEntity):
 
     _attr_should_poll = False
     _switch_suffix: str
-    _sensor_suffix: str
     _uid_kind: str
     _icon_on: str
     _icon_off: str
 
-    def __init__(self, cover_entity_id: str, initial_state: bool, stable_key: str) -> None:
+    def __init__(
+        self, hass: HomeAssistant, cover_entity_id: str, initial_state: bool, stable_key: str
+    ) -> None:
         self._cover_entity_id = cover_entity_id
-        cover_name = cover_entity_id.split(".")[1]
         # Conventional fallback; re-resolved via the registry in async_added_to_hass
-        self._switch_entity_id = f"switch.{cover_name}_{self._switch_suffix}"
+        self._switch_entity_id = helper_entity_id(self._switch_suffix, cover_entity_id)
 
-        self.entity_id = f"binary_sensor.{cover_name}_{self._sensor_suffix}"
+        attach_cover_helper(self, hass, cover_entity_id, self._uid_kind)
         self._attr_unique_id = helper_unique_id(self._uid_kind, stable_key)
-        self._attr_has_entity_name = True
         self._attr_is_on = initial_state
 
     @property
@@ -278,28 +273,24 @@ class _BaseSwitchMirrorBinarySensor(BinarySensorEntity):
 
 
 class CoverEnableAutoShadeBinarySensor(_BaseSwitchMirrorBinarySensor):
-    """Mirrors switch.<cover>_auto_shade state as a binary_sensor.
+    """Mirrors switch.<cover>_cx_auto_shade state as a binary_sensor.
 
     Updates whenever the switch is toggled (via mode change or manually).
     """
 
     _switch_suffix = "auto_shade"
-    _sensor_suffix = "auto_shade"
     _uid_kind = "bs_auto_shade"
-    _attr_translation_key = "auto_shade"
     _icon_on = "mdi:sun-clock"
     _icon_off = "mdi:sun-clock-outline"
 
 
 class CoverEnableSolarGainBinarySensor(_BaseSwitchMirrorBinarySensor):
-    """Mirrors switch.<cover>_auto_solar_gain state as a binary_sensor.
+    """Mirrors switch.<cover>_cx_auto_solar_gain state as a binary_sensor.
 
     Updates whenever the switch is toggled (via mode change or manually).
     """
 
     _switch_suffix = "auto_solar_gain"
-    _sensor_suffix = "solar_gain"
     _uid_kind = "bs_solar_gain"
-    _attr_translation_key = "solar_gain"
     _icon_on = "mdi:thermometer-check"
     _icon_off = "mdi:thermometer-off"

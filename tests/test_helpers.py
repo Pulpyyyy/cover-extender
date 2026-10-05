@@ -133,11 +133,88 @@ def test_resolve_helper_entity_legacy_scheme(hass):
 
 def test_resolve_helper_entity_conventional_fallback(hass):
     # Nothing registered yet (fresh add) → conventional name
-    assert resolve_helper_entity(hass, "cover.volet_sam", "select_mode") == "select.mode_volet_sam"
-    assert resolve_helper_entity(hass, "cover.volet_sam", "auto_shade") == "switch.volet_sam_auto_shade"
+    assert resolve_helper_entity(hass, "cover.volet_sam", "select_mode") == "select.volet_sam_cx_mode"
+    assert resolve_helper_entity(hass, "cover.volet_sam", "auto_shade") == "switch.volet_sam_cx_auto_shade"
 
 
 def test_helper_unique_id_templates():
     assert helper_unique_id("select_mode", UID) == f"{DOMAIN}_select_mode_{UID}"
     assert helper_unique_id("lock", UID) == f"{DOMAIN}_switch_{UID}_lock"
     assert helper_unique_id("bs_sun_facing", UID) == f"{DOMAIN}_binary_sensor_{UID}_sun_facing"
+
+
+# ── 4.0 entity ids and names ──────────────────────────────────────────────────
+
+@pytest.mark.parametrize(("kind", "expected"), [
+    ("select_mode",     "select.volet_sam_cx_mode"),
+    ("lock",            "switch.volet_sam_cx_lock"),
+    ("auto_shade",      "switch.volet_sam_cx_auto_shade"),
+    ("auto_solar_gain", "switch.volet_sam_cx_auto_solar_gain"),
+    ("bs_sun_facing",   "binary_sensor.volet_sam_cx_sun_facing"),
+    ("bs_auto_shade",   "binary_sensor.volet_sam_cx_auto_shade_status"),
+    ("bs_solar_gain",   "binary_sensor.volet_sam_cx_solar_gain_status"),
+])
+def test_helper_entity_id_scheme(kind, expected):
+    assert helpers.helper_entity_id(kind, "cover.volet_sam") == expected
+
+
+def test_every_helper_kind_has_an_id_a_name_and_a_legacy_pattern():
+    kinds = set(helpers.HELPER_UNIQUE_ID_TEMPLATES)
+    assert set(helpers._HELPER_CONVENTIONAL_EIDS) == kinds
+    assert set(helpers.HELPER_NAMES) == kinds
+    assert set(helpers._LEGACY_EID_PATTERNS) == kinds
+    # Fixed English names, all marked as coming from this integration.
+    assert all(name.startswith("CX ") for name in helpers.HELPER_NAMES.values())
+
+
+@pytest.mark.parametrize("kind", list(helpers.HELPER_UNIQUE_ID_TEMPLATES))
+@pytest.mark.parametrize("key", [UID, "volet_sam"])
+def test_helper_kind_reads_the_unique_id(kind, key):
+    domain = helpers.HELPER_UNIQUE_ID_TEMPLATES[kind][0]
+    assert helpers.helper_kind(domain, helper_unique_id(kind, key)) == kind
+
+
+def test_helper_kind_rejects_foreign_unique_ids():
+    assert helpers.helper_kind("switch", "something_else") is None
+    # Right shape, wrong domain.
+    assert helpers.helper_kind("select", helper_unique_id("lock", UID)) is None
+    assert helpers.helper_kind("select", helpers.GLOBAL_SELECT_UNIQUE_ID) is None
+
+
+@pytest.mark.parametrize(("kind", "old", "new"), [
+    ("select_mode",     "select.mode_volet_sam",                "select.volet_sam_cx_mode"),
+    ("lock",            "switch.volet_sam_lock",                "switch.volet_sam_cx_lock"),
+    ("auto_shade",      "switch.volet_sam_auto_shade",          "switch.volet_sam_cx_auto_shade"),
+    ("auto_solar_gain", "switch.volet_sam_auto_solar_gain",     "switch.volet_sam_cx_auto_solar_gain"),
+    ("bs_sun_facing",   "binary_sensor.volet_sam_sun_facing",   "binary_sensor.volet_sam_cx_sun_facing"),
+    ("bs_auto_shade",   "binary_sensor.volet_sam_auto_shade",   "binary_sensor.volet_sam_cx_auto_shade_status"),
+    ("bs_solar_gain",   "binary_sensor.volet_sam_solar_gain",   "binary_sensor.volet_sam_cx_solar_gain_status"),
+    # The cover part is kept as it is: an old cover name, a _2 from a clash.
+    ("select_mode",     "select.mode_ancien_nom_2",             "select.ancien_nom_2_cx_mode"),
+])
+def test_v4_entity_id_renames_the_pre_4_shape(kind, old, new):
+    domain = helpers.HELPER_UNIQUE_ID_TEMPLATES[kind][0]
+    assert helpers.v4_entity_id(domain, helper_unique_id(kind, UID), old) == new
+
+
+@pytest.mark.parametrize(("kind", "current"), [
+    ("lock",          "switch.volet_sam_cx_lock"),          # already on the 4.0 scheme
+    ("lock",          "switch.verrou_du_salon"),            # rewritten by the user
+    ("lock",          "switch.volet_sam_lock_2"),           # not the pre-4.0 shape
+    ("bs_auto_shade", "binary_sensor.volet_sam_cx_auto_shade_status"),
+    ("select_mode",   "select.volet_sam_cx_mode"),
+])
+def test_v4_entity_id_leaves_other_ids_alone(kind, current):
+    domain = helpers.HELPER_UNIQUE_ID_TEMPLATES[kind][0]
+    assert helpers.v4_entity_id(domain, helper_unique_id(kind, UID), current) is None
+
+
+def test_v4_entity_id_global_select():
+    uid = helpers.GLOBAL_SELECT_UNIQUE_ID
+    assert helpers.v4_entity_id("select", uid, "select.cover_extender_modes") == "select.cx_modes"
+    assert helpers.v4_entity_id("select", uid, "select.cx_modes") is None
+    assert helpers.v4_entity_id("select", uid, "select.my_modes") is None
+
+
+def test_v4_entity_id_ignores_foreign_entities():
+    assert helpers.v4_entity_id("switch", "other_integration_uid", "switch.kitchen_lock") is None

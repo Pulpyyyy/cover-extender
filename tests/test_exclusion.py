@@ -87,9 +87,9 @@ def coord(hass, monkeypatch):
     # Sun straight in front of the facade: shading computes a real move.
     hass.states.set("sun.sun", "above_horizon", {"azimuth": 180, "elevation": 30})
     hass.states.set(COVER, "open", {"current_position": 100})
-    hass.states.set("switch.office_auto_shade", "on")
-    hass.states.set("switch.office_auto_solar_gain", "on")
-    hass.states.set("switch.office_lock", "off")
+    hass.states.set("switch.office_cx_auto_shade", "on")
+    hass.states.set("switch.office_cx_auto_solar_gain", "on")
+    hass.states.set("switch.office_cx_lock", "off")
     return c
 
 
@@ -185,7 +185,7 @@ def test_action_waits_for_unlock_if_locked_meanwhile(coord, hass):
     _no_shade(coord)
     hass.states.set(WINDOW, "on")
     asyncio.run(coord._set_cover_position_impl([COVER], 40))
-    hass.states.set("switch.office_lock", "on")
+    hass.states.set("switch.office_cx_lock", "on")
     hass.states.set(WINDOW, "off")
     asyncio.run(coord._resume_after_exclusion(COVER))
     assert _queued(coord) == []

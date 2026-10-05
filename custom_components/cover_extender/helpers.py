@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -43,18 +44,92 @@ HELPER_UNIQUE_ID_TEMPLATES: dict[str, tuple[str, str]] = {
 
 # Conventional entity_id suggested at creation (and used as last-resort
 # fallback when the helper is not registered yet). Stays name-based on
-# purpose: entity ids are human-facing.
+# purpose: entity ids are human-facing. Since 4.0 they read
+# <domain>.<cover>_cx_<function>: the cover first, so a helper sorts next to
+# its cover, then "cx", so every id says which integration made it.
 _HELPER_CONVENTIONAL_EIDS: dict[str, str] = {
-    "select_mode":     "select.mode_{}",
-    "lock":            "switch.{}_lock",
-    "auto_shade":      "switch.{}_auto_shade",
-    "auto_solar_gain": "switch.{}_auto_solar_gain",
+    "select_mode":     "select.{}_cx_mode",
+    "lock":            "switch.{}_cx_lock",
+    "auto_shade":      "switch.{}_cx_auto_shade",
+    "auto_solar_gain": "switch.{}_cx_auto_solar_gain",
+    "bs_sun_facing":   "binary_sensor.{}_cx_sun_facing",
+    "bs_auto_shade":   "binary_sensor.{}_cx_auto_shade_status",
+    "bs_solar_gain":   "binary_sensor.{}_cx_solar_gain_status",
 }
+
+# Display names. Fixed English on purpose, never translated: a name that
+# changed with the reader's language would make every log, screenshot and
+# forum report read differently. The leading "CX" also keeps Home Assistant's
+# own "rename the entity ids with the device" suggestion on the cx scheme,
+# since it derives the ids from <device name> <entity name>.
+HELPER_NAMES: dict[str, str] = {
+    "select_mode":     "CX mode",
+    "lock":            "CX lock",
+    "auto_shade":      "CX auto shade",
+    "auto_solar_gain": "CX auto solar gain",
+    "bs_sun_facing":   "CX sun facing",
+    "bs_auto_shade":   "CX auto shade status",
+    "bs_solar_gain":   "CX solar gain status",
+}
+
+# The one helper that belongs to no cover.
+GLOBAL_SELECT_UNIQUE_ID = f"{DOMAIN}_select_cover_extender_modes"
+GLOBAL_SELECT_ENTITY_ID = "select.cx_modes"
+GLOBAL_SELECT_NAME = "Modes"
+
+# Ids before 4.0, per kind: the regex captures the cover part, kept as is.
+_LEGACY_EID_PATTERNS: dict[str, re.Pattern[str]] = {
+    "select_mode":     re.compile(r"^select\.mode_(.+)$"),
+    "lock":            re.compile(r"^switch\.(.+)_lock$"),
+    "auto_shade":      re.compile(r"^switch\.(.+)_auto_shade$"),
+    "auto_solar_gain": re.compile(r"^switch\.(.+)_auto_solar_gain$"),
+    "bs_sun_facing":   re.compile(r"^binary_sensor\.(.+)_sun_facing$"),
+    "bs_auto_shade":   re.compile(r"^binary_sensor\.(.+)_auto_shade$"),
+    "bs_solar_gain":   re.compile(r"^binary_sensor\.(.+)_solar_gain$"),
+}
+_LEGACY_GLOBAL_SELECT_ENTITY_ID = "select.cover_extender_modes"
 
 
 def cover_object_id(cover_entity_id: str) -> str:
     """Return the object id part of a cover entity id (cover.volet_sam → volet_sam)."""
     return cover_entity_id.split(".", 1)[1]
+
+
+def helper_entity_id(kind: str, cover_entity_id: str) -> str:
+    """Conventional entity_id of a helper (cover.volet_sam, lock → switch.volet_sam_cx_lock)."""
+    return _HELPER_CONVENTIONAL_EIDS[kind].format(cover_object_id(cover_entity_id))
+
+
+def helper_kind(domain: str, unique_id: str) -> str | None:
+    """Which helper a registry entry is, read off its unique_id (None: not a cover helper)."""
+    for kind, (kind_domain, uid_tpl) in HELPER_UNIQUE_ID_TEMPLATES.items():
+        prefix, _, suffix = uid_tpl.partition("{}")
+        if (
+            domain == kind_domain
+            and unique_id.startswith(prefix)
+            and unique_id.endswith(suffix)
+            and len(unique_id) > len(prefix) + len(suffix)
+        ):
+            return kind
+    return None
+
+
+def v4_entity_id(domain: str, unique_id: str, entity_id: str) -> str | None:
+    """The 4.0 entity_id for a helper still carrying its pre-4.0 id, else None.
+
+    Only an id that still has the pre-4.0 SHAPE is renamed; the cover part is
+    kept as it is (it may be an old cover name, a _2 suffix, a name the user
+    chose). An id the user rewrote in any other way is theirs and stays.
+    """
+    if unique_id == GLOBAL_SELECT_UNIQUE_ID:
+        return GLOBAL_SELECT_ENTITY_ID if entity_id == _LEGACY_GLOBAL_SELECT_ENTITY_ID else None
+    kind = helper_kind(domain, unique_id)
+    if kind is None:
+        return None
+    match = _LEGACY_EID_PATTERNS[kind].match(entity_id)
+    if match is None or "_cx_" in entity_id:
+        return None
+    return _HELPER_CONVENTIONAL_EIDS[kind].format(match.group(1))
 
 
 def cover_stable_key(hass: HomeAssistant, cover_entity_id: str) -> str:
@@ -89,10 +164,7 @@ def resolve_helper_entity(hass: HomeAssistant, cover_entity_id: str, kind: str) 
     cover), falling back to the conventional entity_id when the entity is not
     registered yet (fresh add before platform reload).
     """
-    return (
-        _lookup_helper(hass, cover_entity_id, kind)
-        or _HELPER_CONVENTIONAL_EIDS[kind].format(cover_object_id(cover_entity_id))
-    )
+    return _lookup_helper(hass, cover_entity_id, kind) or helper_entity_id(kind, cover_entity_id)
 
 
 def purge_helper_entity(hass: HomeAssistant, cover_entity_id: str, kind: str) -> None:
