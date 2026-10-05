@@ -216,5 +216,31 @@ def test_v4_entity_id_global_select():
     assert helpers.v4_entity_id("select", uid, "select.my_modes") is None
 
 
+def test_carry_restored_states_moves_them_to_the_new_ids():
+    last = {"switch.salon_lock": "on", "select.mode_salon": "Nuit", "switch.other": "off"}
+    moved = helpers.carry_restored_states(
+        last,
+        [("switch.salon_lock", "switch.salon_cx_lock"), ("select.mode_salon", "select.salon_cx_mode")],
+        lambda stored, new_id: (new_id, stored),
+    )
+    assert moved == ["switch.salon_cx_lock", "select.salon_cx_mode"]
+    assert last == {
+        "switch.salon_cx_lock": ("switch.salon_cx_lock", "on"),
+        "select.salon_cx_mode": ("select.salon_cx_mode", "Nuit"),
+        "switch.other": "off",
+    }
+
+
+def test_carry_restored_states_skips_missing_and_never_overwrites():
+    last = {"switch.salon_lock": "on", "switch.salon_cx_lock": "off"}
+    moved = helpers.carry_restored_states(
+        last,
+        [("switch.salon_lock", "switch.salon_cx_lock"), ("switch.absent_lock", "switch.absent_cx_lock")],
+        lambda stored, new_id: stored,
+    )
+    assert moved == []
+    assert last == {"switch.salon_lock": "on", "switch.salon_cx_lock": "off"}
+
+
 def test_v4_entity_id_ignores_foreign_entities():
     assert helpers.v4_entity_id("switch", "other_integration_uid", "switch.kitchen_lock") is None

@@ -157,6 +157,28 @@ def _lookup_helper(hass: HomeAssistant, cover_entity_id: str, kind: str) -> str 
     return None
 
 
+def carry_restored_states(
+    last_states: dict[str, Any],
+    renamed: list[tuple[str, str]],
+    retarget: Any,
+) -> list[str]:
+    """Move restored states from old to new entity ids; return the ids moved.
+
+    Home Assistant keys the states it restores at startup by entity_id and
+    does not follow a registry rename: without this, a lock that was on, a
+    cover's current mode and the shading switches would all come back at
+    their defaults on the first start after the rename. *retarget(stored,
+    new_id)* rebuilds one stored state under its new id.
+    """
+    moved: list[str] = []
+    for old, new in renamed:
+        if new in last_states or (stored := last_states.pop(old, None)) is None:
+            continue
+        last_states[new] = retarget(stored, new)
+        moved.append(new)
+    return moved
+
+
 def resolve_helper_entity(hass: HomeAssistant, cover_entity_id: str, kind: str) -> str:
     """Return the current entity_id of a helper entity for *cover_entity_id*.
 

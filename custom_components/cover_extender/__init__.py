@@ -73,7 +73,12 @@ from .const import (
     SECTIONS_WITH_ITEMS,
 )
 from .coordinator import CoverExtenderCoordinator
-from .helpers import HELPER_UNIQUE_ID_TEMPLATES, cover_object_id, v4_entity_id
+from .helpers import (
+    HELPER_UNIQUE_ID_TEMPLATES,
+    carry_restored_states,
+    cover_object_id,
+    v4_entity_id,
+)
 
 import logging
 _LOGGER = logging.getLogger(__name__)
@@ -186,6 +191,35 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 # ── 2.1 → 2.2 (Cover Extender 4.0): helper entity ids ────────────────────────
 
+def _carry_restored_states(hass: HomeAssistant, renamed: list[tuple[str, str]]) -> None:
+    """Hand each renamed helper the state it had under its old id.
+
+    The restore cache is loaded with Home Assistant's base functionality,
+    before any integration, so it is already there when the entry migrates.
+    It is not a documented API: if its shape ever changes, the helpers simply
+    start from their defaults once, which is logged rather than fatal.
+    """
+    from homeassistant.core import State
+    from homeassistant.helpers import restore_state
+
+    def retarget(stored, new_id):
+        state = State.from_dict({**stored.state.as_dict(), "entity_id": new_id})
+        return restore_state.StoredState(state, stored.extra_data, stored.last_seen)
+
+    try:
+        moved = carry_restored_states(
+            restore_state.async_get(hass).last_states, renamed, retarget
+        )
+    except Exception:  # noqa: BLE001 - never block the migration on a cache
+        _LOGGER.warning(
+            "cover_extender: could not carry the restored states over to the "
+            "renamed helpers; locks, modes and switches start from their defaults once",
+            exc_info=True,
+        )
+        return
+    _LOGGER.debug("cover_extender: restored states carried over to %s", moved)
+
+
 def _migrate_entity_ids_v4(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Rename the helpers to <cover>_cx_<function>, and say so in Repairs.
 
@@ -213,6 +247,7 @@ def _migrate_entity_ids_v4(hass: HomeAssistant, entry: ConfigEntry) -> None:
     if not renamed:
         return
     _LOGGER.info("cover_extender: %d helper entity ids renamed for 4.0", len(renamed))
+    _carry_restored_states(hass, renamed)
     ir.async_create_issue(
         hass, DOMAIN, ISSUE_ENTITY_IDS_RENAMED,
         is_fixable=False,
