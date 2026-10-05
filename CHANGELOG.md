@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0] - Unreleased
+
+### Changed (breaking)
+- **Entity ids now say where they come from: `<cover>_cx_<function>`.** Reported on the HACF forum: on an install with many entities, nothing told the helpers apart from everything else. The cover comes first, so a helper sorts next to its cover, then `cx`:
+
+  | 3.x | 4.0 |
+  |---|---|
+  | `select.mode_<cover>` | `select.<cover>_cx_mode` |
+  | `switch.<cover>_lock` | `switch.<cover>_cx_lock` |
+  | `switch.<cover>_auto_shade` | `switch.<cover>_cx_auto_shade` |
+  | `switch.<cover>_auto_solar_gain` | `switch.<cover>_cx_auto_solar_gain` |
+  | `binary_sensor.<cover>_sun_facing` | `binary_sensor.<cover>_cx_sun_facing` |
+  | `binary_sensor.<cover>_auto_shade` | `binary_sensor.<cover>_cx_auto_shade_status` |
+  | `binary_sensor.<cover>_solar_gain` | `binary_sensor.<cover>_cx_solar_gain_status` |
+  | `select.cover_extender_modes` | `select.cx_modes` |
+
+  Existing entities are renamed once, at the first start of 4.0 (config entry 2.1 → 2.2). Only ids still in their 3.x shape are renamed, keeping their cover part as it is; an id you had rewritten is left alone, and a rename whose target is already taken is skipped with a warning in the log. History follows the rename, automations, scripts and dashboards do not: a **Repairs** issue lists every old → new pair. Going back to 3.x still loads (minor version bump only); the entities then keep their 4.0 ids.
+
+### Added
+- **The entities show under their cover.** Each helper is attached to its cover's device, so it appears on that device's page and under the integration, instead of nowhere. It is linked with `Entity.device_entry`, which does not add Cover Extender to a device another integration owns. A cover without a device has its helpers on the Cover Extender hub device, named after the cover. `select.cx_modes` lives on the hub device too.
+
+### Fixed
+- **The entities have a name.** They declared a translation key with no translation behind it, so Home Assistant showed their raw entity id. Names are now fixed English (`CX mode`, `CX lock`, `CX auto shade`, `CX auto solar gain`, `CX sun facing`, `CX auto shade status`, `CX solar gain status`, `Modes`), never translated, so logs, screenshots and forum reports read the same in every language. The leading `CX` keeps Home Assistant's "rename the entity ids with the device" suggestion on the cx scheme.
+
 ## [3.1.2] - 2026-09-24
 
 ### Added

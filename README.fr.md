@@ -177,6 +177,8 @@ Ou **Paramètres → Appareils et services → Ajouter une intégration**, puis 
 
 **Mise à jour depuis la 2.x :** la configuration est migrée automatiquement au premier démarrage. La migration est à sens unique : revenir en 2.x ensuite est refusé plutôt que de risquer de corrompre la configuration.
 
+**Mise à jour depuis la 3.x :** la 4.0 renomme les entités qu'elle crée en `<volet>_cx_<fonction>` (par exemple `switch.salon_lock` devient `switch.salon_cx_lock`, et `select.mode_salon` devient `select.salon_cx_mode`). Home Assistant conserve leur historique mais ne met pas à jour vos automatisations, scripts et tableaux de bord : **Paramètres → Réparations** liste chaque ancien et nouvel identifiant pour que vous puissiez les remplacer. Un identifiant que vous aviez renommé vous-même est laissé tel quel. Les entités sont rattachées à l'appareil du volet (à l'appareil **Cover Extender** quand le volet n'en a pas), et leurs noms restent en anglais (`CX lock`, `CX mode`...), identiques dans toutes les langues.
+
 ---
 
 ## Prise en main
@@ -188,7 +190,7 @@ Ce parcours configure un volet avec deux modes, *Jour* (ouvert) et *Nuit* (ferm�
 3. **Créez deux modes.** Dans **Modes**, cliquez deux fois sur **Ajouter un mode** : *Jour* et *Nuit*. Laissez **Comportement** sur *Aucun* pour les deux. Cochez **Verrouiller les volets** sur *Nuit* si vous voulez que les commandes passées par Cover Extender attendent le matin.
 4. **Ajoutez votre volet.** Dans **Volets**, cliquez sur **Ajouter un volet**, choisissez l'entité `cover.*` et la façade *Sud*, puis **Enregistrer**.
 5. **Réglez les positions.** Dans **Matrice**, cliquez sur la cellule vide *Jour* de votre volet : cela lie le mode. Choisissez **Fixe** et 100 %. Faites de même pour *Nuit* à 0 %, puis **Enregistrer**. Les positions suivent la convention de Home Assistant : **0 = fermé, 100 = ouvert**.
-6. **Essayez.** Une nouvelle entité `select.mode_<votre_volet>` est apparue. Passez-la de *Jour* à *Nuit* : le volet se ferme.
+6. **Essayez.** Une nouvelle entité `select.<votre_volet>_cx_mode` est apparue. Passez-la de *Jour* à *Nuit* : le volet se ferme.
 
 ### Ensuite
 
@@ -231,11 +233,11 @@ Un mode ne s'applique qu'aux volets auxquels il est lié (une cellule de la matr
 | **Aucune** | Le volet ne bouge pas. Si le mode précédent était verrouillé et pas celui-ci, la position mémorisée est restaurée. |
 | **Auto** (modes à comportement) | La position est calculée. Choisir Fixe ou Entité à la place surcharge le calcul pour ce volet seulement. |
 
-Chaque volet reçoit une entité `select.mode_<volet>` qui liste ses modes liés : la changer applique le mode.
+Chaque volet reçoit une entité `select.<volet>_cx_mode` qui liste ses modes liés : la changer applique le mode.
 
 ### Verrou et mémoire
 
-Le verrou est un interrupteur par volet, `switch.<volet>_lock`. Les modes l'allument et l'éteignent, et vous pouvez le basculer à la main.
+Le verrou est un interrupteur par volet, `switch.<volet>_cx_lock`. Les modes l'allument et l'éteignent, et vous pouvez le basculer à la main.
 
 Tant qu'il est allumé, **les positions demandées via Cover Extender sont mémorisées au lieu de bouger le volet** : les actions `set_cover_position`, `open_cover` et `close_cover` de Cover Extender, et les positions Entité du mode actif.
 
@@ -282,7 +284,7 @@ L'ombrage empêche la lumière directe d'aller plus loin dans la pièce que ce q
 
 Il fonctionne quand :
 
-- **Ombrage automatique activé** est coché sur le volet (ou son gabarit), ce qui crée `switch.<volet>_auto_shade` ;
+- **Ombrage automatique activé** est coché sur le volet (ou son gabarit), ce qui crée `switch.<volet>_cx_auto_shade` ;
 - cet interrupteur est allumé, ce que fait un mode au comportement *Ombrage* ;
 - aucune exclusion n'est active.
 
@@ -304,7 +306,7 @@ La position est recalculée à chaque mise à jour de `sun.sun` (toutes les quel
 
 L'héliotropie est une fonction de **temps froid** : laisser le soleil chauffer la pièce quand il le peut, garder la chaleur sinon.
 
-Elle fonctionne quand **Héliotropie activée** est cochée sur le volet (ce qui crée `switch.<volet>_auto_solar_gain`), que cet interrupteur est allumé (un mode au comportement *Héliotropie* s'en charge) et qu'aucune exclusion n'est active. Alors :
+Elle fonctionne quand **Héliotropie activée** est cochée sur le volet (ce qui crée `switch.<volet>_cx_auto_solar_gain`), que cet interrupteur est allumé (un mode au comportement *Héliotropie* s'en charge) et qu'aucune exclusion n'est active. Alors :
 
 - si l'entité de température est au-dessus ou égale au seuil, **rien ne se passe** (le volet reste où il est) ;
 - sinon, si le soleil fait face au volet et que la météo est dans la liste des bonnes conditions, le volet va à la **Position au soleil** (100 % par défaut) ;
@@ -314,7 +316,7 @@ L'entité de température, le seuil et l'entité météo sont communs à tous le
 
 ### Le sélecteur global
 
-`select.cover_extender_modes` liste tous les modes non masqués, avec leur icône et leur couleur : il est fait pour les tableaux de bord.
+`select.cx_modes` liste tous les modes non masqués, avec leur icône et leur couleur : il est fait pour les tableaux de bord.
 
 > [!NOTE]
 > Le changer **ne change aucun volet à lui seul**. Reliez-le avec une automatisation :
@@ -323,7 +325,7 @@ L'entité de température, le seuil et l'entité météo sont communs à tous le
 alias: Cover Extender - appliquer le mode global
 triggers:
   - trigger: state
-    entity_id: select.cover_extender_modes
+    entity_id: select.cx_modes
     not_from: [unknown, unavailable]
     not_to: [unknown, unavailable]
 actions:
@@ -343,15 +345,15 @@ Les volets qui ne sont pas liés au mode choisi ne bougent pas.
 
 ## Questions fréquentes
 
-**Mon volet ne bouge pas.** C'est l'une de ces trois raisons : le volet est **verrouillé** (`switch.<volet>_lock` est allumé, la position demandée est dans l'attribut `memory`), une entité d'**exclusion** est à `on`, ou le mode n'a **pas de position** pour ce volet (Aucune, ou le mode n'est pas lié au volet dans la matrice). Pour l'ombrage, vérifiez aussi le seuil de changement et la temporisation.
+**Mon volet ne bouge pas.** C'est l'une de ces trois raisons : le volet est **verrouillé** (`switch.<volet>_cx_lock` est allumé, la position demandée est dans l'attribut `memory`), une entité d'**exclusion** est à `on`, ou le mode n'a **pas de position** pour ce volet (Aucune, ou le mode n'est pas lié au volet dans la matrice). Pour l'ombrage, vérifiez aussi le seuil de changement et la temporisation.
 
-**J'ai bougé mon volet à la main et il est revenu tout seul.** L'ombrage ou l'héliotropie est actif. L'ombrage attend la temporisation après tout mouvement, puis reprend. Pour garder votre position, passez à un mode sans comportement, ou éteignez `switch.<volet>_auto_shade`.
+**J'ai bougé mon volet à la main et il est revenu tout seul.** L'ombrage ou l'héliotropie est actif. L'ombrage attend la temporisation après tout mouvement, puis reprend. Pour garder votre position, passez à un mode sans comportement, ou éteignez `switch.<volet>_cx_auto_shade`.
 
-**Changer `select.cover_extender_modes` ne fait rien.** C'est normal : c'est un sélecteur d'affichage. Voir [le sélecteur global](#le-sélecteur-global) pour l'automatisation qui le relie.
+**Changer `select.cx_modes` ne fait rien.** C'est normal : c'est un sélecteur d'affichage. Voir [le sélecteur global](#le-sélecteur-global) pour l'automatisation qui le relie.
 
 **Je ne trouve pas le panneau.** Ouvrez directement `http://<votre-ha>:8123/cover-extender`. Il faut un compte administrateur. Si l'entrée manque dans la barre latérale, elle est peut-être masquée : ouvrez votre **Profil** et modifiez les éléments de la barre latérale.
 
-**`switch.<volet>_auto_shade` n'existe pas.** Cochez **Ombrage automatique activé** dans la section Ombrage du volet (ou de son gabarit). Pareil pour l'héliotropie.
+**`switch.<volet>_cx_auto_shade` n'existe pas.** Cochez **Ombrage automatique activé** dans la section Ombrage du volet (ou de son gabarit). Pareil pour l'héliotropie.
 
 **En ombrage, le volet ferme trop / pas assez.** Augmentez la **Distance du volet** pour laisser entrer plus de soleil, montez la **Position mini** pour garder de la lumière. Après chaque changement, l'action `cover_extender.compute_shade_position` (dans **Outils de développement → Actions**) montre la nouvelle position sans bouger le volet.
 

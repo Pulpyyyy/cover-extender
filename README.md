@@ -196,6 +196,8 @@ Or go to **Settings → Devices & services → Add integration** and search for 
 
 **Upgrading from 2.x:** the stored configuration migrates automatically at first startup. The migration is one-way: going back to 2.x afterwards is refused rather than risking corruption.
 
+**Upgrading from 3.x:** 4.0 renames the entities it creates to `<cover>_cx_<function>` (for example `switch.living_room_lock` becomes `switch.living_room_cx_lock`, and `select.mode_living_room` becomes `select.living_room_cx_mode`). Home Assistant keeps their history but does not update your automations, scripts and dashboards: **Settings → Repairs** lists every old and new id so you can replace them. An id you had renamed yourself is left as it was.
+
 ---
 
 ## Quick start
@@ -207,7 +209,7 @@ This walk-through sets up one cover with two modes, *Day* (open) and *Night* (cl
 3. **Create two modes.** In **Modes**, click **Add a mode** twice: *Day* and *Night*. Leave **Behavior** on *None* for both. Tick **Lock the covers** on *Night* if you want remote commands made through Cover Extender to wait until morning.
 4. **Add your cover.** In **Covers**, click **Add a cover**, pick the `cover.*` entity and the *South* facade, then **Save**.
 5. **Set the positions.** In **Matrix**, click the empty *Day* cell on your cover: it links the mode. Choose **Fixed** and 100 %. Do the same for *Night* at 0 %, then **Save**. Positions follow Home Assistant's convention: **0 = closed, 100 = open**.
-6. **Try it.** A new entity `select.mode_<your_cover>` appeared. Change it from *Day* to *Night*: the cover closes.
+6. **Try it.** A new entity `select.<your_cover>_cx_mode` appeared. Change it from *Day* to *Night*: the cover closes.
 
 ### Next steps
 
@@ -250,11 +252,11 @@ A mode only applies to the covers it is linked to (a cell in the matrix). For ea
 | **None** | The cover does not move. If the previous mode was locked and this one is not, the memorized position is restored. |
 | **Auto** (behavior modes only) | The position is computed by the behavior. Choosing Fixed or Entity instead overrides the computation for this cover only. |
 
-Each cover gets a `select.mode_<cover>` entity listing its linked modes: changing it applies the mode.
+Each cover gets a `select.<cover>_cx_mode` entity listing its linked modes: changing it applies the mode.
 
 ### Lock and memory
 
-The lock is a switch per cover, `switch.<cover>_lock`. Modes turn it on and off, and you can toggle it by hand.
+The lock is a switch per cover, `switch.<cover>_cx_lock`. Modes turn it on and off, and you can toggle it by hand.
 
 While it is on, **positions requested through Cover Extender are stored in memory instead of moving the cover**: the [`set_cover_position`, `open_cover` and `close_cover` actions](#actions) of Cover Extender, and the Entity positions of the active mode.
 
@@ -311,7 +313,7 @@ Shading keeps direct sunlight from reaching further into the room than you decid
 
 It runs when all of these hold:
 
-- **Automatic shading enabled** is ticked on the cover (or its template), which creates `switch.<cover>_auto_shade`;
+- **Automatic shading enabled** is ticked on the cover (or its template), which creates `switch.<cover>_cx_auto_shade`;
 - that switch is on, which a mode with the *Shading* behavior does for you;
 - no exclusion is active.
 
@@ -337,7 +339,7 @@ The height of the bottom edge is `distance / cos(γ) × tan(α)`, where α is th
 
 Solar gain is a **cold-weather** feature: let the sun heat the room when it can, keep the heat in when it cannot.
 
-It runs when **Solar gain enabled** is ticked on the cover (which creates `switch.<cover>_auto_solar_gain`), that switch is on (a mode with the *Solar gain* behavior does it), and no exclusion is active. Then:
+It runs when **Solar gain enabled** is ticked on the cover (which creates `switch.<cover>_cx_auto_solar_gain`), that switch is on (a mode with the *Solar gain* behavior does it), and no exclusion is active. Then:
 
 - if the temperature entity is at or above the threshold, **nothing happens** (the cover stays where it is);
 - otherwise, if the sun [faces](#facades-and-orientation) the cover and the weather is in the good conditions list, the cover goes to **Position in the sun** (default 100 %);
@@ -347,7 +349,7 @@ The temperature entity, threshold and weather entity are shared by all covers (*
 
 ### The global mode selector
 
-`select.cover_extender_modes` lists every mode that is not hidden, with its icon and color: it is meant for dashboards.
+`select.cx_modes` lists every mode that is not hidden, with its icon and color: it is meant for dashboards.
 
 > [!NOTE]
 > Changing it **does not change any cover by itself**. Connect it with an automation:
@@ -356,7 +358,7 @@ The temperature entity, threshold and weather entity are shared by all covers (*
 alias: Cover Extender - apply the global mode
 triggers:
   - trigger: state
-    entity_id: select.cover_extender_modes
+    entity_id: select.cx_modes
     not_from: [unknown, unavailable]
     not_to: [unknown, unavailable]
 actions:
@@ -411,15 +413,17 @@ Per cover:
 
 | Entity | Created when | Purpose |
 |---|---|---|
-| `select.mode_<cover>` | always | Current mode of the cover. Changing it applies the mode. |
-| `switch.<cover>_lock` | always | The [lock](#lock-and-memory). |
-| `switch.<cover>_auto_shade` | shading enabled on the cover | Turns [shading](#autonomous-shading) on or off. |
-| `switch.<cover>_auto_solar_gain` | solar gain enabled on the cover | Turns [solar gain](#solar-gain) on or off. |
-| `binary_sensor.<cover>_sun_facing` | option in General settings | The sun faces the cover. |
-| `binary_sensor.<cover>_auto_shade` | option in General settings | Shading is enabled on the cover. |
-| `binary_sensor.<cover>_solar_gain` | option in General settings | Solar gain is enabled on the cover. |
+| `select.<cover>_cx_mode` | always | Current mode of the cover. Changing it applies the mode. |
+| `switch.<cover>_cx_lock` | always | The [lock](#lock-and-memory). |
+| `switch.<cover>_cx_auto_shade` | shading enabled on the cover | Turns [shading](#autonomous-shading) on or off. |
+| `switch.<cover>_cx_auto_solar_gain` | solar gain enabled on the cover | Turns [solar gain](#solar-gain) on or off. |
+| `binary_sensor.<cover>_cx_sun_facing` | option in General settings | The sun faces the cover. |
+| `binary_sensor.<cover>_cx_auto_shade_status` | option in General settings | Shading is enabled on the cover. |
+| `binary_sensor.<cover>_cx_solar_gain_status` | option in General settings | Solar gain is enabled on the cover. |
 
-Global: `select.cover_extender_modes`, see [the global mode selector](#the-global-mode-selector).
+Global: `select.cx_modes`, see [the global mode selector](#the-global-mode-selector).
+
+Every id contains `_cx_`: search for it to find all the entities Cover Extender created. They are attached to the cover's own device and show on its page; a cover without a device (a template cover, for example) has its entities on the **Cover Extender** device instead. Their names are fixed English (`CX lock`, `CX mode`...), the same in every language, so logs and screenshots read the same for everyone.
 
 Covers are tracked by their entity registry id: renaming a cover, or any of these entities, breaks nothing. After a cover rename, the helper entities keep their old entity_id (standard Home Assistant behavior); rename them by hand if you want matching names.
 
@@ -586,15 +590,15 @@ triggers:
 
 ## FAQ and troubleshooting
 
-**My cover does not move.** It is one of three things: the cover is **locked** (`switch.<cover>_lock` is on, the requested position is in the `memory` attribute), an **exclusion** entity is on, or the mode has **no position** for this cover (None, or the mode is not linked to it in the matrix). For shading, also check the change threshold and the time-out.
+**My cover does not move.** It is one of three things: the cover is **locked** (`switch.<cover>_cx_lock` is on, the requested position is in the `memory` attribute), an **exclusion** entity is on, or the mode has **no position** for this cover (None, or the mode is not linked to it in the matrix). For shading, also check the change threshold and the time-out.
 
-**I moved my cover by hand and it went back on its own.** Shading or solar gain is on. Shading waits for the time-out after any movement, then resumes. To keep your position, switch to a mode without a behavior, or turn `switch.<cover>_auto_shade` off.
+**I moved my cover by hand and it went back on its own.** Shading or solar gain is on. Shading waits for the time-out after any movement, then resumes. To keep your position, switch to a mode without a behavior, or turn `switch.<cover>_cx_auto_shade` off.
 
-**Changing `select.cover_extender_modes` does nothing.** Expected: it is a display selector. See [the global mode selector](#the-global-mode-selector) for the automation that connects it.
+**Changing `select.cx_modes` does nothing.** Expected: it is a display selector. See [the global mode selector](#the-global-mode-selector) for the automation that connects it.
 
 **I cannot find the panel.** Open `http://<your-ha>:8123/cover-extender` directly. The panel needs an administrator account. If the sidebar entry is missing, it may be hidden: open your **Profile** and change the sidebar items there.
 
-**`switch.<cover>_auto_shade` does not exist.** Tick **Automatic shading enabled** in the cover's Shading section (or in its template). Same for solar gain.
+**`switch.<cover>_cx_auto_shade` does not exist.** Tick **Automatic shading enabled** in the cover's Shading section (or in its template). Same for solar gain.
 
 **The cover closes too much / not enough in shading.** Increase **Distance from the cover** to let more sun in, raise **Minimum position** to keep some light. After each change, [`compute_shade_position`](#cover_extendercompute_shade_position) (in **Developer tools → Actions**) shows the new position without moving the cover.
 

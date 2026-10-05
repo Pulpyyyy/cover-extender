@@ -1768,7 +1768,7 @@ class CoverExtenderPanel extends HTMLElement {
     wrap.append(grid);
   }
 
-  /** Drag reorder. The stored order drives the order of the select.mode_* options. */
+  /** Drag reorder. The stored order drives the order of the select.*_cx_mode options. */
   _reorderModes(from, to) {
     if (from === to || from == null) return;
     const items = this._cfg.modes.map((m) => ({ ...m }));
