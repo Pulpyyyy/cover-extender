@@ -78,5 +78,11 @@
         "open_editor": "Façades, gabarits, modes, volets et réglages généraux se modifient tous dans un seul écran.\n\n**[Ouvrir l'éditeur Cover Extender]({url})**"
       }
     }
+  },
+  "issues": {
+    "entity_ids_renamed": {
+      "title": "Cover Extender 4.0 a renommé ses entités",
+      "description": "Cover Extender 4.0 donne à chaque entité qu'il crée un identifiant de la forme volet_cx_fonction, par exemple switch.salon_cx_lock, pour les distinguer de vos autres entités. {count} identifiants ont été renommés :\n\n{renames}\n\nHome Assistant ne met pas à jour les automatisations, scripts et tableaux de bord qui utilisent les anciens identifiants : remplacez-les. L'historique est conservé. Les identifiants que vous aviez modifiés vous-même n'ont pas été touchés.\n\nIgnorez ce message une fois la mise à jour faite."
+    }
   }
 }

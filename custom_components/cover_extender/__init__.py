@@ -2,17 +2,18 @@
 Cover Extender — enriches existing cover entities without creating new ones.
 
 Injects custom attributes (entity_picture, facade, modes, auto_shade, sun_facing)
-and auto-creates the following helper entities for each configured cover:
-  - select.mode_<cover>            mode selector
-  - switch.<cover>_lock            automation lock
-  - switch.<cover>_auto_shade      autonomous solar shading (shade.enable: true only)
-  - switch.<cover>_auto_solar_gain solar gain optimisation (solar_gain.enable: true only)
+and auto-creates the following helper entities for each configured cover, on
+the cover's own device (on the integration's hub when the cover has none):
+  - select.<cover>_cx_mode            mode selector
+  - switch.<cover>_cx_lock            automation lock
+  - switch.<cover>_cx_auto_shade      autonomous solar shading (shading enabled only)
+  - switch.<cover>_cx_auto_solar_gain solar gain optimisation (solar gain enabled only)
 
 Mode definition (cover_extender_modes section):
   Each mode can declare an optional `behavior` field — at most one behavior
   can be active at a time (auto_shade and solar_gain are mutually exclusive):
-    behavior: auto_shade   → turns on switch.<cover>_auto_shade when mode is applied
-    behavior: solar_gain   → turns on switch.<cover>_auto_solar_gain when mode is applied
+    behavior: auto_shade   → turns on switch.<cover>_cx_auto_shade when mode is applied
+    behavior: solar_gain   → turns on switch.<cover>_cx_auto_solar_gain when mode is applied
     behavior: null         → turns off both automation switches (default)
 
 Configuration is done entirely through the admin panel at /cover-extender and
@@ -48,12 +49,15 @@ from homeassistant.helpers import (
     config_validation as cv,
     device_registry as dr,
     entity_registry as er,
+    issue_registry as ir,
 )
 
 from . import frontend as admin_frontend
 from .websocket_api import async_register_websocket_api
 from .const import (
     DOMAIN,
+    HUB_IDENTIFIER,
+    ISSUE_ENTITY_IDS_RENAMED,
     PANEL_URL_PATH,
     SERVICE_APPLY_MODE,
     SERVICE_GET_MODE_POSITION,
@@ -69,7 +73,7 @@ from .const import (
     SECTIONS_WITH_ITEMS,
 )
 from .coordinator import CoverExtenderCoordinator
-from .helpers import HELPER_UNIQUE_ID_TEMPLATES, cover_object_id
+from .helpers import HELPER_UNIQUE_ID_TEMPLATES, cover_object_id, v4_entity_id
 
 import logging
 _LOGGER = logging.getLogger(__name__)
@@ -173,7 +177,53 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         _drop_legacy_subentries(hass, entry)
 
+    if entry.version == 2 and entry.minor_version < 2:
+        _migrate_entity_ids_v4(hass, entry)
+        hass.config_entries.async_update_entry(entry, minor_version=2)
+
     return True
+
+
+# ── 2.1 → 2.2 (Cover Extender 4.0): helper entity ids ────────────────────────
+
+def _migrate_entity_ids_v4(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Rename the helpers to <cover>_cx_<function>, and say so in Repairs.
+
+    Runs once, gated by the entry's minor version. An id is renamed only while
+    it still has its pre-4.0 shape (see helpers.v4_entity_id): an id the user
+    rewrote is theirs and stays. Home Assistant does not follow a rename into
+    automations, scripts or dashboards, hence the repair issue listing every
+    old → new pair; the recorder does follow it, so history is kept.
+    """
+    registry = er.async_get(hass)
+    renamed: list[tuple[str, str]] = []
+    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        new_entity_id = v4_entity_id(reg_entry.domain, reg_entry.unique_id, reg_entry.entity_id)
+        if new_entity_id is None:
+            continue
+        if registry.async_get(new_entity_id) is not None:
+            _LOGGER.warning(
+                "cover_extender: %s not renamed to %s, that id is already taken",
+                reg_entry.entity_id, new_entity_id,
+            )
+            continue
+        registry.async_update_entity(reg_entry.entity_id, new_entity_id=new_entity_id)
+        renamed.append((reg_entry.entity_id, new_entity_id))
+
+    if not renamed:
+        return
+    _LOGGER.info("cover_extender: %d helper entity ids renamed for 4.0", len(renamed))
+    ir.async_create_issue(
+        hass, DOMAIN, ISSUE_ENTITY_IDS_RENAMED,
+        is_fixable=False,
+        is_persistent=True,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key=ISSUE_ENTITY_IDS_RENAMED,
+        translation_placeholders={
+            "count": str(len(renamed)),
+            "renames": "\n".join(f"- `{old}` → `{new}`" for old, new in sorted(renamed)),
+        },
+    )
 
 
 def _migrate_helper_unique_ids(
@@ -268,7 +318,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await admin_frontend.async_register(hass)
     dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
-        identifiers={(DOMAIN, "hub")},
+        identifiers={(DOMAIN, HUB_IDENTIFIER)},
         name="Cover Extender",
         manufacturer="Pulpyyyy",
         model="Cover Extender",

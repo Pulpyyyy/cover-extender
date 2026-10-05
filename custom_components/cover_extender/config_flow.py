@@ -57,6 +57,9 @@ class CoverExtenderConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     # v2: the five configuration sections moved from singleton config subentries
     # into entry.options (see __init__.async_migrate_entry).
     VERSION = 2
+    # 2.2 (Cover Extender 4.0): helper entity ids renamed to <cover>_cx_<function>.
+    # A minor bump, so going back to 3.x still loads the entry.
+    MINOR_VERSION = 2
 
     @classmethod
     @callback
