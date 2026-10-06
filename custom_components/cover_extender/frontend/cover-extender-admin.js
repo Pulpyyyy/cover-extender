@@ -61,7 +61,60 @@ const FOCUSABLE =
 const WORDS = {
   en: {
     title: "Cover Extender",
-    tabs: { matrice: "Matrix", volets: "Covers", modes: "Modes", reglages: "Settings" },
+    tabs: { matrice: "Matrix", volets: "Covers", modes: "Modes", horaires: "Schedules", reglages: "Settings" },
+    sched: {
+      intro: "At the morning and evening times, Cover Extender applies to each cover the mode chosen below. It is a mode change like any other: exclusions, inhibitions, lock and timed modes apply.",
+      kinds: { morning: "Morning opening", evening: "Evening closing" },
+      enable: { morning: "Morning opening on", evening: "Evening closing on" },
+      enableHint: {
+        morning: "Off: no morning event, and the covers keep their mode.",
+        evening: "Off: no evening event, and the covers keep their mode.",
+      },
+      verb: { morning: "Opening", evening: "Closing" },
+      ref: { morning: "sunrise", evening: "sunset" },
+      refCap: { morning: "Sunrise", evening: "Sunset" },
+      refLong: { morning: "sunrise", evening: "sunset" },
+      refLongCap: { morning: "Sunrise", evening: "Sunset" },
+      refWord: "reference",
+      band: { morning: "Open before sunrise", evening: "Closed before sunset" },
+      hi: "Max time", hiFixed: "Max time = min", lo: "Min time",
+      x1: "Spring crossing", x2: "Autumn crossing",
+      fl: "Floor · not before", ce: "Ceiling · not after", flShort: "floor", ceShort: "ceiling",
+      fixedHint: "For a fixed time all year round, drag the max and min handles together until they stick.",
+      dstHint: (h) => ` Here they are either together or at least ${h} h apart, because of daylight saving time.`,
+      legal: "legal time", off: "off", offHalf: "off · plain half-sine",
+      unusedFixed: "unused with a fixed time", glued: "stuck to max: fixed time",
+      fixedAll: "fixed time all year, legal time", ignoredShort: " · ignored",
+      fixedLabel: (t) => `fixed time ${t}`,
+      today: "Today", earliest: "Earliest", latest: "Latest",
+      maxAfter: (r) => `Largest gap after ${r}`, daysBefore: (r) => `Days before ${r}`,
+      onDate: (d) => `on ${d}`, none: "none", upTo: (n, d) => `up to ${n}, on ${d}`,
+      errors: {
+        schedule_min_after_max: "The min time is after the max time. For a fixed time, enter the same time in both fields.",
+        schedule_floor_after_ceiling: "The floor is not before the ceiling.",
+        schedule_invalid: "These settings cannot be read.",
+        schedule_no_sun: "The sun does not rise or set every day at this latitude: no curve can follow it.",
+      },
+      ignored: {
+        out_of_range: (d, r, t) => `Crossing on ${d} ignored: that day, ${r} (${t}) is not between the min and max times.`,
+        same_half: (d) => `Crossing on ${d} ignored: both crossings fall on the same half of the curve, one before the longest day and one after.`,
+        too_steep: (d) => `Crossing on ${d} ignored: it would bend the curve too much. Move it closer to the equinox, or change the min or max time.`,
+      },
+      manyCross: (r, n) => `The curve crosses ${r} ${n} times a year. Check that this is intended.`,
+      clampHiLo: "The max cannot go below the min: the handles stay together.",
+      clampHiFl: (t) => `The max cannot go below the floor (${t}).`,
+      clampLoHi: "The min cannot go above the max: the handles stay together.",
+      clampLoCe: (t) => `The min cannot go above the ceiling (${t}).`,
+      clampFlHi: (t) => `The floor cannot go above the max (${t}).`,
+      clampFlCe: (t) => `The floor stays below the ceiling (${t}).`,
+      clampCeLo: (t) => `The ceiling cannot go below the min (${t}).`,
+      clampCeFl: (t) => `The ceiling stays above the floor (${t}).`,
+      clampGap: "A curve needs at least 1 h between max and min: below that, the clock change would push it under the min in winter.",
+      clampCross: (k, a, b) => `The ${k.toLowerCase()} stays between ${a} and ${b}.`,
+      perCover: "Mode applied per cover",
+      perCoverSub: "“None”: the cover does not follow this schedule. Only the modes linked to the cover and without a duration are offered.",
+      cover: "Cover", noneOpt: "None",
+    },
     loading: "Loading the configuration…",
     loadError: "Could not load the configuration",
     retry: "Retry",
@@ -221,6 +274,10 @@ const WORDS = {
       color_invalid: (n) => `Invalid color for “${n}”.`,
       duration_invalid: (n) => `Duration of “${n}”: between 1 and 1440 minutes.`,
       return_mode_invalid: (n) => `“${n}”: the mode it returns to must be an existing mode without a duration.`,
+      schedule_mode_timed: (m) => `“${m}” is applied by a schedule: it cannot have a duration, and a mode with a duration cannot be scheduled.`,
+      schedule_invalid: (k) => `The ${k} schedule cannot be read.`,
+      schedule_min_after_max: (k) => `The ${k} schedule: the min time is after the max time.`,
+      schedule_floor_after_ceiling: (k) => `The ${k} schedule: the floor is not before the ceiling.`,
       return_mode_timed: (target, user) => `“${target}” is the mode “${user}” returns to: it cannot have a duration. Change the return of “${user}” first.`,
       in_use: (n, count, covers) => `“${n}” is still used by ${count} cover(s): ${covers}`,
       entity_required: () => "A cover must point at an entity.",
@@ -246,7 +303,60 @@ const WORDS = {
   },
 
   fr: {
-    tabs: { matrice: "Matrice", volets: "Volets", modes: "Modes", reglages: "Réglages" },
+    tabs: { matrice: "Matrice", volets: "Volets", modes: "Modes", horaires: "Horaires", reglages: "Réglages" },
+    sched: {
+      intro: "À l'heure du matin et du soir, Cover Extender applique à chaque volet le mode choisi plus bas. C'est un changement de mode comme un autre : les exclusions, les inhibitions, le verrou et les modes minutés s'appliquent.",
+      kinds: { morning: "Ouverture du matin", evening: "Fermeture du soir" },
+      enable: { morning: "Ouverture du matin activée", evening: "Fermeture du soir activée" },
+      enableHint: {
+        morning: "Désactivée : pas d'événement le matin, les volets gardent leur mode.",
+        evening: "Désactivée : pas d'événement le soir, les volets gardent leur mode.",
+      },
+      verb: { morning: "Ouverture", evening: "Fermeture" },
+      ref: { morning: "lever", evening: "coucher" },
+      refCap: { morning: "Lever", evening: "Coucher" },
+      refLong: { morning: "lever du soleil", evening: "coucher du soleil" },
+      refLongCap: { morning: "Lever du soleil", evening: "Coucher du soleil" },
+      refWord: "référence",
+      band: { morning: "Ouvert avant le lever", evening: "Fermé avant le coucher" },
+      hi: "Heure max", hiFixed: "Heure max = min", lo: "Heure min",
+      x1: "Croisement printemps", x2: "Croisement automne",
+      fl: "Plancher · pas avant", ce: "Plafond · pas après", flShort: "plancher", ceShort: "plafond",
+      fixedHint: "Pour une heure fixe toute l'année, rapproche les poignées max et min jusqu'à ce qu'elles se collent.",
+      dstHint: (h) => ` Ici, elles sont soit collées, soit écartées d'au moins ${h} h, à cause de l'heure d'été.`,
+      legal: "heure légale", off: "désactivé", offHalf: "désactivé · demi-sinusoïde simple",
+      unusedFixed: "inutilisé en heure fixe", glued: "collée au max : heure fixe",
+      fixedAll: "heure fixe toute l'année, heure légale", ignoredShort: " · ignoré",
+      fixedLabel: (t) => `heure fixe ${t}`,
+      today: "Aujourd'hui", earliest: "Le plus tôt", latest: "Le plus tard",
+      maxAfter: (r) => `Plus grand écart après le ${r}`, daysBefore: (r) => `Jours avant le ${r}`,
+      onDate: (d) => `le ${d}`, none: "aucun", upTo: (n, d) => `jusqu'à ${n}, le ${d}`,
+      errors: {
+        schedule_min_after_max: "L'heure min est après l'heure max. Pour une heure fixe, mets la même heure dans les deux champs.",
+        schedule_floor_after_ceiling: "Le plancher n'est pas avant le plafond.",
+        schedule_invalid: "Ces réglages sont illisibles.",
+        schedule_no_sun: "À cette latitude, le soleil ne se lève pas ou ne se couche pas tous les jours : aucune courbe ne peut le suivre.",
+      },
+      ignored: {
+        out_of_range: (d, r, t) => `Croisement du ${d} ignoré : ce jour-là, le ${r} (${t}) n'est pas entre l'heure min et l'heure max.`,
+        same_half: (d) => `Croisement du ${d} ignoré : les deux croisements tombent sur la même moitié de courbe, il en faut un avant le jour le plus long et un après.`,
+        too_steep: (d) => `Croisement du ${d} ignoré : il demande une courbe trop déformée. Rapproche-le de l'équinoxe, ou change l'heure min ou max.`,
+      },
+      manyCross: (r, n) => `La courbe croise le ${r} ${n} fois dans l'année. Vérifie que c'est voulu.`,
+      clampHiLo: "Le max ne descend pas sous le min : les poignées restent collées.",
+      clampHiFl: (t) => `Le max ne descend pas sous le plancher (${t}).`,
+      clampLoHi: "Le min ne monte pas au-dessus du max : les poignées restent collées.",
+      clampLoCe: (t) => `Le min ne monte pas au-dessus du plafond (${t}).`,
+      clampFlHi: (t) => `Le plancher ne monte pas au-dessus du max (${t}).`,
+      clampFlCe: (t) => `Le plancher reste sous le plafond (${t}).`,
+      clampCeLo: (t) => `Le plafond ne descend pas sous le min (${t}).`,
+      clampCeFl: (t) => `Le plafond reste au-dessus du plancher (${t}).`,
+      clampGap: "Entre l'heure fixe et la courbe, il faut au moins 1 h d'écart : en dessous, le changement d'heure ferait passer la courbe sous le min en hiver.",
+      clampCross: (k, a, b) => `Le ${k.toLowerCase()} reste entre le ${a} et le ${b}.`,
+      perCover: "Mode appliqué par volet",
+      perCoverSub: "« Aucun » : le volet ne suit pas cet horaire. Seuls les modes liés au volet et sans durée sont proposés.",
+      cover: "Volet", noneOpt: "Aucun",
+    },
     loading: "Chargement de la configuration…",
     loadError: "Impossible de charger la configuration",
     retry: "Réessayer",
@@ -401,6 +511,10 @@ const WORDS = {
       color_invalid: (n) => `Couleur invalide pour « ${n} ».`,
       duration_invalid: (n) => `Durée de « ${n} » : entre 1 et 1440 minutes.`,
       return_mode_invalid: (n) => `« ${n} » : le mode de retour doit être un mode existant sans durée.`,
+      schedule_mode_timed: (m) => `« ${m} » est appliqué par un horaire : il ne peut pas avoir de durée, et un mode avec une durée ne peut pas être programmé.`,
+      schedule_invalid: (k) => `L'horaire « ${k} » est illisible.`,
+      schedule_min_after_max: (k) => `Horaire « ${k} » : l'heure min est après l'heure max.`,
+      schedule_floor_after_ceiling: (k) => `Horaire « ${k} » : le plancher n'est pas avant le plafond.`,
       return_mode_timed: (target, user) => `« ${target} » est le mode de retour de « ${user} » : il ne peut pas avoir de durée. Changez d'abord le retour de « ${user} ».`,
       in_use: (n, count, covers) => `« ${n} » est encore utilisé par ${count} volet(s) : ${covers}`,
       entity_required: () => "Un volet doit désigner une entité.",
@@ -625,6 +739,14 @@ const CONTROLS = `
   --ce-b-none:  hsl(205 var(--ce-beh-s) var(--ce-beh-l));
   --ce-b-shade: hsl(40  var(--ce-beh-s) var(--ce-beh-l));
   --ce-b-gain:  hsl(348 var(--ce-beh-s) var(--ce-beh-l));
+
+  /* Schedule editor: the max / min handles, the crossings, the floor and
+     ceiling, and the band where the cover is closed before sunset (or open
+     before sunrise). */
+  --ce-h:      hsl(250 45% 56%);
+  --ce-x:      hsl(155 55% 38%);
+  --ce-clamp:  hsl(335 48% 52%);
+  --ce-band:   hsl(20 85% 55% / .13);
 }
 `;
 
@@ -931,8 +1053,177 @@ const STYLE = `
   .actions { display: flex; align-items: center; gap: var(--fp-s2); }
   .actions.card { margin-top: var(--fp-s3); }
 
+  /* ---------- schedules ---------- */
+  .blk { margin-bottom: var(--fp-s3); }
+  .sched-body[hidden] { display: none; }
+  .seg.sched-seg { margin: 0; flex: none; }
+  .seg.sched-seg button { padding: 0 var(--fp-s4); white-space: nowrap; }
+  .sched-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--fp-s2); margin: var(--fp-s3) 0; }
+  @media (max-width: 720px) { .sched-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .sf { background: var(--secondary-background-color); border-radius: var(--fp-ctl-r); padding: var(--fp-s2) var(--fp-s3);
+        border-left: 3px solid var(--c); display: grid; gap: var(--fp-s0); align-content: start; }
+  .sf.off { opacity: .55; }
+  .sf-top { display: flex; justify-content: space-between; align-items: center; gap: var(--fp-sh); }
+  .sf label { font-size: var(--f-11); text-transform: uppercase; letter-spacing: .06em; color: var(--secondary-text-color); }
+  .sf input[type=time], .sf input[type=date] { font: inherit; font-size: var(--f-16); font-weight: 600;
+        font-variant-numeric: tabular-nums; border: 0; background: transparent; color: var(--primary-text-color);
+        padding: 0; width: 100%; }
+  .sf input[type=checkbox] { accent-color: var(--c); width: 16px; height: 16px; margin: 0; cursor: pointer; }
+  .sf-info { font-size: var(--f-11-5); color: var(--secondary-text-color); }
+  .legend.sched-legend { margin: 0 0 var(--fp-s2); }
+  .lg-line { width: 16px; height: 3px; border-radius: 2px; display: inline-block; }
+  .lg-line.sw { height: 10px; background: var(--ce-band); }
+  .sched-chart { position: relative; touch-action: none; }
+  .sched-chart svg { display: block; width: 100%; height: auto; overflow: visible; user-select: none; }
+  .sched-chart text { font-size: 11px; fill: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
+  .sched-chart .grid { stroke: var(--divider-color); stroke-width: 1; }
+  .sched-chart .band { fill: var(--ce-band); }
+  .sched-chart .brk { stroke: var(--primary-text-color); stroke-width: 1.5; }
+  .sched-chart .brk-t { fill: var(--primary-text-color); font-weight: 600; paint-order: stroke;
+                        stroke: var(--card-background-color); stroke-width: 3px; }
+  .sched-chart .on-chip { fill: #fff; font-weight: 600; }
+  .sched-chart .fixed-t { fill: var(--ce-h); font-weight: 600; paint-order: stroke;
+                          stroke: var(--card-background-color); stroke-width: 3px; }
+  .sched-chart .cross { stroke: var(--divider-color); }
+  .sched-chart .handle { cursor: grab; }
+  .sched-tip { position: absolute; pointer-events: none; background: var(--card-background-color);
+               border: 1px solid var(--divider-color); border-radius: var(--fp-ctl-r);
+               padding: var(--fp-sh) var(--fp-s2); font-size: var(--f-12); white-space: nowrap;
+               box-shadow: 0 4px 14px rgba(0,0,0,.18); font-variant-numeric: tabular-nums; }
+  .sched-tip[hidden] { display: none; }
+  .sched-tip .d { color: var(--secondary-text-color); }
+  .sched-warn { background: color-mix(in srgb, var(--fp-warn) 14%, transparent); border-radius: var(--fp-ctl-r);
+                padding: var(--fp-s2) var(--fp-s3); font-size: var(--f-12-5); margin-top: var(--fp-s2); }
+  .sched-warn[hidden] { display: none; }
+  .sched-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                 gap: var(--fp-s2) var(--fp-s4); margin-top: var(--fp-s3); }
+  .sched-stats div { display: grid; }
+  .sched-stats .k { font-size: var(--f-11); text-transform: uppercase; letter-spacing: .05em; color: var(--secondary-text-color); }
+  .sched-stats .v { font-size: var(--f-17); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .sched-stats .s { font-size: var(--f-11-5); color: var(--secondary-text-color); }
+  .t-scroll { overflow-x: auto; }
+  table.assign { border-collapse: collapse; width: 100%; font-size: var(--f-13); }
+  table.assign th { text-align: left; font-size: var(--f-11); text-transform: uppercase; letter-spacing: .05em;
+                    color: var(--secondary-text-color); font-weight: 600; padding: var(--fp-s2);
+                    border-bottom: 1px solid var(--divider-color); white-space: nowrap; }
+  table.assign td { padding: var(--fp-s1) var(--fp-s2); border-bottom: 1px solid var(--divider-color); vertical-align: middle; }
+  table.assign tr:last-child td { border-bottom: 0; }
+  table.assign .rowh { padding: var(--fp-s1) 0; min-width: 180px; }
+  table.assign .fselect { width: 100%; min-width: 120px; }
+  table.assign .fselect:disabled { opacity: .45; }
+
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 `;
+
+/* ---------- schedules: what the panel computes itself ----------
+ *
+ * The curve comes from the server (cover_extender/schedule/preview): Python is
+ * the one place that computes it. The panel only converts between the stored
+ * shape and the handles, and keeps the handles within their bounds while they
+ * are dragged; the server validates again on save.
+ */
+const WS_SCHED_PREVIEW = `${DOMAIN}/schedule/preview`;
+const SCHED_KINDS = ["morning", "evening"];
+const P_YEAR = 365.2425;
+const smod = (a, n) => ((a % n) + n) % n;
+const hmFmt = (m) => { m = Math.round(smod(m, 1440)); return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; };
+const hmParse = (v) => { const [h, m] = String(v).split(":").map(Number); return h * 60 + m; };
+const signedMin = (n) => `${n >= 0 ? "+" : "−"}${Math.abs(Math.round(n))} min`;
+const schedDayOfYear = (year, month, day) => {
+  if (month === 2 && day === 29) day = 28;
+  return Math.min(365, Math.round((Date.UTC(year, month - 1, day) - Date.UTC(year, 0, 0)) / 864e5));
+};
+const schedDayDate = (j, year) => new Date(Date.UTC(year, 0, j));
+const schedDayToIso = (j, year) => schedDayDate(j, year).toISOString().slice(0, 10);
+const schedIsoToDay = (iso, year) => { const [, m, d] = iso.split("-").map(Number); return schedDayOfYear(year, m, d); };
+const schedDayLabel = (j, year, style) => new Intl.DateTimeFormat(LANG,
+  { day: "numeric", month: style === "short" ? "short" : "long", timeZone: "UTC" }).format(schedDayDate(j, year));
+
+/** Stored shape → the handles (minutes of the day, days of the year). */
+function schedFromCfg(cfg) {
+  const year = new Date().getFullYear();
+  const day = (v, fallback) => (v ? schedIsoToDay(`${year}-${v}`, year) : fallback);
+  const fixed = cfg.type === "fixed";
+  return {
+    hi: hmParse(fixed ? cfg.time : cfg.max), lo: hmParse(fixed ? cfg.time : cfg.min),
+    x1: { on: !fixed && !!cfg.cross_spring, j: day(cfg.cross_spring, 79) },
+    x2: { on: !fixed && !!cfg.cross_autumn, j: day(cfg.cross_autumn, 266) },
+    fl: { on: !!cfg.not_before, m: cfg.not_before ? hmParse(cfg.not_before) : 7 * 60 },
+    ce: { on: !!cfg.not_after, m: cfg.not_after ? hmParse(cfg.not_after) : 22 * 60 },
+  };
+}
+
+/** The handles → the stored shape. */
+function schedToCfg(s) {
+  const year = new Date().getFullYear();
+  const out = s.hi === s.lo
+    ? { type: "fixed", time: hmFmt(s.hi) }
+    : {
+      type: "curve", max: hmFmt(s.hi), min: hmFmt(s.lo),
+      cross_spring: s.x1.on ? schedDayToIso(s.x1.j, year).slice(5) : null,
+      cross_autumn: s.x2.on ? schedDayToIso(s.x2.j, year).slice(5) : null,
+    };
+  out.not_before = s.fl.on ? hmFmt(s.fl.m) : null;
+  out.not_after = s.ce.on ? hmFmt(s.ce.m) : null;
+  return out;
+}
+
+/** Move one time handle within its bounds. Returns the message to show, or "".
+ *  *pv* is the last preview (its dst_gap); before the first one, no gap. */
+function schedSetVal(pv, s, key, v) {
+  const W = T.sched, SNAP = 5, G = pv?.dst_gap || 0;
+  const FL = s.fl.on ? s.fl.m : -1e9, CE = s.ce.on ? s.ce.m : 1e9, want = v;
+  let msg = "";
+  if (key === "hi") {
+    v = Math.max(v, s.lo, FL);
+    const d = v - s.lo;
+    if ((d <= SNAP || d < G / 2) && s.lo >= FL) v = s.lo;
+    else if (d < G) v = s.lo + G;
+    s.hi = v;
+    if (want < s.lo && v === s.lo) msg = W.clampHiLo;
+    else if (want < FL && v === FL) msg = W.clampHiFl(hmFmt(FL));
+  } else if (key === "lo") {
+    v = Math.min(v, s.hi, CE);
+    const d = s.hi - v;
+    if ((d <= SNAP || d < G / 2) && s.hi <= CE) v = s.hi;
+    else if (d < G) v = s.hi - G;
+    s.lo = v;
+    if (want > s.hi && v === s.hi) msg = W.clampLoHi;
+    else if (want > CE && v === CE) msg = W.clampLoCe(hmFmt(CE));
+  } else if (key === "both") {
+    v = Math.min(Math.max(v, FL), CE); s.hi = s.lo = v;
+  } else if (key === "fl") {
+    v = Math.min(v, s.hi, s.ce.on ? s.ce.m - SNAP : 1e9); s.fl.m = v;
+    if (v !== want) msg = v === s.hi ? W.clampFlHi(hmFmt(s.hi)) : W.clampFlCe(hmFmt(s.ce.m));
+  } else if (key === "ce") {
+    v = Math.max(v, s.lo, s.fl.on ? s.fl.m + SNAP : -1e9); s.ce.m = v;
+    if (v !== want) msg = v === s.lo ? W.clampCeLo(hmFmt(s.lo)) : W.clampCeFl(hmFmt(s.fl.m));
+  }
+  if (!msg && G && (key === "hi" || key === "lo") && s.hi !== s.lo && Math.abs(s.hi - s.lo) === G
+      && Math.abs(want - (key === "hi" ? s.hi : s.lo)) > 0) msg = W.clampGap;
+  return msg;
+}
+
+/** Spring crossing on the half holding the 20 March equinox, autumn on the
+ *  other, at least two days from the extreme days. */
+function schedSetCross(pv, s, key, j, year) {
+  if (!pv?.max_day) { s[key].j = j; return ""; }
+  const JT = pv.min_day, JP = pv.max_day, L1 = pv.rising_days;
+  const half = (d) => smod(d - JT, P_YEAR) < L1;
+  const wantUp = half(79) === (key === "x1");
+  const a = wantUp ? JT : JP, b = wantUp ? JP : JT;
+  const len = smod(b - a, P_YEAR), k = smod(j - a, P_YEAR);
+  let v = j, msg = "";
+  if (k < 2 || k > len - 2) {
+    const toA = Math.min(k, P_YEAR - k), toB = Math.abs(k - len);
+    v = toA <= toB ? a + 2 : b - 2;
+    v = ((Math.round(v) - 1 + 365) % 365) + 1;
+    msg = T.sched.clampCross(key === "x1" ? T.sched.x1 : T.sched.x2,
+      schedDayLabel(smod(a, 365) || 365, year, "long"), schedDayLabel(smod(b, 365) || 365, year, "long"));
+  }
+  s[key].j = v;
+  return msg;
+}
 
 class CoverExtenderPanel extends HTMLElement {
   constructor() {
@@ -1033,7 +1324,7 @@ class CoverExtenderPanel extends HTMLElement {
     bar.append(logo, titleBox);
     const tabs = el("nav", "tabs");
     tabs.setAttribute("role", "tablist");
-    for (const key of ["volets", "matrice", "modes", "reglages"]) {
+    for (const key of ["volets", "matrice", "modes", "horaires", "reglages"]) {
       const b = el("button", "tab", T.tabs[key]);
       b.setAttribute("role", "tab");
       b.setAttribute("aria-selected", String(this._tab === key));
@@ -1077,6 +1368,7 @@ class CoverExtenderPanel extends HTMLElement {
     if (this._tab === "matrice") this._renderMatrix(wrap);
     else if (this._tab === "volets") this._renderCovers(wrap);
     else if (this._tab === "modes") this._renderModes(wrap);
+    else if (this._tab === "horaires") this._renderSchedules(wrap);
     else this._renderSettings(wrap);
 
     this._trackLiveNodes();
@@ -1095,6 +1387,7 @@ class CoverExtenderPanel extends HTMLElement {
     // the two together.
     if (this._edit && JSON.stringify(this._edit.draft) !== this._edit.clean) return true;
     if (this._globalDraft && JSON.stringify(this._globalDraft) !== this._globalClean) return true;
+    if (this._schedDraft && JSON.stringify(this._schedDraft) !== this._schedClean) return true;
     return false;
   }
 
@@ -1107,6 +1400,8 @@ class CoverExtenderPanel extends HTMLElement {
     this._edit = null;
     this._globalDraft = null;
     this._globalClean = null;
+    this._schedDraft = null;
+    this._schedClean = null;
     return true;
   }
 
@@ -1533,6 +1828,8 @@ class CoverExtenderPanel extends HTMLElement {
       this._edit = null;
       this._globalDraft = null;
       this._globalClean = null;
+      this._schedDraft = null;
+      this._schedClean = null;
       this._render();
       toast(this, T.saved);
       return true;
@@ -2170,6 +2467,435 @@ class CoverExtenderPanel extends HTMLElement {
     });
     actions.append(cancel, save);
     wrap.append(actions);
+  }
+
+  /* ---------- HORAIRES ---------- */
+
+  /** Editing copy of the house's schedules and of each cover's morning / evening mode. */
+  _newSchedDraft() {
+    const house = this._cfg.schedule || {};
+    const defaults = this._cfg.schedule_defaults || {};
+    const draft = { enabled: {}, s: {}, assign: {} };
+    for (const k of SCHED_KINDS) {
+      draft.enabled[k] = !!house[k];
+      draft.s[k] = schedFromCfg(house[k] || defaults[k]);
+    }
+    for (const c of this._cfg.covers) {
+      draft.assign[c.entity_id] = { morning: c.schedule?.morning ?? null, evening: c.schedule?.evening ?? null };
+    }
+    return draft;
+  }
+
+  /** Ask the server for the curve; one request in flight per schedule, the last one wins. */
+  _schedRequest(kind, onDone) {
+    this._schedReq = this._schedReq || {};
+    const r = this._schedReq[kind] || (this._schedReq[kind] = { busy: false, again: false });
+    if (r.busy) { r.again = true; return; }
+    r.busy = true;
+    this._hass.connection.sendMessagePromise({
+      type: WS_SCHED_PREVIEW, kind, settings: schedToCfg(this._schedDraft.s[kind]),
+    }).then((res) => {
+      this._schedPv = this._schedPv || {};
+      this._schedPv[kind] = res;
+      onDone();
+    }).catch((err) => console.error(`${DOMAIN}: schedule preview failed`, err))
+      .finally(() => {
+        r.busy = false;
+        if (r.again) { r.again = false; this._schedRequest(kind, onDone); }
+      });
+  }
+
+  _renderSchedules(wrap) {
+    const draft = this._schedDraft || (this._schedDraft = this._newSchedDraft());
+    if (this._schedClean == null) this._schedClean = JSON.stringify(draft);
+    const kind = this._schedKind || (this._schedKind = "evening");
+    const W = T.sched;
+    const s = draft.s[kind];
+    this._schedPv = this._schedPv || {};
+
+    wrap.append(el("p", "note", W.intro));
+
+    /* ---- curve editor ---- */
+    const card = el("div", "card sched blk");
+    const head = el("div", "toolbar");
+    const seg = el("div", "seg sched-seg");
+    for (const k of SCHED_KINDS) {
+      const b = el("button", k === kind ? "on" : "", W.kinds[k]);
+      b.type = "button";
+      b.addEventListener("click", () => { this._schedKind = k; this._render(); });
+      seg.append(b);
+    }
+    const sub = el("span", "secsub", `${W.refWord} : ${W.refLong[kind]}`);
+    head.append(seg, el("span", "spacer"), sub);
+    card.append(head);
+    card.append(this._boolRow(W.enable[kind], draft.enabled[kind], (v) => {
+      draft.enabled[kind] = v; this._render();
+    }, W.enableHint[kind]));
+
+    const body = el("div", "sched-body");
+    body.hidden = !draft.enabled[kind];
+    card.append(body);
+    const hint = el("p", "hint");
+    body.append(hint);
+
+    const fields = el("div", "sched-fields");
+    const mkField = (color, label, type, toggle) => {
+      const box = el("div", "sf");
+      box.style.setProperty("--c", color);
+      const top = el("div", "sf-top");
+      const lab = el("label", "", label);
+      top.append(lab);
+      let cb = null;
+      if (toggle) {
+        cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.setAttribute("aria-label", label);
+        top.append(cb);
+      }
+      const input = document.createElement("input");
+      input.type = type;
+      const info = el("span", "sf-info");
+      box.append(top, input, info);
+      fields.append(box);
+      return { box, input, cb, info, lab };
+    };
+    const F = {
+      hi: mkField("var(--ce-h)", W.hi, "time"),
+      x1: mkField("var(--ce-x)", W.x1, "date", true),
+      fl: mkField("var(--ce-clamp)", W.fl, "time", true),
+      lo: mkField("var(--ce-h)", W.lo, "time"),
+      x2: mkField("var(--ce-x)", W.x2, "date", true),
+      ce: mkField("var(--ce-clamp)", W.ce, "time", true),
+    };
+    body.append(fields);
+
+    const legend = el("div", "legend sched-legend");
+    body.append(legend);
+    const chart = el("div", "sched-chart");
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 940 420");
+    svg.setAttribute("role", "img");
+    const tip = el("div", "sched-tip");
+    tip.hidden = true;
+    chart.append(svg, tip);
+    body.append(chart);
+    const warn = el("div", "sched-warn");
+    body.append(warn);
+    const stats = el("div", "sched-stats");
+    body.append(stats);
+    wrap.append(card);
+
+    /* ---- per-cover mode ---- */
+    const tcard = el("div", "card blk");
+    tcard.append(el("h3", "sec", W.perCover), el("p", "secsub", W.perCoverSub));
+    const scroll = el("div", "t-scroll");
+    const table = el("table", "assign");
+    const hr = el("tr");
+    const timeCells = {};
+    hr.append(el("th", "", W.cover));
+    for (const k of SCHED_KINDS) { timeCells[k] = el("th"); hr.append(timeCells[k]); }
+    const thead = el("thead"); thead.append(hr); table.append(thead);
+    const timed = new Set(this._cfg.modes.filter((m) => m.duration).map((m) => m.name));
+    const tbody = el("tbody");
+    for (const c of this._cfg.covers) {
+      const tr = el("tr");
+      const th = el("td");
+      const rowh = el("div", "rowh");
+      rowh.append(this._coverPic(c));
+      const names = el("span");
+      names.append(el("span", "nm", this._coverName(c)), el("br"), el("span", "fx", c.entity_id));
+      rowh.append(names);
+      th.append(rowh);
+      tr.append(th);
+      const opts = [[null, W.noneOpt], ...Object.keys(c.modes || {}).filter((m) => !timed.has(m)).map((m) => [m, m])];
+      for (const k of SCHED_KINDS) {
+        const td = el("td");
+        const sel = document.createElement("select");
+        sel.className = "fselect";
+        sel.setAttribute("aria-label", `${W.kinds[k]}, ${this._coverName(c)}`);
+        for (const [val, text] of opts) {
+          const o = document.createElement("option");
+          o.value = val ?? "";
+          o.textContent = text;
+          if ((draft.assign[c.entity_id][k] ?? "") === (val ?? "")) o.selected = true;
+          sel.append(o);
+        }
+        sel.disabled = !draft.enabled[k];
+        sel.addEventListener("change", () => { draft.assign[c.entity_id][k] = sel.value || null; });
+        td.append(sel);
+        tr.append(td);
+      }
+      tbody.append(tr);
+    }
+    table.append(tbody);
+    scroll.append(table);
+    tcard.append(scroll);
+    wrap.append(tcard);
+
+    /* ---- actions ---- */
+    const actions = el("div", "actions card");
+    actions.append(el("span", "spacer"));
+    const cancel = el("button", "btn ghost", T.cancel);
+    cancel.addEventListener("click", () => { if (this._leaveEditor()) this._render(); });
+    const save = el("button", "btn primary", T.save);
+    save.addEventListener("click", () => {
+      const house = {};
+      for (const k of SCHED_KINDS) if (draft.enabled[k]) house[k] = schedToCfg(draft.s[k]);
+      this._saveSection("schedule", { house, covers: draft.assign });
+    });
+    actions.append(cancel, save);
+    wrap.append(actions);
+
+    /* ---- drawing ---- */
+    const Wd = 940, Hd = 420, M = { l: 52, r: 104, t: 30, b: 34 };
+    const Y0 = kind === "morning" ? 270 : 930, Y1 = kind === "morning" ? 645 : 1410;
+    const mk = (t, a, p = svg) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); p.appendChild(e); return e; };
+    const xOf = (j) => M.l + (j - 1) / 364 * (Wd - M.l - M.r);
+    const yOf = (m) => M.t + (Y1 - m) / (Y1 - Y0) * (Hd - M.t - M.b);
+    const mAt = (py) => Y1 - (py - M.t) / (Hd - M.t - M.b) * (Y1 - Y0);
+    const jAt = (px) => Math.max(1, Math.min(365, Math.round((px - M.l) / (Wd - M.l - M.r) * 364 + 1)));
+    const year = new Date().getFullYear();
+    let clampMsg = "", cross = null;
+
+    const pathOf = (arr) => {
+      let d = "", p = null;
+      for (let j = 1; j <= 365; j++) {
+        const v = arr[j - 1];
+        d += `${p === null || Math.abs(v - p) > 30 ? "M" : "L"}${xOf(j).toFixed(1)},${yOf(v).toFixed(1)}`;
+        p = v;
+      }
+      return d;
+    };
+    const chip = (key, yy, color, label) => {
+      const g = mk("g", { class: "handle", "data-k": key });
+      const cx = Wd - M.r + 54, w = 96;
+      mk("rect", { x: cx - w / 2, y: yy - 11, width: w, height: 22, rx: 11, fill: color, stroke: "var(--card-background-color)", "stroke-width": 1.5 }, g);
+      mk("text", { x: cx, y: yy + 4, "text-anchor": "middle", class: "on-chip" }, g).textContent = label;
+    };
+    const hLine = (key, yy, color) => {
+      const g = mk("g", { class: "handle", "data-k": key });
+      mk("line", { x1: M.l, x2: Wd - M.r, y1: yy, y2: yy, stroke: color, "stroke-width": 1.5, "stroke-dasharray": key === "fl" || key === "ce" ? "2 3" : "6 4" }, g);
+      mk("line", { x1: M.l, x2: Wd - M.r, y1: yy, y2: yy, stroke: "transparent", "stroke-width": 18 }, g);
+    };
+    const vHandle = (key, j, cy, ko) => {
+      const xx = xOf(j), g = mk("g", { class: "handle", "data-k": key }), c = ko ? "var(--fp-warn)" : "var(--ce-x)";
+      mk("line", { x1: xx, x2: xx, y1: M.t, y2: Hd - M.b, stroke: c, "stroke-width": 1.5, "stroke-dasharray": "6 4" }, g);
+      mk("rect", { x: xx - 32, y: M.t - 26, width: 64, height: 20, rx: 10, fill: c }, g);
+      mk("text", { x: xx, y: M.t - 12, "text-anchor": "middle", class: "on-chip" }, g).textContent = schedDayLabel(j, year, "short");
+      mk("circle", { cx: xx, cy, r: 5, fill: c, stroke: "var(--card-background-color)", "stroke-width": 2 }, g);
+      mk("line", { x1: xx, x2: xx, y1: M.t - 26, y2: Hd - M.b, stroke: "transparent", "stroke-width": 18 }, g);
+    };
+
+    const redraw = () => {
+      const pv = this._schedPv[kind];
+      const sun = pv?.sun, pts = pv?.points;
+      const fixed = s.hi === s.lo;
+      svg.replaceChildren();
+      for (let h = Math.ceil(Y0 / 60); h * 60 <= Y1; h++) {
+        mk("line", { x1: M.l, x2: Wd - M.r, y1: yOf(h * 60), y2: yOf(h * 60), class: "grid" });
+        mk("text", { x: M.l - 8, y: yOf(h * 60) + 4, "text-anchor": "end" }).textContent = `${h}:00`;
+      }
+      for (let i = 0; i < 12; i++) {
+        const j = schedDayOfYear(year, i + 1, 1);
+        if (i) mk("line", { x1: xOf(j), x2: xOf(j), y1: M.t, y2: Hd - M.b, class: "grid" });
+        mk("text", { x: xOf(j + 14), y: Hd - M.b + 20, "text-anchor": "middle" }).textContent =
+          new Intl.DateTimeFormat(LANG, { month: "short", timeZone: "UTC" }).format(new Date(Date.UTC(year, i, 15)));
+      }
+      if (sun) mk("path", { d: pathOf(sun), fill: "none", stroke: "var(--ce-b-shade)", "stroke-width": 2 });
+
+      const msgs = [];
+      if (pv?.error) msgs.push(W.errors[pv.error] || pv.error);
+      if (clampMsg) msgs.push(clampMsg);
+      for (const [name, reason] of Object.entries(pv?.ignored || {})) {
+        const j = name === "spring" ? s.x1.j : s.x2.j;
+        msgs.push(W.ignored[reason]?.(schedDayLabel(j, year, "long"), W.ref[kind],
+          sun ? hmFmt(sun[j - 1]) : "") || reason);
+      }
+      let st = [];
+      if (pts && sun) {
+        let seg2 = [], nBefore = 0, nX = 0, prev = null, aMax = -1e9, aJ = 1, bMax = -1e9, bJ = 1, eJ = 1, lJ = 1;
+        const flush = () => {
+          if (seg2.length > 1) mk("polygon", { points: seg2.map((j) => `${xOf(j)},${yOf(sun[j - 1])}`).concat(seg2.slice().reverse().map((j) => `${xOf(j)},${yOf(pts[j - 1])}`)).join(" "), class: "band" });
+          seg2 = [];
+        };
+        for (let j = 1; j <= 365; j++) {
+          const d = pts[j - 1] - sun[j - 1], before = d < 0;
+          if (before) { seg2.push(j); nBefore++; } else flush();
+          if (d > aMax) { aMax = d; aJ = j; }
+          if (-d > bMax) { bMax = -d; bJ = j; }
+          if (pts[j - 1] < pts[eJ - 1]) eJ = j;
+          if (pts[j - 1] > pts[lJ - 1]) lJ = j;
+          if (prev !== null && before !== prev) nX++;
+          prev = before;
+        }
+        flush();
+        mk("path", { d: pathOf(pts), fill: "none", stroke: "var(--primary-color)", "stroke-width": 2.5, "stroke-linejoin": "round" });
+        const JP = pv.max_day, JT = pv.min_day;
+        for (const [j, v] of [[JP, s.hi], [JT, fixed ? s.hi : s.lo]]) {
+          const ya = Math.max(M.t, Math.min(Hd - M.b, yOf(v))), yb = yOf(sun[j - 1]), xx = xOf(j) - 10, d = v - sun[j - 1];
+          mk("line", { x1: xx, x2: xx, y1: ya, y2: yb, class: "brk" });
+          for (const yy of [ya, yb]) mk("line", { x1: xx - 4, x2: xx + 4, y1: yy, y2: yy, class: "brk" });
+          const ty = (ya + yb) / 2 + (Math.abs(ya - yb) < 14 ? (d >= 0 ? -16 : 16) : 4);
+          mk("text", { x: xx - 7, y: ty, "text-anchor": "end", class: "brk-t" }).textContent = signedMin(d);
+        }
+        const today = pv.today;
+        mk("circle", { cx: xOf(today), cy: yOf(pts[today - 1]), r: 4.5, fill: "var(--primary-color)", stroke: "var(--card-background-color)", "stroke-width": 2 });
+        if (nX > 2) msgs.push(W.manyCross(W.ref[kind], nX));
+        st = [
+          [W.today, hmFmt(pts[today - 1]), `${W.ref[kind]} ${hmFmt(sun[today - 1])}`],
+          [W.earliest, hmFmt(pts[eJ - 1]), W.onDate(schedDayLabel(eJ, year, "long"))],
+          [W.latest, hmFmt(pts[lJ - 1]), W.onDate(schedDayLabel(lJ, year, "long"))],
+          [W.maxAfter(W.ref[kind]), signedMin(aMax), W.onDate(schedDayLabel(aJ, year, "long"))],
+          [W.daysBefore(W.ref[kind]), String(nBefore), nBefore ? W.upTo(signedMin(-bMax), schedDayLabel(bJ, year, "long")) : W.none],
+        ];
+      }
+      warn.hidden = !msgs.length;
+      warn.replaceChildren(...msgs.map((m) => el("div", "", m)));
+      stats.replaceChildren(...st.map(([k, v, t]) => {
+        const d = el("div");
+        d.append(el("span", "k", k), el("span", "v", v), el("span", "s", t));
+        return d;
+      }));
+
+      const chips = [];
+      if (fixed) {
+        const yy = yOf(s.hi);
+        hLine("both", yy, "var(--ce-h)");
+        mk("text", { x: Wd - M.r - 6, y: yy - 7, "text-anchor": "end", class: "fixed-t" }).textContent = W.fixedLabel(hmFmt(s.hi));
+        chips.push({ key: "hi", y0: yy, y: yy - 12, color: "var(--ce-h)", label: "▲ max" }, { key: "lo", y0: yy, y: yy + 12, color: "var(--ce-h)", label: "▼ min" });
+      } else {
+        hLine("hi", yOf(s.hi), "var(--ce-h)"); hLine("lo", yOf(s.lo), "var(--ce-h)");
+        chips.push({ key: "hi", y0: yOf(s.hi), y: yOf(s.hi), color: "var(--ce-h)", label: `max ${hmFmt(s.hi)}` },
+                   { key: "lo", y0: yOf(s.lo), y: yOf(s.lo), color: "var(--ce-h)", label: `min ${hmFmt(s.lo)}` });
+      }
+      if (s.fl.on) { hLine("fl", yOf(s.fl.m), "var(--ce-clamp)"); chips.push({ key: "fl", y0: yOf(s.fl.m), y: yOf(s.fl.m), color: "var(--ce-clamp)", label: `${W.flShort} ${hmFmt(s.fl.m)}` }); }
+      if (s.ce.on) { hLine("ce", yOf(s.ce.m), "var(--ce-clamp)"); chips.push({ key: "ce", y0: yOf(s.ce.m), y: yOf(s.ce.m), color: "var(--ce-clamp)", label: `${W.ceShort} ${hmFmt(s.ce.m)}` }); }
+      chips.sort((a, b) => a.y - b.y || (a.key === "hi" ? -1 : 1));
+      for (let i = 1; i < chips.length; i++) chips[i].y = Math.max(chips[i].y, chips[i - 1].y + 24);
+      const over = chips.length ? chips[chips.length - 1].y - (Hd - 12) : 0;
+      if (over > 0) chips.forEach((c) => { c.y -= over; });
+      for (let i = chips.length - 2; i >= 0; i--) chips[i].y = Math.min(chips[i].y, chips[i + 1].y - 24);
+      for (const c of chips) {
+        if (Math.abs(c.y - c.y0) > 1) mk("path", { d: `M${Wd - M.r},${c.y0} L${Wd - M.r + 6},${c.y}`, stroke: c.color, "stroke-width": 1.5, fill: "none" });
+        chip(c.key, c.y, c.color, c.label);
+      }
+      if (!fixed && sun) {
+        for (const k of ["x1", "x2"]) if (s[k].on) vHandle(k, s[k].j, yOf(sun[s[k].j - 1]), !!pv?.ignored?.[k === "x1" ? "spring" : "autumn"]);
+      }
+      cross = mk("line", { y1: M.t, y2: Hd - M.b, class: "cross", visibility: "hidden" });
+
+      /* fields */
+      const G = pv?.dst_gap || 0;
+      hint.textContent = W.fixedHint + (G ? W.dstHint(G / 60) : "");
+      F.hi.lab.textContent = fixed ? W.hiFixed : W.hi;
+      F.hi.input.value = hmFmt(s.hi); F.lo.input.value = hmFmt(s.lo);
+      F.x1.input.value = schedDayToIso(s.x1.j, year); F.x2.input.value = schedDayToIso(s.x2.j, year);
+      F.x1.cb.checked = s.x1.on; F.x2.cb.checked = s.x2.on;
+      F.fl.input.value = hmFmt(s.fl.m); F.ce.input.value = hmFmt(s.ce.m);
+      F.fl.cb.checked = s.fl.on; F.ce.cb.checked = s.ce.on;
+      if (sun && pv) {
+        F.hi.info.textContent = fixed ? W.fixedAll
+          : `${schedDayLabel(pv.max_day, year, "short")} · ${signedMin(s.hi - sun[pv.max_day - 1])} / ${W.ref[kind]} ${hmFmt(sun[pv.max_day - 1])}`;
+        F.lo.info.textContent = fixed ? W.glued
+          : `${schedDayLabel(pv.min_day, year, "short")} · ${signedMin(s.lo - sun[pv.min_day - 1])} / ${W.ref[kind]} ${hmFmt(sun[pv.min_day - 1])}`;
+      }
+      for (const k of ["x1", "x2"]) {
+        const ko = pv?.ignored?.[k === "x1" ? "spring" : "autumn"];
+        F[k].info.textContent = fixed ? W.unusedFixed
+          : s[k].on ? `${W.ref[kind]} ${sun ? hmFmt(sun[s[k].j - 1]) : ""}${ko ? W.ignoredShort : ""}` : W.offHalf;
+        F[k].box.classList.toggle("off", fixed || !s[k].on);
+        F[k].input.disabled = fixed || !s[k].on;
+        F[k].cb.disabled = fixed;
+      }
+      for (const k of ["fl", "ce"]) {
+        F[k].info.textContent = s[k].on ? W.legal : W.off;
+        F[k].box.classList.toggle("off", !s[k].on);
+        F[k].input.disabled = !s[k].on;
+      }
+      legend.replaceChildren(...[
+        ["var(--primary-color)", W.kinds[kind], ""], ["var(--ce-b-shade)", W.refLongCap[kind], ""], ["", W.band[kind], "sw"],
+      ].map(([c, t, cls]) => { const sp = el("span"); const i = el("i", `lg-line ${cls}`); if (c) i.style.background = c; sp.append(i, document.createTextNode(t)); return sp; }));
+
+      /* times of the day in the table head */
+      for (const k of SCHED_KINDS) {
+        const p2 = this._schedPv[k];
+        timeCells[k].textContent = draft.enabled[k] && p2?.points
+          ? `${W.kinds[k]} · ${hmFmt(p2.points[p2.today - 1])}` : W.kinds[k];
+      }
+    };
+
+    const refresh = () => this._schedRequest(kind, redraw);
+    const changed = () => { redraw(); refresh(); };
+
+    /* field input */
+    const onTime = (key) => F[key].input.addEventListener("input", (e) => {
+      if (!e.target.value) return;
+      clampMsg = schedSetVal(this._schedPv[kind], s, key, hmParse(e.target.value));
+      changed();
+    });
+    ["hi", "lo", "fl", "ce"].forEach(onTime);
+    for (const k of ["x1", "x2"]) {
+      F[k].input.addEventListener("change", (e) => {
+        if (!e.target.value) return;
+        clampMsg = schedSetCross(this._schedPv[kind], s, k, schedIsoToDay(e.target.value, year), year);
+        changed();
+      });
+      F[k].cb.addEventListener("change", (e) => { s[k].on = e.target.checked; clampMsg = ""; changed(); });
+    }
+    for (const k of ["fl", "ce"]) {
+      F[k].cb.addEventListener("change", (e) => {
+        s[k].on = e.target.checked;
+        clampMsg = e.target.checked ? schedSetVal(this._schedPv[kind], s, k, s[k].m) : "";
+        changed();
+      });
+    }
+
+    /* drag */
+    const pt = (e) => { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
+    let drag = null, downAt = null, moved = false;
+    svg.addEventListener("pointerdown", (e) => {
+      const h = e.target.closest(".handle");
+      if (!h) return;
+      drag = h.dataset.k; downAt = { x: e.clientX, y: e.clientY }; moved = false;
+      svg.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    svg.addEventListener("pointermove", (e) => {
+      const p = pt(e);
+      if (drag && !moved && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) < 3) return;
+      if (drag) {
+        moved = true;
+        const m = Math.round(Math.max(Y0, Math.min(Y1, mAt(p.y))));
+        clampMsg = drag === "x1" || drag === "x2"
+          ? schedSetCross(this._schedPv[kind], s, drag, jAt(p.x), year)
+          : schedSetVal(this._schedPv[kind], s, drag, m);
+        tip.hidden = true;
+        changed();
+        return;
+      }
+      const pv = this._schedPv[kind];
+      if (!pv?.sun || p.x < M.l || p.x > Wd - M.r || p.y < M.t || p.y > Hd - M.b) {
+        tip.hidden = true; cross?.setAttribute("visibility", "hidden"); return;
+      }
+      const j = jAt(p.x), r = svg.getBoundingClientRect();
+      cross.setAttribute("x1", xOf(j)); cross.setAttribute("x2", xOf(j)); cross.setAttribute("visibility", "visible");
+      tip.replaceChildren(el("div", "d", schedDayLabel(j, year, "long")));
+      if (pv.points) tip.append(el("div", "", `${W.verb[kind]} ${hmFmt(pv.points[j - 1])} (${signedMin(pv.points[j - 1] - pv.sun[j - 1])})`));
+      tip.append(el("div", "", `${W.refCap[kind]} ${hmFmt(pv.sun[j - 1])}`));
+      tip.hidden = false;
+      const px = xOf(j) / Wd * r.width, tw = tip.offsetWidth;
+      tip.style.left = `${px + 12 + tw > r.width ? px - 12 - tw : px + 12}px`;
+      tip.style.top = "40px";
+    });
+    svg.addEventListener("pointerup", () => { drag = null; if (clampMsg) { clampMsg = ""; redraw(); } });
+    svg.addEventListener("pointerleave", () => { if (!drag) { tip.hidden = true; cross?.setAttribute("visibility", "hidden"); } });
+
+    redraw();
+    // Both curves: the table head shows both times of the day.
+    for (const k of SCHED_KINDS) {
+      if (k === kind || draft.enabled[k]) this._schedRequest(k, redraw);
+    }
   }
 
   /* ---------- RÉGLAGES (editable) ---------- */

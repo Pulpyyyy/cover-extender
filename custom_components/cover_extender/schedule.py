@@ -31,6 +31,15 @@ P_YEAR = 365.2425
 MARCH_EQUINOX = 79          # day of the year, used to tell spring from autumn
 KINDS = ("morning", "evening")
 SUN_EVENT = {"morning": "sunrise", "evening": "sunset"}
+# What a schedule starts from when it is switched on in the panel: a curve
+# that follows the sun between sensible bounds, never before 07:00 in the
+# morning, nor after 22:30 in the evening.
+DEFAULTS = {
+    "morning": {"type": "curve", "max": "08:30", "min": "06:30", "cross_spring": None,
+                "cross_autumn": None, "not_before": "07:00", "not_after": None},
+    "evening": {"type": "curve", "max": "22:00", "min": "17:30", "cross_spring": None,
+                "cross_autumn": None, "not_before": None, "not_after": "22:30"},
+}
 
 _HHMM = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 _MMDD = re.compile(r"^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$")

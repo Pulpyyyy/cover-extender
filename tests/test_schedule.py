@@ -148,3 +148,10 @@ def test_ha_sun_year_reads_the_sun_day_by_day():
 
 def test_ha_sun_year_gives_up_where_the_sun_does_not_set():
     assert sch.ha_sun_year(lambda e, d: None, YEAR, "sunset", timezone.utc) is None
+
+
+@pytest.mark.parametrize("kind", sch.KINDS)
+def test_defaults_are_valid_and_build_a_curve(kind):
+    assert sch.validate_settings(sch.DEFAULTS[kind]) is None
+    curve = build_curve(SUN, sch.parse_settings(sch.DEFAULTS[kind], YEAR))
+    assert curve.error is None and curve.points is not None

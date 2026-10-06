@@ -52,7 +52,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.loader import async_get_integration
 
 from .helpers import resolve_helper_entity
-from .schedule import KINDS as SCHEDULE_KINDS, validate_settings as validate_schedule
+from .schedule import DEFAULTS as SCHEDULE_DEFAULTS, KINDS as SCHEDULE_KINDS, validate_settings as validate_schedule
 
 from .const import (
     MODE_DURATION_MAX,
@@ -716,6 +716,7 @@ async def ws_config_get(
         },
         "global":    _global_data(hass),
         "schedule":  dict(_sections(hass).get(SECTION_SCHEDULE) or {}),
+        "schedule_defaults": SCHEDULE_DEFAULTS,
         "behavior":  _behavior_schema(),
         "weather_conditions": list(WEATHER_CONDITIONS),
         "defaults":  {"command_interval": DEFAULT_COMMAND_INTERVAL_MS},
