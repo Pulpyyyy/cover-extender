@@ -29,6 +29,10 @@
         "mode": {
           "name": "Mode",
           "description": "Nom du mode à appliquer (ex. Nuit, Canicule, Absence…)"
+        },
+        "force": {
+          "name": "Forcer",
+          "description": "Demande prioritaire : passe outre les inhibitions (un invité dans la chambre), jamais les exclusions de sécurité (une fenêtre ouverte). Réapplique aussi le mode aux volets qui y sont déjà."
         }
       }
     },

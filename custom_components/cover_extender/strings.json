@@ -29,6 +29,10 @@
         "mode": {
           "name": "Mode",
           "description": "Name of the mode to apply (e.g. Night, Heat, Away…)"
+        },
+        "force": {
+          "name": "Force",
+          "description": "Priority request: passes the inhibitions (a guest in the room), never the safety exclusions (an open window). Also re-applies the mode on covers already in it."
         }
       }
     },

@@ -36,6 +36,11 @@ apply_mode:
       example: "Nuit"
       selector:
         text:
+    force:
+      required: false
+      default: false
+      selector:
+        boolean:
 
 compute_shade_position:
   fields:

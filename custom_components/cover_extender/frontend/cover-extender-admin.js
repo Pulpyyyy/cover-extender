@@ -180,7 +180,13 @@ const WORDS = {
     backToCovers: "All covers",
     entity: "Cover entity",
     picture: "Picture",
-    exclusion: "Exclusion entities",
+    exclusion: "Safety exclusions",
+    exclusionHint: "While one of these entities is on, nothing moves, not even a priority mode. What was asked meanwhile is applied once they turn off. E.g. an open window, a rain sensor.",
+    inhibition: "Inhibitions",
+    inhibitionHint: "While one of these entities is on, Cover Extender leaves the cover alone, except for a priority mode. What was asked meanwhile is applied once they turn off. E.g. a guest, children, a template sensor for “Wednesday morning”.",
+    priorityField: "Priority mode",
+    priorityHint: "Passes the inhibitions, never the safety exclusions. Same as the apply_mode action with force: true.",
+    priority: "priority",
     noTemplateOpt: "No template",
     overrides: (n) => `${n} override${n > 1 ? "s" : ""}`,
     tplNote: (n) => `Values inherited from the “${n}” template: only the overrides are stored.`,
@@ -340,7 +346,13 @@ const WORDS = {
     backToCovers: "Tous les volets",
     entity: "Entité du volet",
     picture: "Image",
-    exclusion: "Entités d'exclusion",
+    exclusion: "Exclusions de sécurité",
+    exclusionHint: "Tant qu'une de ces entités est allumée, rien ne bouge, même un mode prioritaire. Ce qui a été demandé entre-temps s'applique quand elles retombent. Ex. : une fenêtre ouverte, un capteur de pluie.",
+    inhibition: "Inhibitions",
+    inhibitionHint: "Tant qu'une de ces entités est allumée, Cover Extender ne touche pas au volet, sauf pour un mode prioritaire. Ce qui a été demandé entre-temps s'applique quand elles retombent. Ex. : un invité, les enfants, un capteur template « mercredi matin ».",
+    priorityField: "Mode prioritaire",
+    priorityHint: "Passe outre les inhibitions, jamais les exclusions de sécurité. Comme l'action apply_mode avec force: true.",
+    priority: "prioritaire",
     noTemplateOpt: "Aucun gabarit",
     overrides: (n) => `${n} écart${n > 1 ? "s" : ""}`,
     tplNote: (n) => `Valeurs héritées du gabarit « ${n} » : seuls les écarts sont enregistrés.`,
@@ -846,6 +858,10 @@ const STYLE = `
   .chip.ovr { color: var(--fp-warn); border-color: color-mix(in srgb, var(--fp-warn) 45%, transparent); }
   .chip.auto { color: var(--primary-color); border-color: color-mix(in srgb, var(--primary-color) 45%, transparent); }
   .chip.lock { color: var(--fp-bad); border-color: color-mix(in srgb, var(--fp-bad) 45%, transparent); }
+  .chip.prio { color: var(--fp-bad); border-color: color-mix(in srgb, var(--fp-bad) 45%, transparent);
+               background: color-mix(in srgb, var(--fp-bad) 8%, transparent); }
+  /* A selector row's hint sits between its label and the control. */
+  .field.vertical .fhint { margin: calc(var(--fp-s1) * -1) 0 var(--fp-s2); }
 
   /* ---------- generated entities ---------- */
   .stats { display: flex; flex-wrap: wrap; gap: var(--fp-s5) calc(var(--fp-s5) * 2); }
@@ -1124,6 +1140,7 @@ class CoverExtenderPanel extends HTMLElement {
         flags.append(bf);
       }
       if (m.lock) flags.append(icon("mdi:lock-outline"));
+      if (m.priority) flags.append(icon("mdi:alert-decagram-outline"));
       if (m.hidden) flags.append(icon("mdi:eye-off-outline"));
       mh.append(mico, el("span", "", m.name), flags);
       th.append(mh);
@@ -1602,9 +1619,10 @@ class CoverExtenderPanel extends HTMLElement {
   }
 
   /** A HA selector row (icon, colour, entity…), loaded lazily like the popover. */
-  _selectorRow(label, selector, value, onChange) {
+  _selectorRow(label, selector, value, onChange, hint) {
     const row = el("div", "field vertical");
     row.append(el("span", "flabel", label));
+    if (hint) row.append(el("small", "fhint", hint));
     const sel = document.createElement("ha-selector");
     sel.hass = this._hass;
     sel.selector = selector;
@@ -1693,7 +1711,7 @@ class CoverExtenderPanel extends HTMLElement {
       this._openEditor({
         section: "mode", idx: -1,
         draft: { name: "", icon: "mdi:help-circle", color: "#FFFFFF",
-                 lock: false, behavior: null, hidden: false },
+                 lock: false, behavior: null, hidden: false, priority: false },
       });
       this._render();
     });
@@ -1755,6 +1773,11 @@ class CoverExtenderPanel extends HTMLElement {
         c.append(icon("mdi:lock-outline"), document.createTextNode(T.lock));
         chips.append(c);
       }
+      if (m.priority) {
+        const c = el("span", "chip prio");
+        c.append(icon("mdi:alert-decagram-outline"), document.createTextNode(T.priority));
+        chips.append(c);
+      }
       if (m.hidden) {
         const c = el("span", "chip");
         c.append(icon("mdi:eye-off-outline"), document.createTextNode(T.hidden));
@@ -1802,6 +1825,7 @@ class CoverExtenderPanel extends HTMLElement {
     ], (v) => { draft.behavior = v; rerender(); }));
     if (draft.behavior) host.append(el("p", "hint", T.behaviorHint));
     host.append(this._boolRow(T.lockField, draft.lock, (v) => { draft.lock = v; }, T.lockHint));
+    host.append(this._boolRow(T.priorityField, draft.priority, (v) => { draft.priority = v; }, T.priorityHint));
     host.append(this._boolRow(T.hiddenField, draft.hidden, (v) => { draft.hidden = v; }, T.hiddenHint));
     wrap.append(host);
 
@@ -1849,7 +1873,7 @@ class CoverExtenderPanel extends HTMLElement {
       this._openEditor({
         section: "cover", idx: -1,
         draft: { entity_id: "", facade: this._cfg.facades[0]?.name || null,
-                 template: null, exclusion: [], modes: {},
+                 template: null, exclusion: [], inhibition: [], modes: {},
                  shade_enable: false, solar_gain_enable: false },
       });
       this._render();
@@ -1953,7 +1977,10 @@ class CoverExtenderPanel extends HTMLElement {
       (v) => { draft.template = v; rerender(); }));
     idCard.append(this._selectorRow(T.exclusion, { entity: { multiple: true } },
       draft.exclusion?.length ? draft.exclusion : undefined,
-      (v) => { draft.exclusion = v || []; }));
+      (v) => { draft.exclusion = v || []; }, T.exclusionHint));
+    idCard.append(this._selectorRow(T.inhibition, { entity: { multiple: true } },
+      draft.inhibition?.length ? draft.inhibition : undefined,
+      (v) => { draft.inhibition = v || []; }, T.inhibitionHint));
     wrap.append(idCard);
 
     /* behavior, section by section */
