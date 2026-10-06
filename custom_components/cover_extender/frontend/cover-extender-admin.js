@@ -86,6 +86,12 @@ const WORDS = {
       unusedFixed: "unused with a fixed time", glued: "stuck to max: fixed time",
       fixedAll: "fixed time all year, legal time", ignoredShort: " · ignored",
       fixedLabel: (t) => `fixed time ${t}`,
+      fixedName: "Fixed time",
+      dblHint: " Double-click a handle to type its value.",
+      editApply: "Apply",
+      editBadTime: "Invalid time: type HH:MM.",
+      editRange: (a, b) => `Choose a time between ${a} and ${b}.`,
+      editBadDate: "Invalid date: type day, month and year.",
       today: "Today", earliest: "Earliest", latest: "Latest",
       maxAfter: (r) => `Largest gap after ${r}`, daysBefore: (r) => `Days before ${r}`,
       onDate: (d) => `on ${d}`, none: "none", upTo: (n, d) => `up to ${n}, on ${d}`,
@@ -328,6 +334,12 @@ const WORDS = {
       unusedFixed: "inutilisé en heure fixe", glued: "collée au max : heure fixe",
       fixedAll: "heure fixe toute l'année, heure légale", ignoredShort: " · ignoré",
       fixedLabel: (t) => `heure fixe ${t}`,
+      fixedName: "Heure fixe",
+      dblHint: " Double-clic sur une poignée pour taper sa valeur.",
+      editApply: "Appliquer",
+      editBadTime: "Heure invalide : saisis HH:MM.",
+      editRange: (a, b) => `Choisis une heure entre ${a} et ${b}.`,
+      editBadDate: "Date invalide : saisis jour, mois et année.",
       today: "Aujourd'hui", earliest: "Le plus tôt", latest: "Le plus tard",
       maxAfter: (r) => `Plus grand écart après le ${r}`, daysBefore: (r) => `Jours avant le ${r}`,
       onDate: (d) => `le ${d}`, none: "aucun", upTo: (n, d) => `jusqu'à ${n}, le ${d}`,
@@ -1091,6 +1103,19 @@ const STYLE = `
                padding: var(--fp-sh) var(--fp-s2); font-size: var(--f-12); white-space: nowrap;
                box-shadow: 0 4px 14px rgba(0,0,0,.18); font-variant-numeric: tabular-nums; }
   .sched-tip[hidden] { display: none; }
+  .sched-edit { position: absolute; z-index: 2; display: grid; gap: var(--fp-sh); min-width: 200px;
+                background: var(--card-background-color); border: 1px solid var(--divider-color);
+                border-radius: var(--fp-ctl-r); padding: var(--fp-s2) var(--fp-s3);
+                box-shadow: 0 6px 20px rgba(0,0,0,.2); }
+  .sched-edit label { font-size: var(--f-11); text-transform: uppercase; letter-spacing: .06em;
+                      color: var(--secondary-text-color); }
+  .sched-edit input { font: inherit; font-size: var(--f-16); font-weight: 600; font-variant-numeric: tabular-nums;
+                      color: var(--primary-text-color); background: var(--secondary-background-color);
+                      border: 1px solid var(--divider-color); border-radius: var(--fp-field-r); padding: var(--fp-s1) var(--fp-s2); }
+  .sched-edit input[aria-invalid="true"] { border-color: var(--fp-warn); }
+  .sched-edit .err { font-size: var(--f-12); color: var(--fp-warn); }
+  .sched-edit .err[hidden] { display: none; }
+  .sched-edit .btns { display: flex; gap: var(--fp-sh); justify-content: flex-end; }
   .sched-tip .d { color: var(--secondary-text-color); }
   .sched-warn { background: color-mix(in srgb, var(--fp-warn) 14%, transparent); border-radius: var(--fp-ctl-r);
                 padding: var(--fp-s2) var(--fp-s3); font-size: var(--f-12-5); margin-top: var(--fp-s2); }
@@ -2478,7 +2503,10 @@ class CoverExtenderPanel extends HTMLElement {
     const draft = { enabled: {}, s: {}, assign: {} };
     for (const k of SCHED_KINDS) {
       draft.enabled[k] = !!house[k];
-      draft.s[k] = schedFromCfg(house[k] || defaults[k]);
+      // The defaults come from the server; the last fallback only keeps an
+      // older backend that sends none from breaking the tab.
+      draft.s[k] = schedFromCfg(house[k] || defaults[k]
+        || { type: "fixed", time: k === "morning" ? "07:30" : "20:30" });
     }
     for (const c of this._cfg.covers) {
       draft.assign[c.entity_id] = { morning: c.schedule?.morning ?? null, evening: c.schedule?.evening ?? null };
@@ -2787,7 +2815,7 @@ class CoverExtenderPanel extends HTMLElement {
 
       /* fields */
       const G = pv?.dst_gap || 0;
-      hint.textContent = W.fixedHint + (G ? W.dstHint(G / 60) : "");
+      hint.textContent = W.fixedHint + (G ? W.dstHint(G / 60) : "") + W.dblHint;
       F.hi.lab.textContent = fixed ? W.hiFixed : W.hi;
       F.hi.input.value = hmFmt(s.hi); F.lo.input.value = hmFmt(s.lo);
       F.x1.input.value = schedDayToIso(s.x1.j, year); F.x2.input.value = schedDayToIso(s.x2.j, year);
@@ -2853,9 +2881,11 @@ class CoverExtenderPanel extends HTMLElement {
 
     /* drag */
     const pt = (e) => { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
-    let drag = null, downAt = null, moved = false;
+    // The drag starts only past 3 px, so a double-click does not move the value.
+    let drag = null, downAt = null, moved = false, lastKey = null;
     svg.addEventListener("pointerdown", (e) => {
       const h = e.target.closest(".handle");
+      lastKey = h ? h.dataset.k : null;
       if (!h) return;
       drag = h.dataset.k; downAt = { x: e.clientX, y: e.clientY }; moved = false;
       svg.setPointerCapture(e.pointerId);
@@ -2890,6 +2920,65 @@ class CoverExtenderPanel extends HTMLElement {
     });
     svg.addEventListener("pointerup", () => { drag = null; if (clampMsg) { clampMsg = ""; redraw(); } });
     svg.addEventListener("pointerleave", () => { if (!drag) { tip.hidden = true; cross?.setAttribute("visibility", "hidden"); } });
+
+    /* double-click on a handle: type its value, checked before it is applied */
+    const NAMES = { hi: W.hi, lo: W.lo, both: W.fixedName, fl: W.fl, ce: W.ce, x1: W.x1, x2: W.x2 };
+    let editor = null;
+    const closeEditor = () => { editor?.remove(); editor = null; };
+    svg.addEventListener("dblclick", (e) => {
+      // The pointer capture makes the svg the target: take the handle of the last press.
+      if (!lastKey) return;
+      e.preventDefault();
+      closeEditor();
+      drag = null;
+      const key = lastKey, isDate = key === "x1" || key === "x2";
+      const value = isDate ? schedDayToIso(s[key].j, year)
+        : hmFmt(key === "both" || key === "hi" ? s.hi : key === "lo" ? s.lo : s[key].m);
+      editor = document.createElement("form");
+      editor.className = "sched-edit";
+      const label = el("label", "", NAMES[key]);
+      const input = document.createElement("input");
+      input.type = isDate ? "date" : "time";
+      input.value = value;
+      input.required = true;
+      input.setAttribute("aria-label", NAMES[key]);
+      const err = el("div", "err");
+      err.hidden = true;
+      const btns = el("div", "btns");
+      const no = el("button", "btn ghost", T.cancel);
+      no.type = "button";
+      const ok = el("button", "btn primary", W.editApply);
+      ok.type = "submit";
+      btns.append(no, ok);
+      editor.append(label, input, err, btns);
+      chart.append(editor);
+      const r = svg.getBoundingClientRect(), p = pt(e), sc = r.width / Wd;
+      editor.style.left = `${Math.max(4, Math.min(p.x * sc - 100, r.width - editor.offsetWidth - 4))}px`;
+      editor.style.top = `${Math.max(4, Math.min(p.y * sc + 14, r.height - editor.offsetHeight - 4))}px`;
+      input.focus();
+      const check = () => {
+        const v = input.value;
+        if (isDate) return /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)) ? null : W.editBadDate;
+        if (!/^\d{2}:\d{2}$/.test(v)) return W.editBadTime;
+        const m = hmParse(v);
+        return m < Y0 || m > Y1 ? W.editRange(hmFmt(Y0), hmFmt(Y1)) : null;
+      };
+      input.addEventListener("input", () => { input.setAttribute("aria-invalid", String(!!check())); err.hidden = true; });
+      editor.addEventListener("submit", (ev) => {
+        ev.preventDefault();
+        const msg = check();
+        if (msg) { err.textContent = msg; err.hidden = false; input.setAttribute("aria-invalid", "true"); input.focus(); return; }
+        clampMsg = isDate
+          ? schedSetCross(this._schedPv[kind], s, key, schedIsoToDay(input.value, year), year)
+          : schedSetVal(this._schedPv[kind], s, key, hmParse(input.value));
+        closeEditor();
+        changed();
+      });
+      no.addEventListener("click", closeEditor);
+      editor.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { ev.preventDefault(); closeEditor(); } });
+    });
+    // A press anywhere else closes it.
+    chart.addEventListener("pointerdown", (e) => { if (editor && !e.composedPath().includes(editor)) closeEditor(); });
 
     redraw();
     // Both curves: the table head shows both times of the day.
