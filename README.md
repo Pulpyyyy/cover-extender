@@ -6,7 +6,7 @@
 
 🇫🇷 [Lire en français](https://github.com/Pulpyyyy/cover-extender/blob/main/README.fr.md)
 
-Cover Extender is a Home Assistant integration that adds [modes](#modes), a [lock with position memory](#lock-and-memory), [exclusions](#exclusions) and sun automation ([shading](#autonomous-shading), [solar gain](#solar-gain)) to the covers you already have, all configured from an [admin panel](#the-admin-panel) with a modes × covers matrix, in English or French.
+Cover Extender is a Home Assistant integration that adds [modes](#modes) (some of them [timed](#timed-modes)), a [lock with position memory](#lock-and-memory), [exclusions and inhibitions](#exclusions), [morning and evening schedules](#schedules) that follow the sun, and sun automation ([shading](#autonomous-shading), [solar gain](#solar-gain)) to the covers you already have, all configured from an [admin panel](#the-admin-panel) with a modes × covers matrix, in English or French.
 
 [![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Pulpyyyy&repository=cover-extender&category=integration)
 
@@ -428,10 +428,11 @@ All configuration lives in the panel at `/cover-extender`. Every value is checke
 
 | Tab | What it edits |
 |---|---|
+| **Covers** | The covers: entity, facade, template, [safety exclusions and inhibitions](#exclusions), geometry, shading and solar-gain settings. Each card shows what the cover is doing right now: its mode and position, then whatever holds it back (a [timed mode](#timed-modes) with its end time, the lock with the remembered position, an exclusion or an inhibition that is on). |
 | **Matrix** | Modes × covers: link modes and set every per-cover position from one grid. |
-| **Covers** | The covers: entity, facade, template, exclusions, geometry, shading and solar-gain settings. |
-| **Modes** | Icon, color, lock, behavior, visibility. Drag the tiles to reorder: the order drives the mode selectors. |
-| **Settings** | Facades, templates, general settings, and a count of the entities the configuration produced. |
+| **Modes** | Icon, color, lock, behavior, priority, [duration](#timed-modes) and what happens at its end, visibility. Drag the tiles to reorder: the order drives the mode selectors. |
+| **Schedules** | The [morning opening and evening closing](#schedules): the curve of each over the year, and each cover's morning and evening mode. |
+| **Settings** | Facades, templates, general settings, and the list of the entities the configuration produced. |
 
 ### The matrix
 
@@ -594,6 +595,12 @@ triggers:
                                   │
                                   ▼
                   ┌─────────────────────────────────┐
+                  │ Timed mode: start, extend or    │
+                  │ end the countdown               │
+                  └─────────────────────────────────┘
+                                  │
+                                  ▼
+                  ┌─────────────────────────────────┐
                   │ Unlocked → locked: save the     │
                   │ current position to memory      │
                   └─────────────────────────────────┘
@@ -618,14 +625,16 @@ triggers:
                          │
                          ▼
              ┌────────────────────────────────────┐
-             │ Is an exclusion entity on ?        │
+             │ A safety exclusion on, or an       │
+             │ inhibition on and the request is   │
+             │ not a priority one ?               │
              └────────────────────────────────────┘
                    │ NO                       │ YES
                    ▼                          ▼
         ┌────────────────────────┐   ┌───────────────────────────┐
         │ Send cover command     │   │ Do NOT move the cover     │
-        │ (throttled queue)      │   │ Apply it once the last    │
-        └────────────────────────┘   │ exclusion turns off       │
+        │ (throttled queue)      │   │ Apply it once nothing     │
+        └────────────────────────┘   │ holds the cover any more  │
                                      └───────────────────────────┘
 ```
 
@@ -644,7 +653,7 @@ triggers:
                  │ YES              │ NO
                  ▼                  └────────────┐
  ┌─────────────────────────────────────┐         │
- │ Are exclusion entities all off ?    │         │
+ │ Nothing holds the cover back ?      │         │
  └─────────────────────────────────────┘         │
                │ YES                 │ NO        │
                ▼                     ▼           ▼
@@ -658,9 +667,11 @@ triggers:
 
 ## FAQ and troubleshooting
 
-**My cover does not move.** It is one of three things: the cover is **locked** (`switch.<cover>_cx_lock` is on, the requested position is in the `memory` attribute), an **exclusion** entity is on, or the mode has **no position** for this cover (None, or the mode is not linked to it in the matrix). For shading, also check the change threshold and the time-out.
+**My cover does not move.** The cover's card in the **Covers** tab says why. It is one of these: the cover is **locked** (`switch.<cover>_cx_lock` is on, the requested position is in the `memory` attribute), a **safety exclusion** or an **inhibition** is on, or the mode has **no position** for this cover (None, or the mode is not linked to it in the matrix). For shading, also check the change threshold and the time-out.
 
 **I moved my cover by hand and it went back on its own.** Shading or solar gain is on. Shading waits for the time-out after any movement, then resumes. To keep your position, switch to a mode without a behavior, or turn `switch.<cover>_cx_auto_shade` off.
+
+**My cover changed mode on its own.** A [timed mode](#timed-modes) ended (the cover went back to its base mode, or to the mode's fixed return), or a [schedule](#schedules) applied its morning or evening mode. The `cover_extender_timed_mode_ended` and `cover_extender_mode_changed` events, and the logbook of `select.<cover>_cx_mode`, tell which.
 
 **Changing `select.cx_modes` does nothing.** Expected: it is a display selector. See [the global mode selector](#the-global-mode-selector) for the automation that connects it.
 
@@ -678,7 +689,7 @@ logger:
     custom_components.cover_extender: debug
 ```
 
-Each decision (lock, exclusion, threshold, time-out) is logged with its reason.
+Each decision (lock, exclusion, inhibition, priority, threshold, time-out, timed mode, schedule) is logged with its reason.
 
 ---
 

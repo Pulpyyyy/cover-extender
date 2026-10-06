@@ -2,7 +2,7 @@
 
 🇬🇧 [English version](README.md) (référence complète : entités, actions, événements)
 
-Cover Extender est une intégration Home Assistant qui ajoute des [modes](#modes), un [verrou avec mémoire de position](#verrou-et-mémoire), des [exclusions](#exclusions) et de l'automatisation solaire ([ombrage](#ombrage-automatique), [héliotropie](#héliotropie)) aux volets que vous avez déjà, le tout configuré depuis un panneau d'administration avec une matrice modes × volets, en français ou en anglais.
+Cover Extender est une intégration Home Assistant qui ajoute des [modes](#modes) (dont des [modes minutés](#modes-minutés)), un [verrou avec mémoire de position](#verrou-et-mémoire), des [exclusions et inhibitions](#exclusions), des [horaires du matin et du soir](#horaires) qui suivent le soleil, et de l'automatisation solaire ([ombrage](#ombrage-automatique), [héliotropie](#héliotropie)) aux volets que vous avez déjà, le tout configuré depuis un [panneau d'administration](#le-panneau-dadministration) avec une matrice modes × volets, en français ou en anglais.
 
 [![Ouvrir ce dépôt dans HACS sur votre Home Assistant.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Pulpyyyy&repository=cover-extender&category=integration)
 
@@ -400,11 +400,25 @@ Les volets qui ne sont pas liés au mode choisi ne bougent pas.
 
 ---
 
+## Le panneau d'administration
+
+Toute la configuration se fait dans le panneau, à `/cover-extender`. Chaque valeur est vérifiée par le serveur avant d'être enregistrée. Le panneau suit le thème de Home Assistant, et chaque administrateur le lit dans sa langue (français ou anglais).
+
+| Onglet | Ce qu'il règle |
+|---|---|
+| **Volets** | Les volets : entité, façade, gabarit, [exclusions de sécurité et inhibitions](#exclusions), géométrie, ombrage et héliotropie. Chaque carte montre ce que fait le volet en ce moment : son mode et sa position, puis ce qui le retient (un [mode minuté](#modes-minutés) et son heure de fin, le verrou et la position mémorisée, une exclusion ou une inhibition active). |
+| **Matrice** | Modes × volets : lier les modes et régler chaque position par volet depuis une seule grille. Une cellule vide lie le mode ; une cellule *auto* d'un mode d'ombrage ou d'héliotropie peut être remplacée par une position fixe pour ce seul volet. |
+| **Modes** | Icône, couleur, verrou, comportement, priorité, [durée](#modes-minutés) et ce qui se passe à sa fin, visibilité. Faites glisser les tuiles pour les réordonner : l'ordre est celui des sélecteurs de mode. |
+| **Horaires** | L'[ouverture du matin et la fermeture du soir](#horaires) : la courbe de chacune sur l'année, et le mode du matin et du soir de chaque volet. |
+| **Réglages** | Façades, gabarits, réglages généraux, et la liste des entités que la configuration a créées. |
+
 ## Questions fréquentes
 
-**Mon volet ne bouge pas.** C'est l'une de ces trois raisons : le volet est **verrouillé** (`switch.<volet>_cx_lock` est allumé, la position demandée est dans l'attribut `memory`), une entité d'**exclusion** est à `on`, ou le mode n'a **pas de position** pour ce volet (Aucune, ou le mode n'est pas lié au volet dans la matrice). Pour l'ombrage, vérifiez aussi le seuil de changement et la temporisation.
+**Mon volet ne bouge pas.** La carte du volet dans l'onglet **Volets** dit pourquoi. C'est l'une de ces raisons : le volet est **verrouillé** (`switch.<volet>_cx_lock` est allumé, la position demandée est dans l'attribut `memory`), une **exclusion de sécurité** ou une **inhibition** est à `on`, ou le mode n'a **pas de position** pour ce volet (Aucune, ou le mode n'est pas lié au volet dans la matrice). Pour l'ombrage, vérifiez aussi le seuil de changement et la temporisation.
 
 **J'ai bougé mon volet à la main et il est revenu tout seul.** L'ombrage ou l'héliotropie est actif. L'ombrage attend la temporisation après tout mouvement, puis reprend. Pour garder votre position, passez à un mode sans comportement, ou éteignez `switch.<volet>_cx_auto_shade`.
+
+**Mon volet a changé de mode tout seul.** Un [mode minuté](#modes-minutés) s'est terminé (le volet est revenu à son mode de base, ou au mode de retour fixe du mode), ou un [horaire](#horaires) a appliqué son mode du matin ou du soir. Les événements `cover_extender_timed_mode_ended` et `cover_extender_mode_changed`, et le journal de `select.<volet>_cx_mode`, disent lequel.
 
 **Changer `select.cx_modes` ne fait rien.** C'est normal : c'est un sélecteur d'affichage. Voir [le sélecteur global](#le-sélecteur-global) pour l'automatisation qui le relie.
 
@@ -422,7 +436,7 @@ logger:
     custom_components.cover_extender: debug
 ```
 
-Chaque décision (verrou, exclusion, seuil, temporisation) est journalisée avec sa raison.
+Chaque décision (verrou, exclusion, inhibition, priorité, seuil, temporisation, mode minuté, horaire) est journalisée avec sa raison.
 
 ---
 
