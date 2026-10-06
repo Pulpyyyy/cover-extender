@@ -1164,8 +1164,16 @@ const schedIsoToDay = (iso, year) => { const [, m, d] = iso.split("-").map(Numbe
 const schedDayLabel = (j, year, style) => new Intl.DateTimeFormat(LANG,
   { day: "numeric", month: style === "short" ? "short" : "long", timeZone: "UTC" }).format(schedDayDate(j, year));
 
+/* The hours each chart shows: morning 04:30–10:45, evening 15:30–23:30. A
+   floor or a ceiling is kept inside them, so its handle can always be seen
+   and grabbed; outside, it would never touch the curve anyway. */
+const SCHED_RANGE = { morning: [270, 645], evening: [930, 1410] };
+// Where a floor / ceiling starts when it is ticked on.
+const SCHED_CLAMP_START = { morning: { fl: 435, ce: 570 }, evening: { fl: 1020, ce: 1320 } };
+const schedInRange = (kind, m) => Math.min(SCHED_RANGE[kind][1], Math.max(SCHED_RANGE[kind][0], m));
+
 /** Stored shape → the handles (minutes of the day, days of the year). */
-function schedFromCfg(cfg) {
+function schedFromCfg(cfg, kind) {
   const year = new Date().getFullYear();
   const day = (v, fallback) => (v ? schedIsoToDay(`${year}-${v}`, year) : fallback);
   const fixed = cfg.type === "fixed";
@@ -1173,8 +1181,10 @@ function schedFromCfg(cfg) {
     hi: hmParse(fixed ? cfg.time : cfg.max), lo: hmParse(fixed ? cfg.time : cfg.min),
     x1: { on: !fixed && !!cfg.cross_spring, j: day(cfg.cross_spring, 79) },
     x2: { on: !fixed && !!cfg.cross_autumn, j: day(cfg.cross_autumn, 266) },
-    fl: { on: !!cfg.not_before, m: cfg.not_before ? hmParse(cfg.not_before) : 7 * 60 },
-    ce: { on: !!cfg.not_after, m: cfg.not_after ? hmParse(cfg.not_after) : 22 * 60 },
+    fl: { on: !!cfg.not_before,
+          m: schedInRange(kind, cfg.not_before ? hmParse(cfg.not_before) : SCHED_CLAMP_START[kind].fl) },
+    ce: { on: !!cfg.not_after,
+          m: schedInRange(kind, cfg.not_after ? hmParse(cfg.not_after) : SCHED_CLAMP_START[kind].ce) },
   };
 }
 
@@ -1194,9 +1204,11 @@ function schedToCfg(s) {
 }
 
 /** Move one time handle within its bounds. Returns the message to show, or "".
- *  *pv* is the last preview (its dst_gap); before the first one, no gap. */
-function schedSetVal(pv, s, key, v) {
+ *  *pv* is the last preview (its dst_gap); before the first one, no gap. A
+ *  floor or a ceiling also stays within the chart of *kind*. */
+function schedSetVal(pv, s, key, v, kind) {
   const W = T.sched, SNAP = 5, G = pv?.dst_gap || 0;
+  if (key === "fl" || key === "ce") v = schedInRange(kind, v);
   const FL = s.fl.on ? s.fl.m : -1e9, CE = s.ce.on ? s.ce.m : 1e9, want = v;
   let msg = "";
   if (key === "hi") {
@@ -2506,7 +2518,7 @@ class CoverExtenderPanel extends HTMLElement {
       // The defaults come from the server; the last fallback only keeps an
       // older backend that sends none from breaking the tab.
       draft.s[k] = schedFromCfg(house[k] || defaults[k]
-        || { type: "fixed", time: k === "morning" ? "07:30" : "20:30" });
+        || { type: "fixed", time: k === "morning" ? "07:30" : "20:30" }, k);
     }
     for (const c of this._cfg.covers) {
       draft.assign[c.entity_id] = { morning: c.schedule?.morning ?? null, evening: c.schedule?.evening ?? null };
@@ -2677,7 +2689,7 @@ class CoverExtenderPanel extends HTMLElement {
 
     /* ---- drawing ---- */
     const Wd = 940, Hd = 420, M = { l: 52, r: 104, t: 30, b: 34 };
-    const Y0 = kind === "morning" ? 270 : 930, Y1 = kind === "morning" ? 645 : 1410;
+    const [Y0, Y1] = SCHED_RANGE[kind];
     const mk = (t, a, p = svg) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); p.appendChild(e); return e; };
     const xOf = (j) => M.l + (j - 1) / 364 * (Wd - M.l - M.r);
     const yOf = (m) => M.t + (Y1 - m) / (Y1 - Y0) * (Hd - M.t - M.b);
@@ -2859,7 +2871,7 @@ class CoverExtenderPanel extends HTMLElement {
     /* field input */
     const onTime = (key) => F[key].input.addEventListener("input", (e) => {
       if (!e.target.value) return;
-      clampMsg = schedSetVal(this._schedPv[kind], s, key, hmParse(e.target.value));
+      clampMsg = schedSetVal(this._schedPv[kind], s, key, hmParse(e.target.value), kind);
       changed();
     });
     ["hi", "lo", "fl", "ce"].forEach(onTime);
@@ -2874,7 +2886,7 @@ class CoverExtenderPanel extends HTMLElement {
     for (const k of ["fl", "ce"]) {
       F[k].cb.addEventListener("change", (e) => {
         s[k].on = e.target.checked;
-        clampMsg = e.target.checked ? schedSetVal(this._schedPv[kind], s, k, s[k].m) : "";
+        clampMsg = e.target.checked ? schedSetVal(this._schedPv[kind], s, k, s[k].m, kind) : "";
         changed();
       });
     }
@@ -2899,7 +2911,7 @@ class CoverExtenderPanel extends HTMLElement {
         const m = Math.round(Math.max(Y0, Math.min(Y1, mAt(p.y))));
         clampMsg = drag === "x1" || drag === "x2"
           ? schedSetCross(this._schedPv[kind], s, drag, jAt(p.x), year)
-          : schedSetVal(this._schedPv[kind], s, drag, m);
+          : schedSetVal(this._schedPv[kind], s, drag, m, kind);
         tip.hidden = true;
         changed();
         return;
@@ -2970,7 +2982,7 @@ class CoverExtenderPanel extends HTMLElement {
         if (msg) { err.textContent = msg; err.hidden = false; input.setAttribute("aria-invalid", "true"); input.focus(); return; }
         clampMsg = isDate
           ? schedSetCross(this._schedPv[kind], s, key, schedIsoToDay(input.value, year), year)
-          : schedSetVal(this._schedPv[kind], s, key, hmParse(input.value));
+          : schedSetVal(this._schedPv[kind], s, key, hmParse(input.value), kind);
         closeEditor();
         changed();
       });
