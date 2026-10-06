@@ -34,6 +34,8 @@ SERVICE_SET_COVER_POSITION = "set_cover_position"
 SERVICE_OPEN_COVER         = "open_cover"
 SERVICE_CLOSE_COVER        = "close_cover"
 SERVICE_APPLY_MEMORY       = "apply_memory"
+SERVICE_END_TIMED_MODE     = "end_timed_mode"
+SERVICE_END_TIMED_MODE     = "end_timed_mode"
 
 # hass.data keys
 DATA_COVER_PROFILES      = "cover_profiles"
@@ -50,6 +52,10 @@ DATA_BINARY_SENSOR_AUTO_SOLAR_GAIN_IDS   = "binary_sensor_solar_gain_ids"
 DATA_MEMORY                = "memory"
 
 STORAGE_KEY     = f"{DOMAIN}.memory"
+# Running countdowns of timed modes, so they survive a restart.
+TIMERS_STORAGE_KEY = f"{DOMAIN}.timers"
+# Running countdowns of timed modes, so they survive a restart.
+TIMERS_STORAGE_KEY = f"{DOMAIN}.timers"
 STORAGE_VERSION = 1
 
 # Dispatcher signal fired after a reload so select entities can refresh their options
@@ -71,6 +77,26 @@ EXTERNAL_ATTRS_SIGNAL = "cover_external_attrs_updated"
 EVENT_MODE_CHANGED  = f"{DOMAIN}_mode_changed"
 EVENT_MEMORY_SAVED  = f"{DOMAIN}_memory_saved"
 EVENT_SHADE_APPLIED = f"{DOMAIN}_shade_applied"
+EVENT_TIMED_MODE_ENDED = f"{DOMAIN}_timed_mode_ended"
+
+# Timed modes: bounds of a mode duration, in minutes (24 h at most), the
+# attributes the cover's mode selector exposes, and the dispatcher signal
+# that tells it to redraw them.
+MODE_DURATION_MIN = 1
+MODE_DURATION_MAX = 1440
+ATTR_MODE_ENDS_AT = "mode_ends_at"
+ATTR_RETURN_MODE  = "return_mode"
+SIGNAL_TIMED_MODE = f"{DOMAIN}_timed_mode"
+EVENT_TIMED_MODE_ENDED = f"{DOMAIN}_timed_mode_ended"
+
+# Timed modes: bounds of a mode duration, in minutes (24 h at most), the
+# attributes the cover's mode selector exposes, and the dispatcher signal
+# that tells it to redraw them.
+MODE_DURATION_MIN = 1
+MODE_DURATION_MAX = 1440
+ATTR_MODE_ENDS_AT = "mode_ends_at"
+ATTR_RETURN_MODE  = "return_mode"
+SIGNAL_TIMED_MODE = f"{DOMAIN}_timed_mode"
 
 # Weather states accepted as "good conditions" for solar gain. Shared so the
 # config flow and the admin panel offer the same list (the panel receives it

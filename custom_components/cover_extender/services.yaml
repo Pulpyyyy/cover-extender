@@ -42,6 +42,11 @@ apply_mode:
       selector:
         boolean:
 
+end_timed_mode:
+  target:
+    entity:
+      domain: cover
+
 compute_shade_position:
   fields:
     entity_id:

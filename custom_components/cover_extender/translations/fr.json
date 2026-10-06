@@ -36,6 +36,10 @@
         }
       }
     },
+    "end_timed_mode": {
+      "name": "Terminer le mode minuté",
+      "description": "Termine tout de suite le mode minuté des volets ciblés : chacun revient au mode où il était avant, comme à la fin du délai."
+    },
     "compute_shade_position": {
       "name": "Calculer la position d'ombrage",
       "description": "Calcule la position d'ombrage solaire d'un volet en fonction de sa configuration et de la position actuelle du soleil. Retourne la position (0-100 %) et should_update.",

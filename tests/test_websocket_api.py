@@ -75,6 +75,27 @@ def test_modes_behavior_and_color_validation():
     assert flagged["priority"] is True
 
 
+def test_modes_duration_validation():
+    plain = {"name": "Day", "duration": 0}
+    assert ws._validate_modes([plain]) is None
+    assert plain["duration"] is None and plain["return_mode"] is None
+    for bad in (-5, 1441, 2.5, "60", True):
+        assert ws._validate_modes([{"name": "Manual", "duration": bad}]) == "duration_invalid:Manual"
+    assert ws._validate_modes([{"name": "Manual", "duration": 60}]) is None
+
+
+def test_modes_return_mode_must_be_an_existing_non_timed_mode():
+    day = {"name": "Day"}
+    guest = {"name": "Guest", "duration": 720}
+    assert ws._validate_modes([day, guest, {"name": "M", "duration": 60, "return_mode": "Day"}]) is None
+    assert ws._validate_modes([day, guest, {"name": "M", "duration": 60, "return_mode": "Guest"}])         == "return_mode_invalid:M"
+    assert ws._validate_modes([day, {"name": "M", "duration": 60, "return_mode": "Gone"}])         == "return_mode_invalid:M"
+    # A mode without duration keeps no return mode.
+    plain = {"name": "Night", "return_mode": "Day"}
+    assert ws._validate_modes([day, plain]) is None
+    assert plain["return_mode"] is None
+
+
 # ── Facades ───────────────────────────────────────────────────────────────────
 
 def test_facades_azimuth_and_key_stripping():

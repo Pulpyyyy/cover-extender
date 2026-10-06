@@ -273,6 +273,8 @@ def build_profiles_from_options(
                 "behavior": item.get("behavior") or None,
                 "hidden":   bool(item.get("hidden", False)),
                 "priority": bool(item.get("priority", False)),
+                "duration": item.get("duration") or None,
+                "return_mode": item.get("return_mode") or None,
             }
 
     for cover_data in sections.get(SECTION_COVER) or []:

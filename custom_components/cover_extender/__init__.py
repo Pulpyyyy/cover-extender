@@ -66,6 +66,7 @@ from .const import (
     SERVICE_OPEN_COVER,
     SERVICE_CLOSE_COVER,
     SERVICE_APPLY_MEMORY,
+    SERVICE_END_TIMED_MODE,
     SERVICE_RELOAD,
     OPT_CONFIG,
     SECTION_COVER,
@@ -413,6 +414,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         schema=_cover_target,
     )
     hass.services.async_register(
+        DOMAIN, SERVICE_END_TIMED_MODE, coordinator.service_end_timed_mode,
+        schema=_cover_target,
+    )
+    hass.services.async_register(
         DOMAIN, SERVICE_RELOAD, coordinator.service_reload,
         schema=vol.Schema({}),
     )
@@ -440,7 +445,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             SERVICE_APPLY_MODE, SERVICE_GET_MODE_POSITION,
             SERVICE_COMPUTE_SHADE_POSITION, SERVICE_SET_COVER_POSITION,
             SERVICE_OPEN_COVER, SERVICE_CLOSE_COVER, SERVICE_APPLY_MEMORY,
-            SERVICE_RELOAD,
+            SERVICE_END_TIMED_MODE, SERVICE_RELOAD,
         ):
             hass.services.async_remove(DOMAIN, service)
     return unload_ok

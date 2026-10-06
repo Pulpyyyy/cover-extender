@@ -85,6 +85,14 @@ except ImportError:
     util = _module("homeassistant.util")
     dt = _module("homeassistant.util.dt")
     dt.utcnow = lambda: datetime.now(timezone.utc)
+
+    def _parse_datetime(value):
+        try:
+            return datetime.fromisoformat(value)
+        except (TypeError, ValueError):
+            return None
+
+    dt.parse_datetime = _parse_datetime
     util.dt = dt
     ha.util = util
 
@@ -122,6 +130,7 @@ except ImportError:
 
     event = _module("homeassistant.helpers.event")
     event.async_track_state_change_event = lambda hass, entity_ids, action: (lambda: None)
+    event.async_track_point_in_utc_time = lambda hass, action, point: (lambda: None)
 
     service = _module("homeassistant.helpers.service")
 

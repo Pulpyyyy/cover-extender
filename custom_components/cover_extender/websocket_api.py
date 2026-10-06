@@ -52,6 +52,8 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.loader import async_get_integration
 
 from .const import (
+    MODE_DURATION_MAX,
+    MODE_DURATION_MIN,
     DEFAULT_COMMAND_INTERVAL_MS,
     DOMAIN,
     FALLBACK_VERSION,
@@ -319,6 +321,28 @@ def _validate_modes(items: list[dict[str, Any]]) -> str | None:
         item["lock"] = bool(item.get("lock", False))
         item["hidden"] = bool(item.get("hidden", False))
         item["priority"] = bool(item.get("priority", False))
+        duration = item.get("duration")
+        if duration in (None, "", 0, False):
+            item["duration"] = None
+        elif (
+            isinstance(duration, bool)
+            or not isinstance(duration, int)
+            or not MODE_DURATION_MIN <= duration <= MODE_DURATION_MAX
+        ):
+            return f"duration_invalid:{item.get('name')}"
+    # A timed mode ends on its fixed return mode, or on the cover's base mode
+    # when it has none. The fixed one must be an existing NON-timed mode: that
+    # is what guarantees every countdown ends on a mode that starts no other.
+    names = {it.get("name") for it in items}
+    timed = {it.get("name") for it in items if it.get("duration")}
+    for item in items:
+        target = item.get("return_mode") or None
+        if not item.get("duration"):
+            item["return_mode"] = None
+        elif target is not None and (target not in names or target in timed):
+            return f"return_mode_invalid:{item.get('name')}"
+        else:
+            item["return_mode"] = target
     return None
 
 
@@ -706,6 +730,14 @@ async def ws_config_save(
         connection.send_error(msg["id"], "invalid_format", f"{section} expects a list")
         return
     items = [dict(it) for it in msg["data"]]
+    old_items = _items(hass, section_key)
+
+    # A renamed mode is renamed in the other modes' return mode too, before
+    # validation would refuse them for pointing at a name that is gone.
+    if section == "mode" and (pair := _rename_pair(old_items, items)) is not None:
+        for it in items:
+            if it.get("return_mode") == pair[0]:
+                it["return_mode"] = pair[1]
 
     if section == "cover":
         error = _validate_covers(hass, items)
@@ -721,7 +753,6 @@ async def ws_config_save(
         connection.send_error(msg["id"], "invalid_config", error)
         return
 
-    old_items = _items(hass, section_key)
     if error := _deletion_blocked(hass, section, old_items, items):
         connection.send_error(msg["id"], "in_use", error)
         return

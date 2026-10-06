@@ -16,6 +16,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from .const import (
     DOMAIN, DATA_COVER_PROFILES, DATA_MODES, DATA_SELECT_COVER_IDS,
     CONF_MODES, SIGNAL_COVER_RELOAD,
+    ATTR_MODE_ENDS_AT, ATTR_RETURN_MODE, SIGNAL_TIMED_MODE,
 )
 from .entity import attach_cover_helper, hub_device_info
 from .helpers import (
@@ -113,6 +114,15 @@ class CoverModeSelect(SelectEntity, RestoreEntity):
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_COVER_RELOAD, self._handle_reload)
         )
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_TIMED_MODE, self._handle_timed_mode)
+        )
+
+    @callback
+    def _handle_timed_mode(self, cover_entity_id: str) -> None:
+        """Redraw the countdown attributes when this cover's timed mode changes."""
+        if cover_entity_id == self._cover_entity_id:
+            self.async_write_ha_state()
 
     @callback
     def _handle_reload(self) -> None:
@@ -142,9 +152,13 @@ class CoverModeSelect(SelectEntity, RestoreEntity):
         """Expose icon, color of the current mode, and the full available modes dict."""
         modes_list: dict = self.hass.data.get(DOMAIN, {}).get(DATA_MODES, {})
         display = modes_list.get(self._attr_current_option or "", {})
+        # A timed mode running: when it ends and which mode follows.
+        timer = self._coordinator.timed_mode_info(self._cover_entity_id) if self._coordinator else None
         return {
             "icon":  display.get("icon",  "mdi:refresh-auto"),
             "color": display.get("color", "white"),
+            ATTR_MODE_ENDS_AT: timer["until"].isoformat() if timer else None,
+            ATTR_RETURN_MODE:  timer["return_mode"] if timer else None,
             "modes_list": {
                 opt: {
                     "icon":     modes_list.get(opt, {}).get("icon",     "mdi:help-circle"),
@@ -152,6 +166,8 @@ class CoverModeSelect(SelectEntity, RestoreEntity):
                     "lock":     modes_list.get(opt, {}).get("lock",     False),
                     "behavior": modes_list.get(opt, {}).get("behavior", None),
                     "priority": modes_list.get(opt, {}).get("priority", False),
+                    "duration": modes_list.get(opt, {}).get("duration"),
+                    "return_mode": modes_list.get(opt, {}).get("return_mode"),
                 }
                 for opt in self._attr_options
             },
@@ -160,11 +176,16 @@ class CoverModeSelect(SelectEntity, RestoreEntity):
     async def async_select_option(self, option: str) -> None:
         """Change the selected option and immediately sync the lock switch.
 
+        Choosing the timed mode the cover is already in restarts its countdown:
+        the state does not change, so the coordinator would not hear of it.
+
         The coordinator (_handle_select_mode_change → _apply_mode_core) handles the
         full mode logic (lock, behavior, position, memory) asynchronously.  We also
         apply the lock here synchronously so the UI reflects the new state without
         waiting for the coordinator task to be scheduled.
         """
+        if option == self._attr_current_option and self._coordinator is not None:
+            self._coordinator.extend_timed_mode(self._cover_entity_id, option)
         self._attr_current_option = option
         self.async_write_ha_state()
 

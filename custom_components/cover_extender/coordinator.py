@@ -21,7 +21,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timedelta
+from functools import partial
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -30,7 +31,11 @@ from homeassistant.core import CoreState, HomeAssistant, ServiceCall, Event, cal
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.entity_registry import EVENT_ENTITY_REGISTRY_UPDATED
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.event import (
+    async_track_point_in_utc_time,
+    async_track_state_change_event,
+)
 from homeassistant.helpers.service import async_extract_entity_ids
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
@@ -57,6 +62,9 @@ from .const import (
     EVENT_MODE_CHANGED,
     EVENT_MEMORY_SAVED,
     EVENT_SHADE_APPLIED,
+    EVENT_TIMED_MODE_ENDED,
+    SIGNAL_TIMED_MODE,
+    TIMERS_STORAGE_KEY,
     CONF_COMMAND_INTERVAL,
     DEFAULT_COMMAND_INTERVAL,
     OPT_CONFIG,
@@ -88,6 +96,13 @@ class CoverExtenderCoordinator:
         self.hass = hass
         self._entry = entry
         self._store: Store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+        # Timed modes. _timers: cover -> {"mode", "until" (aware UTC datetime),
+        # "base" (the non-timed mode the parenthesis was opened over)}.
+        self._timer_store: Store = Store(hass, 1, TIMERS_STORAGE_KEY)
+        self._timers: dict[str, dict[str, Any]] = {}
+        self._timer_unsubs: dict[str, Callable[[], None]] = {}
+        # Countdowns loaded from storage, restored once the profiles are set up.
+        self._stored_timers: dict[str, Any] | None = None
         self._cover_queue: asyncio.Queue[tuple[str, dict]] = asyncio.Queue()
         self._worker_task: asyncio.Task | None = None
         # Configurable interval between cover commands (from the global settings)
@@ -310,6 +325,147 @@ class CoverExtenderCoordinator:
             EVENT_MEMORY_SAVED,
             {"entity_id": entity_id, "position": value},
         )
+
+    # ── Timed modes ────────────────────────────────────────────────────────────
+    # A mode with a duration is a parenthesis over the cover's BASE mode, the
+    # last non-timed mode it was put in. When the time is up the cover goes
+    # back to that base mode, or to the mode's fixed return mode when it has
+    # one (always a non-timed mode, the validation sees to it). Every ending
+    # therefore lands on a non-timed mode, which starts no countdown: no chain
+    # of returns can loop.
+    #
+    # - another timed mode chosen meanwhile replaces the parenthesis, the base
+    #   mode stays;
+    # - a non-timed mode chosen meanwhile closes it, and becomes the base;
+    # - the running timed mode chosen again extends it.
+    # The countdown survives a restart (TIMERS_STORAGE_KEY).
+
+    def _mode_duration(self, mode: str | None) -> int | None:
+        return self._modes_list.get(mode, {}).get("duration") if mode else None
+
+    def _return_target(self, entity_id: str, timer: dict[str, Any]) -> str | None:
+        """Where the running timed mode hands the cover back: its fixed return
+        mode when it has one linked to this cover, else the base mode."""
+        modes = self._profiles.get(entity_id, {}).get(CONF_MODES, {})
+        fixed = self._modes_list.get(timer["mode"], {}).get("return_mode")
+        if fixed and fixed in modes:
+            return fixed
+        if fixed:
+            _LOGGER.warning(
+                "timed mode '%s' on %s: return mode '%s' is not linked to this cover, "
+                "using the base mode '%s'", timer["mode"], entity_id, fixed, timer["base"],
+            )
+        base = timer["base"]
+        return base if base in modes else None
+
+    def timed_mode_info(self, entity_id: str) -> dict[str, Any] | None:
+        """Running countdown of a cover: when it ends and where it returns, or None."""
+        timer = self._timers.get(entity_id)
+        if timer is None:
+            return None
+        modes = self._profiles.get(entity_id, {}).get(CONF_MODES, {})
+        fixed = self._modes_list.get(timer["mode"], {}).get("return_mode")
+        return {"until": timer["until"], "return_mode": fixed if fixed in modes else timer["base"]}
+
+    def _update_timed_mode(self, entity_id: str, mode: str, from_mode: str | None) -> None:
+        """Open, replace, extend or close the parenthesis as *mode* is applied."""
+        duration = self._mode_duration(mode)
+        if not duration:
+            self._cancel_timed_mode(entity_id)
+            return
+        timer = self._timers.get(entity_id)
+        if timer is not None:
+            base = timer["base"]          # replaced or extended: same base mode
+        elif from_mode and not self._mode_duration(from_mode):
+            base = from_mode              # opened over a non-timed mode
+        else:
+            base = None                   # e.g. a timed mode restored without its countdown
+        if base is None and not self._modes_list.get(mode, {}).get("return_mode"):
+            _LOGGER.warning(
+                "timed mode '%s' on %s: no mode to go back to, no countdown", mode, entity_id
+            )
+            self._cancel_timed_mode(entity_id)
+            return
+        self._start_timer(entity_id, mode, dt_util.utcnow() + timedelta(minutes=duration), base)
+
+    def extend_timed_mode(self, entity_id: str, mode: str) -> None:
+        """The running timed mode was chosen again: restart its countdown."""
+        timer = self._timers.get(entity_id)
+        duration = self._mode_duration(mode)
+        if timer is None or timer["mode"] != mode or not duration:
+            return
+        self._start_timer(entity_id, mode, dt_util.utcnow() + timedelta(minutes=duration), timer["base"])
+
+    def _start_timer(self, entity_id: str, mode: str, until: datetime, base: str | None) -> None:
+        if unsub := self._timer_unsubs.pop(entity_id, None):
+            unsub()
+        self._timers[entity_id] = {"mode": mode, "until": until, "base": base}
+        self._timer_unsubs[entity_id] = async_track_point_in_utc_time(
+            self.hass, partial(self._on_timer_due, entity_id), until
+        )
+        _LOGGER.debug("timed mode '%s' on %s until %s (base mode '%s')", mode, entity_id, until, base)
+        self._timers_changed(entity_id)
+
+    def _cancel_timed_mode(self, entity_id: str) -> None:
+        if unsub := self._timer_unsubs.pop(entity_id, None):
+            unsub()
+        if self._timers.pop(entity_id, None) is not None:
+            self._timers_changed(entity_id)
+
+    @callback
+    def _on_timer_due(self, entity_id: str, _now: datetime) -> None:
+        self._timer_unsubs.pop(entity_id, None)
+        self.hass.async_create_task(self.async_end_timed_mode(entity_id))
+
+    async def async_end_timed_mode(self, entity_id: str) -> None:
+        """Close the parenthesis now: back to the return mode."""
+        timer = self._timers.get(entity_id)
+        if timer is None:
+            return
+        self._cancel_timed_mode(entity_id)
+        target = self._return_target(entity_id, timer)
+        if target is None:
+            _LOGGER.warning(
+                "timed mode '%s' ended on %s: base mode '%s' is no longer linked, "
+                "the cover stays in '%s'", timer["mode"], entity_id, timer["base"], timer["mode"],
+            )
+            return
+        self.hass.bus.async_fire(
+            EVENT_TIMED_MODE_ENDED,
+            {"entity_id": entity_id, "mode": timer["mode"], "return_mode": target},
+        )
+        select_id = resolve_helper_entity(self.hass, entity_id, "select_mode")
+        select_state = self.hass.states.get(select_id)
+        if select_state is None or select_state.state == target:
+            return
+        await self.hass.services.async_call(
+            "select", "select_option", {"entity_id": select_id, "option": target}
+        )
+
+    def _timers_changed(self, entity_id: str) -> None:
+        self._timer_store.async_delay_save(self._timers_to_save, _MEMORY_SAVE_DELAY)
+        async_dispatcher_send(self.hass, SIGNAL_TIMED_MODE, entity_id)
+
+    @callback
+    def _timers_to_save(self) -> dict[str, Any]:
+        return {
+            self._memory_key(eid): {"mode": t["mode"], "until": t["until"].isoformat(), "base": t["base"]}
+            for eid, t in self._timers.items()
+        }
+
+    def _restore_timers(self) -> None:
+        """Pick up the countdowns that were running before the restart, once."""
+        stored, self._stored_timers = self._stored_timers or {}, None
+        now = dt_util.utcnow()
+        for entity_id in self._profiles:
+            data = stored.get(self._memory_key(entity_id))
+            if not data:
+                continue
+            select_state = self.hass.states.get(resolve_helper_entity(self.hass, entity_id, "select_mode"))
+            until = dt_util.parse_datetime(str(data.get("until")))
+            if select_state is None or select_state.state != data.get("mode") or until is None:
+                continue  # the mode changed meanwhile: that countdown is over
+            self._start_timer(entity_id, data["mode"], max(until, now), data.get("base"))
 
     # ── Exclusion ──────────────────────────────────────────────────────────────
 
@@ -545,6 +701,7 @@ class CoverExtenderCoordinator:
                 return
             # A new mode replaces whatever was waiting for the exclusion to clear.
             self._exclusion_pending.pop(entity_id, None)
+            self._update_timed_mode(entity_id, mode, from_mode)
 
             lock_id    = resolve_helper_entity(self.hass, entity_id, "lock")
             shading_id = resolve_helper_entity(self.hass, entity_id, "auto_shade")
@@ -899,6 +1056,11 @@ class CoverExtenderCoordinator:
         self._sg_switch_to_cover  = new_sg_switch_to_cover
         self._exclusion_to_covers = new_exclusion_to_covers
         self._unsubs              = new_unsubs
+
+        for gone in set(self._timers) - set(profiles):
+            self._cancel_timed_mode(gone)
+        if self._stored_timers is not None:
+            self._restore_timers()
 
         # ── Strip injected attributes from covers removed from the config ─────
         # Without this they linger on the cover until the next HA restart.
@@ -1280,6 +1442,11 @@ class CoverExtenderCoordinator:
                 "set_cover_position", {"entity_id": entity_id, "position": position}
             )
 
+    async def service_end_timed_mode(self, call: ServiceCall) -> None:
+        """End the timed mode of the target covers now: back to their return mode."""
+        for entity_id in await self._extract_cover_ids(call):
+            await self.async_end_timed_mode(entity_id)
+
     async def service_reload(self, call: ServiceCall) -> None:
         """Reload cover configuration from entry.options without restarting HA."""
         count = self._reload_config()
@@ -1299,6 +1466,7 @@ class CoverExtenderCoordinator:
             else:
                 mem[key] = int(val)
         self.hass.data[DOMAIN][DATA_MEMORY] = mem
+        self._stored_timers = await self._timer_store.async_load() or {}
 
         self._start_worker()
 
@@ -1351,6 +1519,10 @@ class CoverExtenderCoordinator:
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
+        # The countdowns stay in storage; only their callbacks go.
+        for unsub in self._timer_unsubs.values():
+            unsub()
+        self._timer_unsubs.clear()
         # Drop the extras we carried through the external-attrs contract so the
         # reader entities rewrite themselves without them.
         self._clear_external_attrs()
