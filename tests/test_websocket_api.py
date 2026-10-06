@@ -68,6 +68,11 @@ def test_modes_behavior_and_color_validation():
     assert ws._validate_modes([item]) is None
     assert item["color"] == "#FF7043"          # normalised
     assert item["lock"] is False and item["hidden"] is False  # defaults filled
+    assert item["priority"] is False
+
+    flagged = {"name": "Alarm", "priority": 1}
+    assert ws._validate_modes([flagged]) is None
+    assert flagged["priority"] is True
 
 
 # ── Facades ───────────────────────────────────────────────────────────────────

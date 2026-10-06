@@ -18,6 +18,7 @@ from .const import (
     CONF_ANGLE_LEFT,
     CONF_ANGLE_RIGHT,
     CONF_EXCLUSION,
+    CONF_INHIBITION,
     DEFAULT_COMMAND_INTERVAL_MS,
     OPT_CONFIG,
     SECTION_COVER,
@@ -177,6 +178,7 @@ def _add_cover_profile(
         CONF_SHADING:        shade_cfg,
         CONF_SOLAR_GAIN:     sg_cfg,
         CONF_EXCLUSION:      list(d.get("exclusion") or []),
+        CONF_INHIBITION:     list(d.get("inhibition") or []),
     }
 
 
@@ -270,6 +272,7 @@ def build_profiles_from_options(
                 "lock":     bool(item.get("lock", False)),
                 "behavior": item.get("behavior") or None,
                 "hidden":   bool(item.get("hidden", False)),
+                "priority": bool(item.get("priority", False)),
             }
 
     for cover_data in sections.get(SECTION_COVER) or []:

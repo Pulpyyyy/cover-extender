@@ -151,6 +151,7 @@ class CoverModeSelect(SelectEntity, RestoreEntity):
                     "color":    modes_list.get(opt, {}).get("color",    "white"),
                     "lock":     modes_list.get(opt, {}).get("lock",     False),
                     "behavior": modes_list.get(opt, {}).get("behavior", None),
+                    "priority": modes_list.get(opt, {}).get("priority", False),
                 }
                 for opt in self._attr_options
             },

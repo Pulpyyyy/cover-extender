@@ -378,6 +378,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         schema=vol.Schema({
             **cv.TARGET_SERVICE_FIELDS,
             vol.Required("mode"): cv.string,
+            vol.Optional("force", default=False): cv.boolean,
         }),
         supports_response=SupportsResponse.OPTIONAL,
     )

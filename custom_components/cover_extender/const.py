@@ -18,7 +18,8 @@ ATTR_SUN_FACING = "sun_facing"
 
 # Shading sub-config key and its fields (all optional, defaults in service)
 CONF_SHADING      = "shade"
-CONF_EXCLUSION    = "exclusion"
+CONF_EXCLUSION    = "exclusion"   # safety: blocks every move, priority included
+CONF_INHIBITION   = "inhibition"  # blocks every move except priority requests
 
 # Solar gain sub-config keys
 CONF_SOLAR_GAIN  = "solar_gain"

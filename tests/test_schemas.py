@@ -54,6 +54,7 @@ def test_facades_and_modes_parsed():
     assert modes["Night"]["icon"] == "mdi:weather-night"
     assert modes["Night"]["color"] == "#FFFFFF"  # default
     assert modes["Night"]["hidden"] is False     # default
+    assert modes["Night"]["priority"] is False   # default
 
 
 def test_cover_profile_basic_and_mode_conversion():
@@ -61,6 +62,7 @@ def test_cover_profile_basic_and_mode_conversion():
         "entity_id": "cover.volet_sam",
         "facade": "south",
         "exclusion": ["binary_sensor.fenetre"],
+        "inhibition": ["input_boolean.invite"],
         "modes": {
             "Day":   {"type": "fixed", "value": 100},
             "Perso": {"type": "entity", "value": " input_number.pos "},
@@ -72,6 +74,7 @@ def test_cover_profile_basic_and_mode_conversion():
     cfg = profiles["cover.volet_sam"]
     assert cfg["facade"] == "south"
     assert cfg["exclusion"] == ["binary_sensor.fenetre"]
+    assert cfg["inhibition"] == ["input_boolean.invite"]
     assert cfg["modes"]["Day"] == 100
     assert cfg["modes"]["Perso"] == "input_number.pos"  # stripped
     assert cfg["modes"]["Ombre"] is None
@@ -175,3 +178,15 @@ def test_registry_id_unresolvable_falls_back_to_stored_entity_id(hass, monkeypat
 
     profiles, _, _, _, _, _ = build_profiles_from_options(entry, hass)
     assert "cover.volet_sam" in profiles
+
+
+def test_priority_mode_parsed():
+    entry = _entry(modes=[{"name": "Alarm", "lock": True, "priority": True}])
+    _, modes, _, _, _, _ = build_profiles_from_options(entry)
+    assert modes["Alarm"]["priority"] is True
+
+
+def test_cover_without_inhibition_gets_an_empty_list():
+    entry = _entry(covers=[{"entity_id": "cover.volet_sam", "facade": "south"}])
+    profiles, _, _, _, _, _ = build_profiles_from_options(entry)
+    assert profiles["cover.volet_sam"]["inhibition"] == []

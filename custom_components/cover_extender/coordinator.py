@@ -41,6 +41,7 @@ from .const import (
     CONF_SHADING,
     CONF_SOLAR_GAIN,
     CONF_EXCLUSION,
+    CONF_INHIBITION,
     ATTR_SUN_FACING,
     DATA_COVER_PROFILES,
     DATA_MODES,
@@ -117,7 +118,13 @@ class CoverExtenderCoordinator:
         # locked period, which must not come back when a window is closed.
         # respect_lock: an action's position waits for the unlock if the cover
         # got locked meanwhile; a mode's own position applies regardless.
-        self._exclusion_pending: dict[str, tuple[int, bool]] = {}
+        # priority: the request may pass an inhibition (a priority mode, or
+        # apply_mode with force), so it applies as soon as no SAFETY exclusion
+        # is left, even if an inhibition is still on.
+        self._exclusion_pending: dict[str, tuple[int, bool, bool]] = {}
+        # Covers whose next mode application was requested with force: true
+        # (apply_mode). Consumed by _apply_mode_core.
+        self._forced: set[str] = set()
         # Attribute keys injected per cover — used to strip them when a cover
         # is removed from the config (otherwise they linger until restart).
         # Only tracks the direct-write (fallback) covers; reader covers carry
@@ -306,10 +313,35 @@ class CoverExtenderCoordinator:
 
     # ── Exclusion ──────────────────────────────────────────────────────────────
 
-    def _is_excluded(self, entity_id: str) -> bool:
-        """True when one of the cover's exclusion entities (e.g. an open window) is on."""
-        exclusion: list[str] = self._profiles.get(entity_id, {}).get(CONF_EXCLUSION, [])
-        return any(self.hass.states.is_state(e, "on") for e in exclusion)
+    def _blocker(self, entity_id: str, priority: bool = False) -> tuple[str, str] | None:
+        """What holds the cover back, as (kind, entity_id), else None.
+
+        A safety exclusion (an open window) blocks everything. An inhibition
+        (a guest in the room) blocks everything but a priority request: a
+        priority mode, or apply_mode with force.
+        """
+        profile = self._profiles.get(entity_id, {})
+        for ent in profile.get(CONF_EXCLUSION, []):
+            if self.hass.states.is_state(ent, "on"):
+                return ("safety", ent)
+        if not priority:
+            for ent in profile.get(CONF_INHIBITION, []):
+                if self.hass.states.is_state(ent, "on"):
+                    return ("inhibition", ent)
+        return None
+
+    def _is_excluded(self, entity_id: str, priority: bool = False) -> bool:
+        """True when a safety exclusion, or (unless *priority*) an inhibition, is on."""
+        return self._blocker(entity_id, priority) is not None
+
+    def _mode_priority(self, entity_id: str) -> bool:
+        """True when the cover's current mode is a priority mode."""
+        select_state = self.hass.states.get(
+            resolve_helper_entity(self.hass, entity_id, "select_mode")
+        )
+        if select_state is None:
+            return False
+        return bool(self._modes_list.get(select_state.state, {}).get("priority", False))
 
     def _is_locked(self, entity_id: str) -> bool:
         """True when the cover's lock switch is on."""
@@ -320,7 +352,11 @@ class CoverExtenderCoordinator:
 
     @callback
     def _handle_exclusion_change(self, event: Event) -> None:
-        """Resume a cover when its last active exclusion turns off."""
+        """Resume a cover when an exclusion or an inhibition turns off.
+
+        Nothing can move while a safety exclusion is still on; otherwise the
+        resume decides, per request, whether a remaining inhibition holds it.
+        """
         new_state = event.data.get("new_state")
         old_state = event.data.get("old_state")
         if not new_state or not old_state:
@@ -328,8 +364,8 @@ class CoverExtenderCoordinator:
         if old_state.state != "on" or new_state.state == "on":
             return
         for cover_id in self._exclusion_to_covers.get(event.data.get("entity_id"), []):
-            if self._is_excluded(cover_id):
-                continue  # another exclusion of this cover is still on
+            if self._is_excluded(cover_id, priority=True):
+                continue  # a safety exclusion of this cover is still on
             self.hass.async_create_task(self._resume_after_exclusion(cover_id))
 
     async def _resume_after_exclusion(self, cover_id: str) -> None:
@@ -339,8 +375,12 @@ class CoverExtenderCoordinator:
         if not cfg:
             self._exclusion_pending.pop(cover_id, None)
             return
-        if (pending := self._exclusion_pending.pop(cover_id, None)) is not None:
-            position, respect_lock = pending
+        pending = self._exclusion_pending.get(cover_id)
+        if pending is not None and self._is_excluded(cover_id, pending[2]):
+            _LOGGER.debug("blocker cleared %s: still held by %s", cover_id, self._blocker(cover_id))
+        elif pending is not None:
+            del self._exclusion_pending[cover_id]
+            position, respect_lock, _priority = pending
             if respect_lock and self._is_locked(cover_id):
                 _LOGGER.debug(
                     "exclusion cleared %s: locked → %d%% stays in memory", cover_id, position
@@ -374,8 +414,8 @@ class CoverExtenderCoordinator:
             return
         # Nothing is memorized: the computation resumes at the next sun update
         # once the exclusion clears, and the memory keeps the pre-mode position.
-        if self._is_excluded(entity_id):
-            _LOGGER.debug("auto_shade %s: exclusion active → skipped", entity_id)
+        if self._is_excluded(entity_id, self._mode_priority(entity_id)):
+            _LOGGER.debug("auto_shade %s: %s → skipped", entity_id, self._blocker(entity_id))
             return
         position, should_update = compute_shade_sync(
             self.hass, entity_id, cfg, self._last_move.get(entity_id)
@@ -410,8 +450,8 @@ class CoverExtenderCoordinator:
         if not solar_gain_sw or solar_gain_sw.state != "on":
             _LOGGER.debug("auto_solar_gain %s: switch missing or off → skipped", entity_id)
             return
-        if self._is_excluded(entity_id):
-            _LOGGER.debug("auto_solar_gain %s: exclusion active → skipped", entity_id)
+        if self._is_excluded(entity_id, self._mode_priority(entity_id)):
+            _LOGGER.debug("auto_solar_gain %s: %s → skipped", entity_id, self._blocker(entity_id))
             return
 
         solar_gain_cfg = cfg.get(CONF_SOLAR_GAIN, {})
@@ -492,6 +532,9 @@ class CoverExtenderCoordinator:
 
         Does NOT update the select entity; it is already up-to-date at call time.
         """
+        # One-shot: apply_mode with force: true marked this cover just before.
+        forced = entity_id in self._forced
+        self._forced.discard(entity_id)
         try:
             # Own the lock-off decision for this cover: suppress _handle_lock_off
             # for any on→off transition triggered below (gather). Cleared in finally.
@@ -508,6 +551,8 @@ class CoverExtenderCoordinator:
 
             from_mode_cfg = self._modes_list.get(from_mode, {}) if from_mode else {}
             to_mode_cfg   = self._modes_list.get(mode, {})
+            # A priority mode, or apply_mode with force, passes the inhibitions.
+            priority = bool(to_mode_cfg.get("priority", False)) or forced
 
             cover_state = self.hass.states.get(entity_id)
             current_pos = cover_state.attributes.get("current_position") if cover_state else None
@@ -590,12 +635,12 @@ class CoverExtenderCoordinator:
                     consume_memory = False
 
                 if target_position is not None:
-                    if self._is_excluded(entity_id):
+                    if self._is_excluded(entity_id, priority):
                         _LOGGER.debug(
-                            "_apply_mode_core '%s' → %s: exclusion active, %d%% pending",
-                            mode, entity_id, target_position,
+                            "_apply_mode_core '%s' → %s: %s, %d%% pending",
+                            mode, entity_id, self._blocker(entity_id, priority), target_position,
                         )
-                        self._exclusion_pending[entity_id] = (target_position, False)
+                        self._exclusion_pending[entity_id] = (target_position, False, priority)
                         # A locked mode keeps the position saved on entry (step
                         # 1) in memory, to restore it when leaving the mode.
                         if not to_locked:
@@ -618,10 +663,10 @@ class CoverExtenderCoordinator:
             #     throttle (last_move=None): selecting the mode is an explicit request.
             #     The exclusion is not bypassed: an open window blocks it, as it
             #     blocks every other move.
-            if to_behavior == "auto_shade" and self._is_excluded(entity_id):
+            if to_behavior == "auto_shade" and self._is_excluded(entity_id, priority):
                 _LOGGER.debug(
-                    "_apply_mode_core '%s' → %s: exclusion active, shade skipped",
-                    mode, entity_id,
+                    "_apply_mode_core '%s' → %s: %s, shade skipped",
+                    mode, entity_id, self._blocker(entity_id, priority),
                 )
             elif to_behavior == "auto_shade":
                 shade_pos, shade_should_update = compute_shade_sync(self.hass, entity_id, cfg)
@@ -832,7 +877,8 @@ class CoverExtenderCoordinator:
 
         new_exclusion_to_covers: dict[str, list[str]] = {}
         for cover_id, cfg in profiles.items():
-            for excl in cfg.get(CONF_EXCLUSION, []):
+            blockers = [*cfg.get(CONF_EXCLUSION, []), *cfg.get(CONF_INHIBITION, [])]
+            for excl in dict.fromkeys(blockers):
                 new_exclusion_to_covers.setdefault(excl, []).append(cover_id)
         if new_exclusion_to_covers:
             new_unsubs.append(
@@ -978,8 +1024,8 @@ class CoverExtenderCoordinator:
             self._suspend_lock_off.discard(cover_id)
             _LOGGER.debug("lock released %s → suspended (mode-driven), handled by _apply_mode_core", cover_id)
             return
-        if self._is_excluded(cover_id):
-            _LOGGER.debug("lock released %s → blocked by exclusion", cover_id)
+        if self._is_excluded(cover_id, self._mode_priority(cover_id)):
+            _LOGGER.debug("lock released %s → blocked by %s", cover_id, self._blocker(cover_id))
             return
         position = self._get_memory(cover_id)
         if position is None:
@@ -1011,8 +1057,9 @@ class CoverExtenderCoordinator:
                 "mode entity '%s' → %d%% : applying to %s (mode=%s)",
                 ref_entity, new_position, cover_id, mode_name,
             )
+            priority = bool(self._modes_list.get(mode_name, {}).get("priority", False))
             self.hass.async_create_task(
-                self._set_cover_position_impl([cover_id], new_position)
+                self._set_cover_position_impl([cover_id], new_position, force=priority)
             )
 
     @callback
@@ -1117,8 +1164,14 @@ class CoverExtenderCoordinator:
         return sorted(e for e in entity_ids if e.startswith("cover."))
 
     async def service_apply_mode(self, call: ServiceCall) -> dict:
-        """Apply a mode to one or more covers via select.select_option."""
+        """Apply a mode to one or more covers via select.select_option.
+
+        force: true makes this request a priority one: it passes the
+        inhibitions (never the safety exclusions), and re-applies the mode
+        even when the cover is already in it.
+        """
         mode: str       = call.data["mode"]
+        force: bool     = call.data.get("force", False)
         target_ids: list[str] = await self._extract_cover_ids(call)
 
         applied: list[str] = []
@@ -1137,6 +1190,13 @@ class CoverExtenderCoordinator:
                 )
                 skipped.append(entity_id)
                 continue
+            if force:
+                self._forced.add(entity_id)
+                if self.hass.states.get(select_id).state == mode:
+                    # No state change, so no listener would fire: apply directly.
+                    await self._apply_mode_core(entity_id, mode, mode)
+                    applied.append(entity_id)
+                    continue
             await self.hass.services.async_call(
                 "select", "select_option", {"entity_id": select_id, "option": mode}
             )
@@ -1165,11 +1225,14 @@ class CoverExtenderCoordinator:
         )
         return {"position": position, "should_update": should_update}
 
-    async def _set_cover_position_impl(self, entity_ids: list[str], position: int) -> None:
+    async def _set_cover_position_impl(
+        self, entity_ids: list[str], position: int, force: bool = False
+    ) -> None:
         """Move, or store in memory when the lock or an exclusion blocks the move.
 
         A position blocked by an exclusion is also kept pending and applied when
-        the exclusion clears (see _resume_after_exclusion).
+        the exclusion clears (see _resume_after_exclusion). *force* lets the
+        move pass the inhibitions, never the safety exclusions.
         """
         for entity_id in entity_ids:
             if self._is_locked(entity_id):
@@ -1179,12 +1242,12 @@ class CoverExtenderCoordinator:
                 )
                 self._exclusion_pending.pop(entity_id, None)
                 await self._set_memory(entity_id, position)
-            elif self._is_excluded(entity_id):
+            elif self._is_excluded(entity_id, force):
                 _LOGGER.debug(
-                    "set_cover_position %s: exclusion active → memory and pending (%d%%)",
-                    entity_id, position,
+                    "set_cover_position %s: %s → memory and pending (%d%%)",
+                    entity_id, self._blocker(entity_id, force), position,
                 )
-                self._exclusion_pending[entity_id] = (position, True)
+                self._exclusion_pending[entity_id] = (position, True, force)
                 await self._set_memory(entity_id, position)
             else:
                 self._enqueue_cover(

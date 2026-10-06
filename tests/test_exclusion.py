@@ -25,6 +25,7 @@ from custom_components.cover_extender.const import (
     DATA_SOLAR_GAIN,
     CONF_EXCLUSION,
     CONF_FACADE,
+    CONF_INHIBITION,
     CONF_MODES,
     CONF_SHADING,
     CONF_SOLAR_GAIN,
@@ -34,6 +35,8 @@ from conftest import FakeState
 
 COVER = "cover.office"
 WINDOW = "binary_sensor.office_window"
+GUEST = "input_boolean.guest"
+SELECT = "select.office_cx_mode"
 
 
 class FakeBus:
@@ -73,14 +76,19 @@ def coord(hass, monkeypatch):
         DATA_COVER_PROFILES: {
             COVER: {
                 CONF_FACADE: "South",
-                CONF_MODES: {"Day": 100, "Night": 0},
+                CONF_MODES: {"Day": 100, "Night": 0, "Alarm": 0},
                 CONF_EXCLUSION: [WINDOW],
+                CONF_INHIBITION: [GUEST],
                 CONF_SHADING: {"enable": True},
                 CONF_SOLAR_GAIN: {"enable": True, "position_solar": 100, "position_cold": 0},
             }
         },
         DATA_FACADES: {"South": {"azimuth": 180}},
-        DATA_MODES: {"Day": {"lock": False}, "Night": {"lock": True}},
+        DATA_MODES: {
+            "Day": {"lock": False},
+            "Night": {"lock": True},
+            "Alarm": {"lock": True, "priority": True},
+        },
         DATA_SOLAR_GAIN: {},
         DATA_MEMORY: {},
     }
@@ -222,7 +230,7 @@ def test_new_mode_replaces_pending(coord, hass):
     hass.states.set(WINDOW, "on")
     asyncio.run(coord._set_cover_position_impl([COVER], 40))
     asyncio.run(coord._apply_mode_core(COVER, "Night", "Day"))
-    assert coord._exclusion_pending[COVER] == (0, False)
+    assert coord._exclusion_pending[COVER] == (0, False, False)
 
 
 def test_shading_catches_up_when_window_closes(coord, hass):
@@ -244,6 +252,131 @@ def test_exclusion_listener(coord, hass, old, new, other, scheduled):
     hass.states.set(WINDOW, new)
     hass.states.set(other_id, other)
     coord._handle_exclusion_change(_window_event(old, new))
+    assert (len(hass.tasks) == 1) is scheduled
+    for task in hass.tasks:
+        task.close()
+
+
+# ── Inhibitions and priority ──────────────────────────────────────────────────
+# An inhibition (a guest in the room) holds the cover like an exclusion does,
+# except for a priority request: a priority mode, or apply_mode with force.
+# A safety exclusion (an open window) holds everything, priority included.
+
+def _guest(hass, guest="on", window="off"):
+    hass.states.set(GUEST, guest)
+    hass.states.set(WINDOW, window)
+
+
+def test_blocker_reports_the_kind(coord, hass):
+    _guest(hass, "on", "on")
+    assert coord._blocker(COVER) == ("safety", WINDOW)
+    assert coord._blocker(COVER, priority=True) == ("safety", WINDOW)
+    _guest(hass, "on", "off")
+    assert coord._blocker(COVER) == ("inhibition", GUEST)
+    assert coord._blocker(COVER, priority=True) is None
+    _guest(hass, "off", "off")
+    assert coord._blocker(COVER) is None
+
+
+def test_inhibition_blocks_shading(coord, hass):
+    _guest(hass)
+    hass.states.set(SELECT, "Day")
+    coord._apply_shade(COVER, coord._profiles[COVER])
+    assert _queued(coord) == []
+
+
+def test_priority_mode_shading_passes_the_inhibition(coord, hass):
+    _guest(hass)
+    hass.states.set(SELECT, "Alarm")
+    coord._apply_shade(COVER, coord._profiles[COVER])
+    assert [s for s, _ in _queued(coord)] == ["set_cover_position"]
+
+
+def test_inhibition_blocks_a_plain_mode(coord, hass):
+    _no_shade(coord)
+    _guest(hass)
+    asyncio.run(coord._apply_mode_core(COVER, "Night", "Day"))
+    assert _queued(coord) == []
+    assert coord._exclusion_pending[COVER] == (0, False, False)
+
+
+def test_priority_mode_passes_the_inhibition(coord, hass):
+    _no_shade(coord)
+    _guest(hass)
+    asyncio.run(coord._apply_mode_core(COVER, "Alarm", "Day"))
+    assert _queued(coord) == [("set_cover_position", {"entity_id": COVER, "position": 0})]
+    assert COVER not in coord._exclusion_pending
+
+
+def test_priority_mode_never_passes_a_safety_exclusion(coord, hass):
+    _no_shade(coord)
+    _guest(hass, "on", "on")
+    asyncio.run(coord._apply_mode_core(COVER, "Alarm", "Day"))
+    assert _queued(coord) == []
+    assert coord._exclusion_pending[COVER] == (0, False, True)
+
+
+def test_forced_plain_mode_passes_the_inhibition_once(coord, hass):
+    _no_shade(coord)
+    _guest(hass)
+    coord._forced.add(COVER)
+    asyncio.run(coord._apply_mode_core(COVER, "Night", "Day"))
+    assert _queued(coord) == [("set_cover_position", {"entity_id": COVER, "position": 0})]
+    # One-shot: the next plain request waits again.
+    asyncio.run(coord._apply_mode_core(COVER, "Day", "Night"))
+    assert _queued(coord) == []
+    assert coord._exclusion_pending[COVER] == (100, False, False)
+
+
+def test_action_force_passes_the_inhibition_not_the_window(coord, hass):
+    _guest(hass)
+    asyncio.run(coord._set_cover_position_impl([COVER], 40, force=True))
+    assert _queued(coord) == [("set_cover_position", {"entity_id": COVER, "position": 40})]
+    _guest(hass, "on", "on")
+    asyncio.run(coord._set_cover_position_impl([COVER], 30, force=True))
+    assert _queued(coord) == []
+    assert coord._exclusion_pending[COVER] == (30, True, True)
+
+
+def test_plain_request_waits_for_the_guest_to_leave(coord, hass):
+    _no_shade(coord)
+    _guest(hass)
+    asyncio.run(coord._set_cover_position_impl([COVER], 40))
+    _guest(hass, "off")
+    asyncio.run(coord._resume_after_exclusion(COVER))
+    assert _queued(coord) == [("set_cover_position", {"entity_id": COVER, "position": 40})]
+
+
+def test_priority_request_goes_when_the_window_closes_even_with_a_guest(coord, hass):
+    _no_shade(coord)
+    _guest(hass, "on", "on")
+    asyncio.run(coord._apply_mode_core(COVER, "Alarm", "Day"))
+    _guest(hass, "on", "off")
+    asyncio.run(coord._resume_after_exclusion(COVER))
+    assert _queued(coord) == [("set_cover_position", {"entity_id": COVER, "position": 0})]
+
+
+def test_plain_request_keeps_waiting_when_only_the_window_closes(coord, hass):
+    _no_shade(coord)
+    _guest(hass, "on", "on")
+    asyncio.run(coord._apply_mode_core(COVER, "Night", "Day"))
+    _guest(hass, "on", "off")
+    asyncio.run(coord._resume_after_exclusion(COVER))
+    assert _queued(coord) == []
+    assert coord._exclusion_pending[COVER] == (0, False, False)
+
+
+@pytest.mark.parametrize("window, scheduled", [
+    ("off", True),    # guest left, nothing else on
+    ("on", False),    # the window is still open: nothing can move
+])
+def test_inhibition_listener(coord, hass, window, scheduled):
+    coord._exclusion_to_covers = {GUEST: [COVER], WINDOW: [COVER]}
+    hass.states.set(WINDOW, window)
+    hass.states.set(GUEST, "off")
+    coord._handle_exclusion_change(types.SimpleNamespace(data={
+        "entity_id": GUEST, "old_state": FakeState("on"), "new_state": FakeState("off"),
+    }))
     assert (len(hass.tasks) == 1) is scheduled
     for task in hass.tasks:
         task.close()

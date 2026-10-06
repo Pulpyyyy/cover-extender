@@ -318,6 +318,7 @@ def _validate_modes(items: list[dict[str, Any]]) -> str | None:
         item["icon"] = str(item.get("icon") or "mdi:help-circle")
         item["lock"] = bool(item.get("lock", False))
         item["hidden"] = bool(item.get("hidden", False))
+        item["priority"] = bool(item.get("priority", False))
     return None
 
 
