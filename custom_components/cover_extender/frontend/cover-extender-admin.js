@@ -2014,7 +2014,7 @@ class CoverExtenderPanel extends HTMLElement {
       (v) => { draft.entity_picture = v || undefined; }, { placeholder: "/local/…" }));
     idCard.append(this._selectRow(T.facade, draft.facade,
       this._cfg.facades.map((f) => [f.name, f.name]), (v) => { draft.facade = v; }));
-    idCard.append(this._selectRow(T.template, draft.template,
+    idCard.append(this._selectRow(T.templateTitle, draft.template,
       [[null, T.noTemplateOpt], ...this._cfg.templates.map((t) => [t.name, t.name])],
       (v) => { draft.template = v; rerender(); }));
     idCard.append(this._selectorRow(T.exclusion, { entity: { multiple: true } },
