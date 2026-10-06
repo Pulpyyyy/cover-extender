@@ -194,6 +194,9 @@ const WORDS = {
     returnBase: "Back to the base mode",
     returnHint: "The base mode is the last mode without a duration the cover was in. Only modes without a duration can be chosen here.",
     timedChip: (n, r) => (r ? `${n} min, then ${r}` : `${n} min`),
+    statusTimer: (m, t) => `back to ${m} at ${t}`,
+    statusLocked: (p) => (p == null ? "locked" : `locked, ${p} % remembered`),
+    entitiesShow: "Show the entities",
     usedAsReturn: (names) => `This mode is the one ${names.map((n) => `“${n}”`).join(", ")} returns to: it cannot have a duration while it is.`,
     noTemplateOpt: "No template",
     overrides: (n) => `${n} override${n > 1 ? "s" : ""}`,
@@ -371,6 +374,9 @@ const WORDS = {
     returnBase: "Revenir au mode de base",
     returnHint: "Le mode de base est le dernier mode sans durée dans lequel était le volet. Seuls les modes sans durée peuvent être choisis ici.",
     timedChip: (n, r) => (r ? `${n} min, puis ${r}` : `${n} min`),
+    statusTimer: (m, t) => `retour à ${m} à ${t}`,
+    statusLocked: (p) => (p == null ? "verrouillé" : `verrouillé, ${p} % mémorisé`),
+    entitiesShow: "Voir les entités",
     usedAsReturn: (names) => `Ce mode est le mode de retour de ${names.map((n) => `« ${n} »`).join(", ")} : il ne peut pas avoir de durée tant qu'il l'est.`,
     noTemplateOpt: "Aucun gabarit",
     overrides: (n) => `${n} écart${n > 1 ? "s" : ""}`,
@@ -880,6 +886,23 @@ const STYLE = `
   .chip.ovr { color: var(--fp-warn); border-color: color-mix(in srgb, var(--fp-warn) 45%, transparent); }
   .chip.auto { color: var(--primary-color); border-color: color-mix(in srgb, var(--primary-color) 45%, transparent); }
   .chip.lock { color: var(--fp-bad); border-color: color-mix(in srgb, var(--fp-bad) 45%, transparent); }
+  .status { display: flex; align-items: center; gap: var(--fp-sh); flex-wrap: wrap;
+            margin-bottom: var(--fp-s3); font-size: var(--f-12-5); }
+  .status .smode { display: inline-flex; align-items: center; gap: var(--fp-sh); font-weight: 600;
+                   border-radius: var(--fp-pill-r); padding: var(--fp-s0) var(--fp-s2); }
+  .status .smode ha-icon { --mdc-icon-size: 14px; width: 14px; height: 14px; }
+  .status .spos { color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
+  .chip.safety { color: var(--fp-bad); border-color: color-mix(in srgb, var(--fp-bad) 45%, transparent); }
+  .chip.inhib { color: var(--fp-warn); border-color: color-mix(in srgb, var(--fp-warn) 45%, transparent); }
+  details.ents summary { cursor: pointer; color: var(--primary-color); font-size: var(--f-13);
+                         margin-top: var(--fp-s3); }
+  .ent-list { columns: 2 300px; column-gap: var(--fp-s5); font-size: var(--f-12);
+              margin: var(--fp-s2) 0 0; padding: 0; list-style: none; }
+  .ent-list li { padding: var(--fp-s0) 0; break-inside: avoid; display: flex; gap: var(--fp-s2);
+                 justify-content: space-between; }
+  .ent-list code { font-family: ui-monospace, monospace; }
+  .ent-list span { color: var(--secondary-text-color); white-space: nowrap; overflow: hidden;
+                   text-overflow: ellipsis; }
   .chip.timer { color: var(--primary-color); border-color: color-mix(in srgb, var(--primary-color) 45%, transparent); }
   .chip.prio { color: var(--fp-bad); border-color: color-mix(in srgb, var(--fp-bad) 45%, transparent);
                background: color-mix(in srgb, var(--fp-bad) 8%, transparent); }
@@ -942,6 +965,13 @@ class CoverExtenderPanel extends HTMLElement {
     // that hold no ha-selector at all, that often. The list is captured once per
     // render instead (_trackLiveNodes).
     for (const n of this._liveNodes) n.hass = hass;
+    // The cover cards show live state (mode, position, lock, what holds the
+    // cover back). Redraw them only when one of those states changed, and
+    // never under an open editor.
+    if (this._tab === "volets" && !this._edit && this._state === "ready") {
+      const sig = this._statusSignature();
+      if (sig !== this._statusSig) { this._statusSig = sig; this._render(); }
+    }
   }
   get hass() { return this._hass; }
   set narrow(_) {}
@@ -1954,6 +1984,8 @@ class CoverExtenderPanel extends HTMLElement {
         head.append(names);
         head.append(el("span", "spacer"), icon("mdi:chevron-right", "chev"));
         card.append(head);
+        const status = this._statusLine(c);
+        if (status) card.append(status);
 
         const chips = el("div", "chips");
         const fchip = el("span", "chip");
@@ -1984,6 +2016,60 @@ class CoverExtenderPanel extends HTMLElement {
       }
     }
     wrap.append(grid);
+  }
+
+  /** Every state the cover cards show, as one string: the redraw trigger. */
+  _statusSignature() {
+    const st = this._hass?.states || {};
+    const parts = [];
+    for (const c of this._cfg?.covers || []) {
+      const ids = this._cfg.helpers?.[c.entity_id] || {};
+      const sel = st[ids.select];
+      const cov = st[c.entity_id];
+      parts.push(sel?.state, sel?.attributes?.mode_ends_at, st[ids.lock]?.state,
+        cov?.attributes?.current_position, cov?.attributes?.memory,
+        ...[...(c.exclusion || []), ...(c.inhibition || [])].map((e) => st[e]?.state));
+    }
+    return JSON.stringify(parts);
+  }
+
+  /** Why the cover is where it is: its mode, its position, then whatever holds
+   *  it back (a countdown, the lock, an exclusion or an inhibition on). */
+  _statusLine(c) {
+    const st = this._hass.states;
+    const ids = this._cfg.helpers?.[c.entity_id];
+    const sel = ids && st[ids.select];
+    if (!sel) return null;
+    const line = el("div", "status");
+    const mode = this._cfg.modes.find((m) => m.name === sel.state);
+    const pill = el("span", "smode");
+    pill.style.background = `color-mix(in srgb, ${mode?.color || "#888888"} 16%, transparent)`;
+    pill.append(icon(mode?.icon || "mdi:help-circle"), document.createTextNode(sel.state));
+    line.append(pill);
+    const pos = st[c.entity_id]?.attributes?.current_position;
+    if (pos != null) line.append(el("span", "spos", `${pos} %`));
+    const chip = (cls, ico, text, title) => {
+      const ch = el("span", `chip ${cls}`);
+      ch.append(icon(ico), document.createTextNode(text));
+      if (title) ch.title = title;
+      line.append(ch);
+    };
+    const ends = sel.attributes?.mode_ends_at;
+    if (ends) {
+      const at = new Date(ends).toLocaleTimeString(LANG, { hour: "2-digit", minute: "2-digit" });
+      chip("timer", "mdi:timer-outline", T.statusTimer(sel.attributes.return_mode, at));
+    }
+    if (st[ids.lock]?.state === "on") {
+      chip("lock", "mdi:lock-outline", T.statusLocked(st[c.entity_id]?.attributes?.memory));
+    }
+    const name = (e) => st[e]?.attributes?.friendly_name || e;
+    for (const e of c.exclusion || []) {
+      if (st[e]?.state === "on") chip("safety", "mdi:shield-alert-outline", name(e), T.exclusion);
+    }
+    for (const e of c.inhibition || []) {
+      if (st[e]?.state === "on") chip("inhib", "mdi:pause-circle-outline", name(e), T.inhibition);
+    }
+    return line;
   }
 
   /** Behavior keys the cover overrides — the amber count on its card.
@@ -2153,6 +2239,23 @@ class CoverExtenderPanel extends HTMLElement {
     card.append(grid);
     card.append(el("p", "stat-total",
       T.entityTotal(counts.reduce((total, [, count]) => total + count, 0))));
+    // The counts alone told nothing about which entities they were.
+    const det = document.createElement("details");
+    det.className = "ents";
+    const sum = document.createElement("summary");
+    sum.textContent = T.entitiesShow;
+    det.append(sum);
+    const list = el("ul", "ent-list");
+    const mine = Object.keys(this._hass.entities)
+      .filter((eid) => this._hass.entities[eid].platform === DOMAIN).sort();
+    for (const eid of mine) {
+      const li = el("li");
+      li.append(el("code", "", eid),
+        el("span", "", this._hass.states[eid]?.attributes?.friendly_name || ""));
+      list.append(li);
+    }
+    det.append(list);
+    card.append(det);
     wrap.append(card);
   }
 

@@ -51,6 +51,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.loader import async_get_integration
 
+from .helpers import resolve_helper_entity
+
 from .const import (
     MODE_DURATION_MAX,
     MODE_DURATION_MIN,
@@ -694,6 +696,15 @@ async def ws_config_get(
         # shape for covers and templates alike.
         "templates": [_flatten_template(t) for t in _items(hass, SECTION_TEMPLATE)],
         "covers":    _items(hass, SECTION_COVER),
+        # The live entity ids of each cover's mode selector and lock (they may
+        # have been renamed), so the panel can read their state from hass.
+        "helpers":   {
+            c["entity_id"]: {
+                "select": resolve_helper_entity(hass, c["entity_id"], "select_mode"),
+                "lock":   resolve_helper_entity(hass, c["entity_id"], "lock"),
+            }
+            for c in _items(hass, SECTION_COVER) if c.get("entity_id")
+        },
         "global":    _global_data(hass),
         "behavior":  _behavior_schema(),
         "weather_conditions": list(WEATHER_CONDITIONS),
