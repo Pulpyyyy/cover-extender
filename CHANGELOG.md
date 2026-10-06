@@ -32,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Actions keep working with Home Assistant 2026.10** (also released alone as 3.1.3). The targeted actions passed `hass` to `async_extract_entity_ids`, which Home Assistant removes in Core 2026.10.
 - **The entities have a name.** They declared a translation key with no translation behind it, so Home Assistant showed their raw entity id. Names are now fixed English (`CX mode`, `CX lock`, `CX auto shade`, `CX auto solar gain`, `CX sun facing`, `CX auto shade status`, `CX solar gain status`, `Modes`), never translated, so logs, screenshots and forum reports read the same in every language. The leading `CX` keeps Home Assistant's "rename the entity ids with the device" suggestion on the cx scheme.
 
+## [3.1.3] - 2026-10-06
+
+### Fixed
+- **Actions keep working with Home Assistant 2026.10.** Every action that takes a target (`apply_mode`, `set_cover_position`, `open_cover`, `close_cover`, `apply_memory`) passed `hass` to `async_extract_entity_ids`, an argument Home Assistant deprecated and removes in Core 2026.10; it also logged a warning at each call. The call now uses the current signature, available since 2026.1, the minimum supported version.
+
 ## [3.1.2] - 2026-09-24
 
 ### Added
