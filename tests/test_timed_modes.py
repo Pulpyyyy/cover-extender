@@ -213,3 +213,36 @@ def test_restore_drops_a_countdown_whose_mode_changed(coord, hass):
     coord._stored_timers = saved
     coord._restore_timers()
     assert coord.timed_mode_info(COVER) is None
+
+
+@pytest.mark.parametrize("target", ["Night", "Day"])
+def test_forced_switch_to_a_non_timed_mode_ends_the_countdown(coord, hass, target):
+    """apply_mode with force: true, to another mode or to the base mode itself."""
+    _choose(coord, hass, "Manual")
+
+    async def covers(_call):
+        return [COVER]
+
+    coord._extract_cover_ids = covers
+    call = types.SimpleNamespace(data={"mode": target, "force": True})
+    asyncio.run(coord.service_apply_mode(call))
+    # The selector change reaches the coordinator.
+    asyncio.run(coord._apply_mode_core(COVER, target, "Manual"))
+    assert hass.states.get(SELECT).state == target
+    assert coord.timed_mode_info(COVER) is None
+    assert coord._timer_store.saved == {}
+
+
+def test_forced_same_timed_mode_extends(coord, hass):
+    _choose(coord, hass, "Manual")
+    coord._timers[COVER]["until"] -= timedelta(minutes=30)   # time passes
+    before = coord_mod.dt_util.utcnow()
+
+    async def covers(_call):
+        return [COVER]
+
+    coord._extract_cover_ids = covers
+    asyncio.run(coord.service_apply_mode(types.SimpleNamespace(data={"mode": "Manual", "force": True})))
+    info = coord.timed_mode_info(COVER)
+    assert info["until"] - before > timedelta(minutes=59)
+    assert info["return_mode"] == "Day"
