@@ -19,6 +19,7 @@ from .const import (
     CONF_ANGLE_RIGHT,
     CONF_EXCLUSION,
     CONF_INHIBITION,
+    CONF_SCHEDULE,
     DEFAULT_COMMAND_INTERVAL_MS,
     OPT_CONFIG,
     SECTION_COVER,
@@ -179,6 +180,10 @@ def _add_cover_profile(
         CONF_SOLAR_GAIN:     sg_cfg,
         CONF_EXCLUSION:      list(d.get("exclusion") or []),
         CONF_INHIBITION:     list(d.get("inhibition") or []),
+        CONF_SCHEDULE:       {
+            kind: (d.get("schedule") or {}).get(kind) or None
+            for kind in ("morning", "evening")
+        },
     }
 
 

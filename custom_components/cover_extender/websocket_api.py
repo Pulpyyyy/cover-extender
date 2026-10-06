@@ -52,6 +52,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.loader import async_get_integration
 
 from .helpers import resolve_helper_entity
+from .schedule import KINDS as SCHEDULE_KINDS, validate_settings as validate_schedule
 
 from .const import (
     MODE_DURATION_MAX,
@@ -63,6 +64,8 @@ from .const import (
     SECTION_COVER,
     SECTION_FACADE,
     SECTION_GLOBAL,
+    SECTION_SCHEDULE,
+    WS_SCHEDULE_PREVIEW,
     SECTION_MODE,
     SECTION_TEMPLATE,
     WEATHER_CONDITIONS,
@@ -81,6 +84,7 @@ _SECTIONS: dict[str, str] = {
     "template": SECTION_TEMPLATE,
     "cover":    SECTION_COVER,
     "global":   SECTION_GLOBAL,
+    "schedule": SECTION_SCHEDULE,
 }
 
 # ── Behavior fields ───────────────────────────────────────────────────────────
@@ -155,6 +159,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         return
     websocket_api.async_register_command(hass, ws_config_get)
     websocket_api.async_register_command(hass, ws_config_save)
+    websocket_api.async_register_command(hass, ws_schedule_preview)
     domain_data[_DATA_WS_REGISTERED] = True
     _LOGGER.debug("websocket_api: commands registered")
 
@@ -532,6 +537,8 @@ def _validate_covers(hass: HomeAssistant, items: list[dict[str, Any]]) -> str | 
 
         if error := _validate_mode_cfgs(item, mode_names):
             return error
+        if error := _validate_cover_schedule(hass, item, entity_id):
+            return error
 
         tpl = templates.get(template_name) if template_name else None
         effective = {**_BEHAVIOR_FIELDS_DEFAULTS, **(_defaults_from_template(tpl) if tpl else {}),
@@ -640,6 +647,8 @@ def _renamed_covers(
             changed = True
         elif section == "mode" and old in (it.get("modes") or {}):
             it["modes"] = {(new if k == old else k): v for k, v in it["modes"].items()}
+            sched = dict(it.get("schedule") or {})
+            it["schedule"] = {k: (new if v == old else v) for k, v in sched.items()}
             changed = True
     if not changed:
         return None
@@ -706,10 +715,114 @@ async def ws_config_get(
             for c in _items(hass, SECTION_COVER) if c.get("entity_id")
         },
         "global":    _global_data(hass),
+        "schedule":  dict(_sections(hass).get(SECTION_SCHEDULE) or {}),
         "behavior":  _behavior_schema(),
         "weather_conditions": list(WEATHER_CONDITIONS),
         "defaults":  {"command_interval": DEFAULT_COMMAND_INTERVAL_MS},
     })
+
+
+# ── Schedules ─────────────────────────────────────────────────────────────────
+
+def _timed_mode_names(hass: HomeAssistant, items: list[dict[str, Any]] | None = None) -> set[str]:
+    modes = items if items is not None else _items(hass, SECTION_MODE)
+    return {it.get("name") for it in modes if it.get("duration")}
+
+
+def _validate_cover_schedule(hass: HomeAssistant, item: dict[str, Any], entity_id: str) -> str | None:
+    """A cover's morning / evening mode: linked to it, and without a duration.
+
+    A mode unlinked from the cover in the matrix is dropped from its schedule
+    rather than refused: the unlink is what the user asked for, and a schedule
+    cannot apply a mode the cover does not have.
+    """
+    sched = item.get("schedule") or {}
+    linked = item.get("modes") or {}
+    timed = _timed_mode_names(hass)
+    clean: dict[str, str | None] = {}
+    for kind in SCHEDULE_KINDS:
+        mode = sched.get(kind) or None
+        if mode is not None and mode not in linked:
+            mode = None
+        if mode is not None and mode in timed:
+            return f"schedule_mode_timed:{mode}"
+        clean[kind] = mode
+    if any(clean.values()):
+        item["schedule"] = clean
+    else:
+        item.pop("schedule", None)
+    return None
+
+
+def _scheduled_mode_timed(
+    hass: HomeAssistant, items: list[dict[str, Any]], old_items: list[dict[str, Any]]
+) -> str | None:
+    """Refuse giving a duration to a mode a cover's schedule applies."""
+    pair = _rename_pair(old_items, items)
+    for mode in _timed_mode_names(hass, items):
+        old_name = pair[0] if pair and pair[1] == mode else mode
+        users = [
+            c.get("entity_id") for c in _items(hass, SECTION_COVER)
+            if old_name in (c.get("schedule") or {}).values()
+        ]
+        if users:
+            return f"schedule_mode_timed:{mode}"
+    return None
+
+
+def _save_schedule(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """The house's schedules and each cover's morning / evening mode, saved in
+    ONE write (see _persist): one reload, never half of it applied.
+
+    data: {"house": {"morning": {...}, "evening": {...}},
+           "covers": {cover_entity_id: {"morning": mode|None, "evening": mode|None}}}
+    """
+    data = msg["data"]
+    if not isinstance(data, dict):
+        connection.send_error(msg["id"], "invalid_format", "schedule expects a dict")
+        return
+    house = {k: v for k, v in (data.get("house") or {}).items() if k in SCHEDULE_KINDS}
+    for kind, cfg in house.items():
+        if error := validate_schedule(cfg):
+            connection.send_error(msg["id"], "invalid_config", f"{error}:{kind}")
+            return
+    covers = _items(hass, SECTION_COVER)
+    wanted = data.get("covers") or {}
+    for item in covers:
+        if item.get("entity_id") in wanted:
+            item["schedule"] = dict(wanted[item["entity_id"]] or {})
+        if error := _validate_cover_schedule(hass, item, item.get("entity_id")):
+            connection.send_error(msg["id"], "invalid_config", error)
+            return
+    _persist(hass, {SECTION_SCHEDULE: house, SECTION_COVER: covers})
+    _LOGGER.debug("websocket_api: saved schedules (%s)", ", ".join(house) or "none")
+    connection.send_result(msg["id"], {"saved": True})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_SCHEDULE_PREVIEW,
+    vol.Required("kind"): vol.In(SCHEDULE_KINDS),
+    vol.Required("settings"): dict,
+})
+@websocket_api.async_response
+async def ws_schedule_preview(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """The curve the panel draws while the user drags its handles."""
+    entry = _entry(hass)
+    coordinator = getattr(entry, "runtime_data", None) if entry else None
+    if coordinator is None:
+        connection.send_error(msg["id"], "not_ready", "cover_extender is not set up")
+        return
+    if error := validate_schedule(msg["settings"]):
+        connection.send_result(msg["id"], {"error": error})
+        return
+    connection.send_result(msg["id"], coordinator.schedule_preview(msg["kind"], msg["settings"]))
 
 
 @websocket_api.require_admin
@@ -727,6 +840,10 @@ async def ws_config_save(
     """Persist one section of the configuration."""
     section: str = msg["section"]
     section_key = _SECTIONS[section]
+
+    if section == "schedule":
+        _save_schedule(hass, connection, msg)
+        return
 
     if section == "global":
         if not isinstance(msg["data"], dict):
@@ -770,6 +887,9 @@ async def ws_config_save(
 
     if error := _deletion_blocked(hass, section, old_items, items):
         connection.send_error(msg["id"], "in_use", error)
+        return
+    if section == "mode" and (error := _scheduled_mode_timed(hass, items, old_items)):
+        connection.send_error(msg["id"], "invalid_config", error)
         return
 
     updates: dict[str, Any] = {section_key: items}

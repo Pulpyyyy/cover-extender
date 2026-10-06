@@ -21,7 +21,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from functools import partial
 from typing import Any
 
@@ -33,6 +33,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.entity_registry import EVENT_ENTITY_REGISTRY_UPDATED
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import (
+    async_track_point_in_time,
     async_track_point_in_utc_time,
     async_track_state_change_event,
 )
@@ -47,6 +48,7 @@ from .const import (
     CONF_SOLAR_GAIN,
     CONF_EXCLUSION,
     CONF_INHIBITION,
+    CONF_SCHEDULE,
     ATTR_SUN_FACING,
     DATA_COVER_PROFILES,
     DATA_MODES,
@@ -64,6 +66,9 @@ from .const import (
     EVENT_SHADE_APPLIED,
     EVENT_TIMED_MODE_ENDED,
     SIGNAL_TIMED_MODE,
+    SIGNAL_SCHEDULE,
+    SCHEDULE_STORAGE_KEY,
+    SECTION_SCHEDULE,
     TIMERS_STORAGE_KEY,
     CONF_COMMAND_INTERVAL,
     DEFAULT_COMMAND_INTERVAL,
@@ -77,6 +82,19 @@ from .helpers import (
     resolve_mode_position,
 )
 from .shade import compute_sun_facing, compute_shade_sync
+from .schedule import (
+    KINDS as SCHEDULE_KINDS,
+    SUN_EVENT,
+    Curve,
+    SunYear,
+    build_curve,
+    day_of_year,
+    event_at,
+    ha_sun_year,
+    missed_event,
+    parse_settings,
+    validate_settings as validate_schedule,
+)
 from .schemas import build_profiles_from_options
 
 _LOGGER = logging.getLogger(__name__)
@@ -103,6 +121,14 @@ class CoverExtenderCoordinator:
         self._timer_unsubs: dict[str, Callable[[], None]] = {}
         # Countdowns loaded from storage, restored once the profiles are set up.
         self._stored_timers: dict[str, Any] | None = None
+        # Schedules: the next-event timer, what the day sensor shows, the
+        # last day each schedule ran (for the catch-up), and the sun per year.
+        self._schedule_store: Store = Store(hass, 1, SCHEDULE_STORAGE_KEY)
+        self._schedule_unsub: Callable[[], None] | None = None
+        self._schedule_state: dict[str, Any] | None = None
+        self._schedule_last: dict[str, str] = {}
+        self._schedule_planned = False
+        self._sun_cache: dict[tuple, SunYear | None] = {}
         self._cover_queue: asyncio.Queue[tuple[str, dict]] = asyncio.Queue()
         self._worker_task: asyncio.Task | None = None
         # Configurable interval between cover commands (from the global settings)
@@ -481,6 +507,147 @@ class CoverExtenderCoordinator:
             if select_state is None or select_state.state != data.get("mode") or until is None:
                 continue  # the mode changed meanwhile: that countdown is over
             self._start_timer(entity_id, data["mode"], max(until, now), data.get("base"))
+
+    # ── Schedules ──────────────────────────────────────────────────────────────
+    # The house has a morning and an evening schedule (schedule.py computes
+    # the day's time from an annual curve). At each, every cover applies its
+    # morning or evening mode, through its mode selector like any other mode
+    # change: lock, exclusions, inhibitions and timed modes all apply.
+    # A single timer always points at the next thing to happen: today's
+    # opening, today's closing, or midnight (new day, new times).
+
+    def _schedule_settings(self) -> dict[str, dict[str, Any]]:
+        options = getattr(self._entry, "options", None) or {}
+        house = (options.get(OPT_CONFIG) or {}).get(SECTION_SCHEDULE) or {}
+        return {
+            kind: cfg for kind, cfg in house.items()
+            if kind in SCHEDULE_KINDS and validate_schedule(cfg) is None
+        }
+
+    def _time_zone(self):
+        return dt_util.get_time_zone(self.hass.config.time_zone) or dt_util.DEFAULT_TIME_ZONE
+
+    def _sun_year(self, kind: str, year: int) -> SunYear | None:
+        key = (kind, year, self.hass.config.latitude, self.hass.config.longitude)
+        if key not in self._sun_cache:
+            from homeassistant.helpers.sun import get_astral_event_date
+
+            self._sun_cache[key] = ha_sun_year(
+                lambda event, day: get_astral_event_date(self.hass, event, day),
+                year, SUN_EVENT[kind], self._time_zone(),
+            )
+        return self._sun_cache[key]
+
+    def _schedule_curve(self, kind: str, cfg: dict[str, Any], year: int) -> Curve | None:
+        sun = self._sun_year(kind, year)
+        if sun is None:
+            return None
+        return build_curve(sun, parse_settings(cfg, year))
+
+    def _schedule_time(self, kind: str, day: date) -> datetime | None:
+        """When *kind* happens on *day* (aware, local), or None."""
+        cfg = self._schedule_settings().get(kind)
+        if cfg is None:
+            return None
+        curve = self._schedule_curve(kind, cfg, day.year)
+        return event_at(curve, day, self._time_zone()) if curve else None
+
+    def schedule_state(self) -> dict[str, Any] | None:
+        """Today's opening and closing, what comes next, and why it last changed."""
+        return self._schedule_state
+
+    def _plan_schedule(self, cause: str, catch_up: bool = False) -> None:
+        """Point the timer at the next opening, closing or midnight."""
+        if self._schedule_unsub:
+            self._schedule_unsub()
+            self._schedule_unsub = None
+        if not self._schedule_settings():
+            self._schedule_state = None
+            async_dispatcher_send(self.hass, SIGNAL_SCHEDULE)
+            return
+        now = dt_util.now(self._time_zone())
+        today = now.date()
+        opening = self._schedule_time("morning", today)
+        closing = self._schedule_time("evening", today)
+        tomorrow_opening = self._schedule_time("morning", today + timedelta(days=1))
+        upcoming = [
+            (when, kind) for when, kind in (
+                (opening, "morning"), (closing, "evening"), (tomorrow_opening, None),
+            ) if when is not None and when > now
+        ]
+        self._schedule_state = {
+            "opening": opening, "closing": closing,
+            "next_change": min(w for w, _ in upcoming) if upcoming else None,
+            "cause": cause,
+        }
+
+        if catch_up:
+            if not self._schedule_last:
+                # First run: nothing to catch up, whatever the hour. Record
+                # what already passed today so a restart later today does not
+                # take it for missed.
+                stamp = today.isoformat()
+                for kind, when in (("morning", opening), ("evening", closing)):
+                    if when is not None and now >= when:
+                        self._schedule_last[kind] = stamp
+                self._schedule_store.async_delay_save(lambda: dict(self._schedule_last), _MEMORY_SAVE_DELAY)
+            elif missed := missed_event(now, opening, closing, self._schedule_last, today):
+                _LOGGER.info("schedule: %s missed while Home Assistant was down, applied now", missed)
+                self.hass.async_create_task(self._run_schedule(missed, today))
+
+        midnight = datetime.combine(today + timedelta(days=1), datetime.min.time(), self._time_zone())
+        due = [(when, kind) for when, kind in upcoming if kind is not None] + [(midnight, None)]
+        when, kind = min(due, key=lambda item: item[0])
+        self._schedule_unsub = async_track_point_in_time(
+            self.hass, partial(self._on_schedule_due, kind), when
+        )
+        async_dispatcher_send(self.hass, SIGNAL_SCHEDULE)
+
+    @callback
+    def _on_schedule_due(self, kind: str | None, now: datetime) -> None:
+        self._schedule_unsub = None
+        if kind is not None:
+            self.hass.async_create_task(self._run_schedule(kind, now.date()))
+        self._plan_schedule("time")
+
+    async def _run_schedule(self, kind: str, day: date) -> None:
+        """Every cover applies its *kind* mode, as a plain mode change."""
+        self._schedule_last[kind] = day.isoformat()
+        self._schedule_store.async_delay_save(lambda: dict(self._schedule_last), _MEMORY_SAVE_DELAY)
+        for entity_id, cfg in self._profiles.items():
+            mode = (cfg.get(CONF_SCHEDULE) or {}).get(kind)
+            if not mode or mode not in cfg.get(CONF_MODES, {}):
+                continue
+            select_id = resolve_helper_entity(self.hass, entity_id, "select_mode")
+            state = self.hass.states.get(select_id)
+            if state is None or state.state == mode:
+                continue
+            _LOGGER.debug("schedule %s: %s → %s", kind, entity_id, mode)
+            await self.hass.services.async_call(
+                "select", "select_option", {"entity_id": select_id, "option": mode}
+            )
+
+    def schedule_preview(self, kind: str, cfg: dict[str, Any]) -> dict[str, Any]:
+        """The curve the panel draws: the year's points, the sun, and what was ignored."""
+        tz = self._time_zone()
+        today = dt_util.now(tz).date()
+        sun = self._sun_year(kind, today.year)
+        if sun is None:
+            return {"error": "schedule_no_sun"}
+        curve = build_curve(sun, parse_settings(cfg, today.year))
+        rnd = lambda v: round(v, 1)  # noqa: E731 - a payload, not logic
+        return {
+            "error": curve.error,
+            "ignored": curve.ignored,
+            "year": today.year,
+            "today": day_of_year(today),
+            "points": [rnd(v) for v in curve.points[1:]] if curve.points else None,
+            "sun": [rnd(sun.local(j)) for j in range(1, len(sun.ref))],
+            "max_day": sun.jp,
+            "min_day": sun.jt,
+            "rising_days": rnd(sun.l1),
+            "dst_gap": sun.dst_gap,
+        }
 
     # ── Exclusion ──────────────────────────────────────────────────────────────
 
@@ -1076,6 +1243,11 @@ class CoverExtenderCoordinator:
             self._cancel_timed_mode(gone)
         if self._stored_timers is not None:
             self._restore_timers()
+        # First setup: catch up a schedule missed while HA was down. Later
+        # ones come from a settings change.
+        self._plan_schedule("setting" if self._schedule_planned else "time",
+                            catch_up=not self._schedule_planned)
+        self._schedule_planned = True
 
         # ── Strip injected attributes from covers removed from the config ─────
         # Without this they linger on the cover until the next HA restart.
@@ -1482,6 +1654,7 @@ class CoverExtenderCoordinator:
                 mem[key] = int(val)
         self.hass.data[DOMAIN][DATA_MEMORY] = mem
         self._stored_timers = await self._timer_store.async_load() or {}
+        self._schedule_last = await self._schedule_store.async_load() or {}
 
         self._start_worker()
 
@@ -1538,6 +1711,9 @@ class CoverExtenderCoordinator:
         for unsub in self._timer_unsubs.values():
             unsub()
         self._timer_unsubs.clear()
+        if self._schedule_unsub:
+            self._schedule_unsub()
+            self._schedule_unsub = None
         # Drop the extras we carried through the external-attrs contract so the
         # reader entities rewrite themselves without them.
         self._clear_external_attrs()

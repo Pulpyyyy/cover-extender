@@ -20,6 +20,7 @@ ATTR_SUN_FACING = "sun_facing"
 CONF_SHADING      = "shade"
 CONF_EXCLUSION    = "exclusion"   # safety: blocks every move, priority included
 CONF_INHIBITION   = "inhibition"  # blocks every move except priority requests
+CONF_SCHEDULE     = "schedule"    # per cover: {"morning": mode|None, "evening": mode|None}
 
 # Solar gain sub-config keys
 CONF_SOLAR_GAIN  = "solar_gain"
@@ -53,6 +54,8 @@ DATA_MEMORY                = "memory"
 STORAGE_KEY     = f"{DOMAIN}.memory"
 # Running countdowns of timed modes, so they survive a restart.
 TIMERS_STORAGE_KEY = f"{DOMAIN}.timers"
+# Last day each schedule ran, to catch a missed one up after a restart.
+SCHEDULE_STORAGE_KEY = f"{DOMAIN}.schedule"
 STORAGE_VERSION = 1
 
 # Dispatcher signal fired after a reload so select entities can refresh their options
@@ -84,6 +87,8 @@ MODE_DURATION_MAX = 1440
 ATTR_MODE_ENDS_AT = "mode_ends_at"
 ATTR_RETURN_MODE  = "return_mode"
 SIGNAL_TIMED_MODE = f"{DOMAIN}_timed_mode"
+# The day's opening / closing times changed (new day, event, settings).
+SIGNAL_SCHEDULE   = f"{DOMAIN}_schedule"
 
 # Weather states accepted as "good conditions" for solar gain. Shared so the
 # config flow and the admin panel offer the same list (the panel receives it
@@ -128,6 +133,7 @@ PANEL_SIDEBAR_ICON  = "mdi:window-shutter-cog"
 # WebSocket API commands (admin panel ↔ entry options)
 WS_CONFIG_GET  = f"{DOMAIN}/config/get"
 WS_CONFIG_SAVE = f"{DOMAIN}/config/save"
+WS_SCHEDULE_PREVIEW = f"{DOMAIN}/schedule/preview"
 
 # ── Configuration storage ─────────────────────────────────────────────────────
 # Everything the panel edits lives under entry.options[OPT_CONFIG], one key per
@@ -149,6 +155,8 @@ SECTION_FACADE   = "facade"
 SECTION_MODE     = "mode"
 SECTION_COVER    = "cover"
 SECTION_TEMPLATE = "cover_template"
+# The house's morning and evening schedules: {"morning": {...}, "evening": {...}}.
+SECTION_SCHEDULE = "schedule"
 
 # Sections holding a list of named items (global is a flat dict instead).
 SECTIONS_WITH_ITEMS = (SECTION_FACADE, SECTION_MODE, SECTION_COVER, SECTION_TEMPLATE)
