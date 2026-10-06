@@ -187,6 +187,13 @@ const WORDS = {
     priorityField: "Priority mode",
     priorityHint: "Passes the inhibitions, never the safety exclusions. Same as the apply_mode action with force: true.",
     priority: "priority",
+    durationField: "Timed mode",
+    durationHint: "When the time is up, the cover leaves this mode on its own. Choosing a mode without a duration before that ends it at once.",
+    durationLabel: "Duration",
+    returnField: "When the time is up",
+    returnBase: "Back to the base mode",
+    returnHint: "The base mode is the last mode without a duration the cover was in. Only modes without a duration can be chosen here.",
+    timedChip: (n, r) => (r ? `${n} min, then ${r}` : `${n} min`),
     noTemplateOpt: "No template",
     overrides: (n) => `${n} override${n > 1 ? "s" : ""}`,
     tplNote: (n) => `Values inherited from the “${n}” template: only the overrides are stored.`,
@@ -208,6 +215,8 @@ const WORDS = {
       name_exists: (n) => `The name “${n}” is already taken.`,
       behavior_invalid: (n) => `Invalid behavior for “${n}”.`,
       color_invalid: (n) => `Invalid color for “${n}”.`,
+      duration_invalid: (n) => `Duration of “${n}”: between 1 and 1440 minutes.`,
+      return_mode_invalid: (n) => `“${n}”: the mode it returns to must be an existing mode without a duration.`,
       in_use: (n, count, covers) => `“${n}” is still used by ${count} cover(s): ${covers}`,
       entity_required: () => "A cover must point at an entity.",
       cover_domain: (e) => `${e} is not an entity of the cover domain.`,
@@ -353,6 +362,13 @@ const WORDS = {
     priorityField: "Mode prioritaire",
     priorityHint: "Passe outre les inhibitions, jamais les exclusions de sécurité. Comme l'action apply_mode avec force: true.",
     priority: "prioritaire",
+    durationField: "Mode minuté",
+    durationHint: "À la fin du délai, le volet quitte ce mode tout seul. Choisir un mode sans durée avant y met fin tout de suite.",
+    durationLabel: "Durée",
+    returnField: "À la fin du délai",
+    returnBase: "Revenir au mode de base",
+    returnHint: "Le mode de base est le dernier mode sans durée dans lequel était le volet. Seuls les modes sans durée peuvent être choisis ici.",
+    timedChip: (n, r) => (r ? `${n} min, puis ${r}` : `${n} min`),
     noTemplateOpt: "Aucun gabarit",
     overrides: (n) => `${n} écart${n > 1 ? "s" : ""}`,
     tplNote: (n) => `Valeurs héritées du gabarit « ${n} » : seuls les écarts sont enregistrés.`,
@@ -374,6 +390,8 @@ const WORDS = {
       name_exists: (n) => `Le nom « ${n} » existe déjà.`,
       behavior_invalid: (n) => `Comportement invalide pour « ${n} ».`,
       color_invalid: (n) => `Couleur invalide pour « ${n} ».`,
+      duration_invalid: (n) => `Durée de « ${n} » : entre 1 et 1440 minutes.`,
+      return_mode_invalid: (n) => `« ${n} » : le mode de retour doit être un mode existant sans durée.`,
       in_use: (n, count, covers) => `« ${n} » est encore utilisé par ${count} volet(s) : ${covers}`,
       entity_required: () => "Un volet doit désigner une entité.",
       cover_domain: (e) => `${e} n'est pas une entité du domaine cover.`,
@@ -858,6 +876,7 @@ const STYLE = `
   .chip.ovr { color: var(--fp-warn); border-color: color-mix(in srgb, var(--fp-warn) 45%, transparent); }
   .chip.auto { color: var(--primary-color); border-color: color-mix(in srgb, var(--primary-color) 45%, transparent); }
   .chip.lock { color: var(--fp-bad); border-color: color-mix(in srgb, var(--fp-bad) 45%, transparent); }
+  .chip.timer { color: var(--primary-color); border-color: color-mix(in srgb, var(--primary-color) 45%, transparent); }
   .chip.prio { color: var(--fp-bad); border-color: color-mix(in srgb, var(--fp-bad) 45%, transparent);
                background: color-mix(in srgb, var(--fp-bad) 8%, transparent); }
   /* A selector row's hint sits between its label and the control. */
@@ -1141,6 +1160,7 @@ class CoverExtenderPanel extends HTMLElement {
       }
       if (m.lock) flags.append(icon("mdi:lock-outline"));
       if (m.priority) flags.append(icon("mdi:alert-decagram-outline"));
+      if (m.duration) flags.append(icon("mdi:timer-outline"));
       if (m.hidden) flags.append(icon("mdi:eye-off-outline"));
       mh.append(mico, el("span", "", m.name), flags);
       th.append(mh);
@@ -1711,7 +1731,8 @@ class CoverExtenderPanel extends HTMLElement {
       this._openEditor({
         section: "mode", idx: -1,
         draft: { name: "", icon: "mdi:help-circle", color: "#FFFFFF",
-                 lock: false, behavior: null, hidden: false, priority: false },
+                 lock: false, behavior: null, hidden: false, priority: false,
+                 duration: null, return_mode: null },
       });
       this._render();
     });
@@ -1773,6 +1794,11 @@ class CoverExtenderPanel extends HTMLElement {
         c.append(icon("mdi:lock-outline"), document.createTextNode(T.lock));
         chips.append(c);
       }
+      if (m.duration) {
+        const c = el("span", "chip timer");
+        c.append(icon("mdi:timer-outline"), document.createTextNode(T.timedChip(m.duration, m.return_mode)));
+        chips.append(c);
+      }
       if (m.priority) {
         const c = el("span", "chip prio");
         c.append(icon("mdi:alert-decagram-outline"), document.createTextNode(T.priority));
@@ -1826,6 +1852,22 @@ class CoverExtenderPanel extends HTMLElement {
     if (draft.behavior) host.append(el("p", "hint", T.behaviorHint));
     host.append(this._boolRow(T.lockField, draft.lock, (v) => { draft.lock = v; }, T.lockHint));
     host.append(this._boolRow(T.priorityField, draft.priority, (v) => { draft.priority = v; }, T.priorityHint));
+    host.append(this._boolRow(T.durationField, !!draft.duration, (v) => {
+      draft.duration = v ? (draft.duration || 60) : null;
+      if (!v) draft.return_mode = null;
+      rerender();
+    }, T.durationHint));
+    if (draft.duration) {
+      host.append(this._numberRow(T.durationLabel, draft.duration,
+        { min: 1, max: 1440, step: 1, unit: "min" }, (v) => { draft.duration = v; }));
+      // Only modes without a duration: every countdown must end on a mode
+      // that starts no other (the server refuses anything else too).
+      const targets = this._cfg.modes.filter((m) => !m.duration && m.name !== draft.name);
+      host.append(this._selectRow(T.returnField, draft.return_mode,
+        [[null, T.returnBase], ...targets.map((m) => [m.name, m.name])],
+        (v) => { draft.return_mode = v; }));
+      host.append(el("p", "hint", T.returnHint));
+    }
     host.append(this._boolRow(T.hiddenField, draft.hidden, (v) => { draft.hidden = v; }, T.hiddenHint));
     wrap.append(host);
 
