@@ -2614,7 +2614,6 @@ class CoverExtenderPanel extends HTMLElement {
     const chart = el("div", "sched-chart");
     const NS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(NS, "svg");
-    svg.setAttribute("viewBox", "0 0 940 420");
     svg.setAttribute("role", "img");
     const tip = el("div", "sched-tip");
     tip.hidden = true;
@@ -2688,7 +2687,11 @@ class CoverExtenderPanel extends HTMLElement {
     wrap.append(actions);
 
     /* ---- drawing ---- */
-    const Wd = 940, Hd = 420, M = { l: 52, r: 104, t: 30, b: 34 };
+    // Drawn at the size it is shown: the width follows the card, the height
+    // stays at 300 px, so the chart neither towers over a wide screen nor
+    // scales its text up with it. Redrawn when the card's width changes.
+    let Wd = 940;
+    const Hd = 300, M = { l: 52, r: 104, t: 30, b: 34 };
     const [Y0, Y1] = SCHED_RANGE[kind];
     const mk = (t, a, p = svg) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); p.appendChild(e); return e; };
     const xOf = (j) => M.l + (j - 1) / 364 * (Wd - M.l - M.r);
@@ -2728,6 +2731,8 @@ class CoverExtenderPanel extends HTMLElement {
     };
 
     const redraw = () => {
+      Wd = Math.max(560, Math.round(chart.clientWidth || 940));
+      svg.setAttribute("viewBox", `0 0 ${Wd} ${Hd}`);
       const pv = this._schedPv[kind];
       const sun = pv?.sun, pts = pv?.points;
       const fixed = s.hi === s.lo;
@@ -2993,6 +2998,11 @@ class CoverExtenderPanel extends HTMLElement {
     chart.addEventListener("pointerdown", (e) => { if (editor && !e.composedPath().includes(editor)) closeEditor(); });
 
     redraw();
+    const resized = new ResizeObserver(() => {
+      if (!chart.isConnected) { resized.disconnect(); return; }
+      if (Math.round(chart.clientWidth) !== Wd && chart.clientWidth >= 560) redraw();
+    });
+    resized.observe(chart);
     // Both curves: the table head shows both times of the day.
     for (const k of SCHED_KINDS) {
       if (k === kind || draft.enabled[k]) this._schedRequest(k, redraw);
