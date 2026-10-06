@@ -246,3 +246,14 @@ def test_forced_same_timed_mode_extends(coord, hass):
     info = coord.timed_mode_info(COVER)
     assert info["until"] - before > timedelta(minutes=59)
     assert info["return_mode"] == "Day"
+
+
+def test_a_fixed_return_with_a_duration_is_never_followed(coord, hass):
+    """Should a configuration slip past the validation (Pause returning to a
+    timed mode), the countdown still ends on the base mode: no loop."""
+    coord._modes_list["Pause"]["return_mode"] = "Guest"
+    _choose(coord, hass, "Pause")
+    assert coord.timed_mode_info(COVER)["return_mode"] == "Day"
+    _time_is_up(coord, hass)
+    assert hass.states.get(SELECT).state == "Day"
+    assert coord.timed_mode_info(COVER) is None

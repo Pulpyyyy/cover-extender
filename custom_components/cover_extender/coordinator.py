@@ -343,11 +343,26 @@ class CoverExtenderCoordinator:
     def _mode_duration(self, mode: str | None) -> int | None:
         return self._modes_list.get(mode, {}).get("duration") if mode else None
 
+    def _fixed_return(self, mode: str) -> str | None:
+        """The fixed return mode of *mode*, unless it has a duration itself.
+
+        The validation refuses that case; this guard holds even against a
+        configuration that slipped past it, since following a timed return
+        is the one way a chain of countdowns could loop.
+        """
+        fixed = self._modes_list.get(mode, {}).get("return_mode")
+        if fixed and self._mode_duration(fixed):
+            _LOGGER.warning(
+                "timed mode '%s': its return mode '%s' has a duration, ignored", mode, fixed
+            )
+            return None
+        return fixed or None
+
     def _return_target(self, entity_id: str, timer: dict[str, Any]) -> str | None:
         """Where the running timed mode hands the cover back: its fixed return
         mode when it has one linked to this cover, else the base mode."""
         modes = self._profiles.get(entity_id, {}).get(CONF_MODES, {})
-        fixed = self._modes_list.get(timer["mode"], {}).get("return_mode")
+        fixed = self._fixed_return(timer["mode"])
         if fixed and fixed in modes:
             return fixed
         if fixed:
@@ -364,7 +379,7 @@ class CoverExtenderCoordinator:
         if timer is None:
             return None
         modes = self._profiles.get(entity_id, {}).get(CONF_MODES, {})
-        fixed = self._modes_list.get(timer["mode"], {}).get("return_mode")
+        fixed = self._fixed_return(timer["mode"])
         return {"until": timer["until"], "return_mode": fixed if fixed in modes else timer["base"]}
 
     def _update_timed_mode(self, entity_id: str, mode: str, from_mode: str | None) -> None:
@@ -380,7 +395,7 @@ class CoverExtenderCoordinator:
             base = from_mode              # opened over a non-timed mode
         else:
             base = None                   # e.g. a timed mode restored without its countdown
-        if base is None and not self._modes_list.get(mode, {}).get("return_mode"):
+        if base is None and not self._fixed_return(mode):
             _LOGGER.warning(
                 "timed mode '%s' on %s: no mode to go back to, no countdown", mode, entity_id
             )

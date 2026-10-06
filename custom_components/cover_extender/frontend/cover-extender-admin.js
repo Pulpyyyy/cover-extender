@@ -194,6 +194,7 @@ const WORDS = {
     returnBase: "Back to the base mode",
     returnHint: "The base mode is the last mode without a duration the cover was in. Only modes without a duration can be chosen here.",
     timedChip: (n, r) => (r ? `${n} min, then ${r}` : `${n} min`),
+    usedAsReturn: (names) => `This mode is the one ${names.map((n) => `“${n}”`).join(", ")} returns to: it cannot have a duration while it is.`,
     noTemplateOpt: "No template",
     overrides: (n) => `${n} override${n > 1 ? "s" : ""}`,
     tplNote: (n) => `Values inherited from the “${n}” template: only the overrides are stored.`,
@@ -217,6 +218,7 @@ const WORDS = {
       color_invalid: (n) => `Invalid color for “${n}”.`,
       duration_invalid: (n) => `Duration of “${n}”: between 1 and 1440 minutes.`,
       return_mode_invalid: (n) => `“${n}”: the mode it returns to must be an existing mode without a duration.`,
+      return_mode_timed: (target, user) => `“${target}” is the mode “${user}” returns to: it cannot have a duration. Change the return of “${user}” first.`,
       in_use: (n, count, covers) => `“${n}” is still used by ${count} cover(s): ${covers}`,
       entity_required: () => "A cover must point at an entity.",
       cover_domain: (e) => `${e} is not an entity of the cover domain.`,
@@ -369,6 +371,7 @@ const WORDS = {
     returnBase: "Revenir au mode de base",
     returnHint: "Le mode de base est le dernier mode sans durée dans lequel était le volet. Seuls les modes sans durée peuvent être choisis ici.",
     timedChip: (n, r) => (r ? `${n} min, puis ${r}` : `${n} min`),
+    usedAsReturn: (names) => `Ce mode est le mode de retour de ${names.map((n) => `« ${n} »`).join(", ")} : il ne peut pas avoir de durée tant qu'il l'est.`,
     noTemplateOpt: "Aucun gabarit",
     overrides: (n) => `${n} écart${n > 1 ? "s" : ""}`,
     tplNote: (n) => `Valeurs héritées du gabarit « ${n} » : seuls les écarts sont enregistrés.`,
@@ -392,6 +395,7 @@ const WORDS = {
       color_invalid: (n) => `Couleur invalide pour « ${n} ».`,
       duration_invalid: (n) => `Durée de « ${n} » : entre 1 et 1440 minutes.`,
       return_mode_invalid: (n) => `« ${n} » : le mode de retour doit être un mode existant sans durée.`,
+      return_mode_timed: (target, user) => `« ${target} » est le mode de retour de « ${user} » : il ne peut pas avoir de durée. Changez d'abord le retour de « ${user} ».`,
       in_use: (n, count, covers) => `« ${n} » est encore utilisé par ${count} volet(s) : ${covers}`,
       entity_required: () => "Un volet doit désigner une entité.",
       cover_domain: (e) => `${e} n'est pas une entité du domaine cover.`,
@@ -1852,11 +1856,16 @@ class CoverExtenderPanel extends HTMLElement {
     if (draft.behavior) host.append(el("p", "hint", T.behaviorHint));
     host.append(this._boolRow(T.lockField, draft.lock, (v) => { draft.lock = v; }, T.lockHint));
     host.append(this._boolRow(T.priorityField, draft.priority, (v) => { draft.priority = v; }, T.priorityHint));
+    // A mode other modes return to cannot take a duration (the server refuses
+    // it too): say so before the user tries, rather than after the save.
+    const returners = creating ? [] : this._cfg.modes
+      .filter((m) => m.duration && m.return_mode === this._cfg.modes[idx].name)
+      .map((m) => m.name);
     host.append(this._boolRow(T.durationField, !!draft.duration, (v) => {
       draft.duration = v ? (draft.duration || 60) : null;
       if (!v) draft.return_mode = null;
       rerender();
-    }, T.durationHint));
+    }, returners.length ? T.usedAsReturn(returners) : T.durationHint));
     if (draft.duration) {
       host.append(this._numberRow(T.durationLabel, draft.duration,
         { min: 1, max: 1440, step: 1, unit: "min" }, (v) => { draft.duration = v; }));

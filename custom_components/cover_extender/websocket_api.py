@@ -339,8 +339,12 @@ def _validate_modes(items: list[dict[str, Any]]) -> str | None:
         target = item.get("return_mode") or None
         if not item.get("duration"):
             item["return_mode"] = None
-        elif target is not None and (target not in names or target in timed):
+        elif target is not None and target not in names:
             return f"return_mode_invalid:{item.get('name')}"
+        elif target is not None and target in timed:
+            # Usually not a bad choice here but a later edit there: the target
+            # was given a duration after being picked as a return mode.
+            return f"return_mode_timed:{target}:{item.get('name')}"
         else:
             item["return_mode"] = target
     return None

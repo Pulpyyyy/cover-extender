@@ -84,12 +84,21 @@ def test_modes_duration_validation():
     assert ws._validate_modes([{"name": "Manual", "duration": 60}]) is None
 
 
+def test_giving_a_duration_to_a_return_mode_is_refused_with_a_clear_reason():
+    """Pause returns to Night; later, Night is edited and given a duration."""
+    pause = {"name": "Pause", "duration": 30, "return_mode": "Night"}
+    night = {"name": "Night", "duration": 60}
+    assert ws._validate_modes([pause, night]) == "return_mode_timed:Night:Pause"
+
+
 def test_modes_return_mode_must_be_an_existing_non_timed_mode():
     day = {"name": "Day"}
     guest = {"name": "Guest", "duration": 720}
     assert ws._validate_modes([day, guest, {"name": "M", "duration": 60, "return_mode": "Day"}]) is None
-    assert ws._validate_modes([day, guest, {"name": "M", "duration": 60, "return_mode": "Guest"}])         == "return_mode_invalid:M"
-    assert ws._validate_modes([day, {"name": "M", "duration": 60, "return_mode": "Gone"}])         == "return_mode_invalid:M"
+    timed_target = [day, guest, {"name": "M", "duration": 60, "return_mode": "Guest"}]
+    assert ws._validate_modes(timed_target) == "return_mode_timed:Guest:M"
+    unknown_target = [day, {"name": "M", "duration": 60, "return_mode": "Gone"}]
+    assert ws._validate_modes(unknown_target) == "return_mode_invalid:M"
     # A mode without duration keeps no return mode.
     plain = {"name": "Night", "return_mode": "Day"}
     assert ws._validate_modes([day, plain]) is None
