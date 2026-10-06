@@ -243,6 +243,7 @@ A mode says *what the cover should be doing right now*. Each mode has a name, ic
 - **Lock the covers**: while the mode is on, the cover is [locked](#lock-and-memory).
 - **Behavior**: *None* (each cover gets its own position from the matrix), *Shading* (the position is computed from the sun, see [autonomous shading](#autonomous-shading)) or *Solar gain* (see [solar gain](#solar-gain)).
 - **Priority mode**: the mode passes the [inhibitions](#exclusions) (never the safety exclusions). Typically an *Alarm* mode that must close every cover, guest room included.
+- **Timed mode**: the mode only lasts a while (1 minute to 24 hours), see [timed modes](#timed-modes).
 - **Hide from the selector**: the mode stays usable by automations but does not show in the global selector.
 
 A mode only applies to the covers it is linked to (a cell in the matrix). For each linked cover, the matrix sets what happens when the mode turns on:
@@ -271,6 +272,25 @@ While it is on, **positions requested through Cover Extender are stored in memor
 > The lock only filters what goes through Cover Extender. A remote control, the cover's own card or a native `cover.set_cover_position` still move the cover. That is deliberate: Cover Extender never takes your covers away from you.
 
 A *Shading* or *Solar gain* mode always locks the cover, so that its computed moves do not erase the position you had before. The only exception is a cover that overrides the mode with its own Fixed or Entity position: the mode's own lock setting applies to it.
+
+### Timed modes
+
+A mode with a duration is a parenthesis over the cover's **base mode**, the last mode without a duration the cover was put in. Typically a *Manual* mode of one hour: you take the cover over, and it goes back to what it was doing afterwards.
+
+| What happens | Mode of the cover | Base mode |
+|---|---|---|
+| The morning automation applies *Day* | Day | **Day** |
+| You choose *Manual* (1 h) | Manual | Day |
+| Before the hour is up, you choose *Guest* (12 h) | Guest | Day |
+| Guest's time is up | Day | Day |
+| The evening automation applies *Night* | Night | **Night** |
+
+- **When the time is up**, the cover goes back to its base mode, or to a fixed mode set in the mode's editor (*Manual: 1 h, then Day*). The fixed mode can only be a mode without a duration, so every countdown ends on a mode that starts no other.
+- **A mode without a duration chosen meanwhile** applies at once, ends the countdown and becomes the base mode.
+- **Choosing the running timed mode again** restarts its countdown.
+- [`cover_extender.end_timed_mode`](#cover_extenderend_timed_mode) ends it now.
+
+The cover's `select.<cover>_cx_mode` shows when the countdown ends and which mode follows, in its `mode_ends_at` and `return_mode` attributes. The countdown survives a restart of Home Assistant. Going back is a mode change like any other: the lock, the exclusions and the inhibitions apply.
 
 ### Exclusions
 
@@ -486,6 +506,16 @@ data:
   force: true
 ```
 
+#### `cover_extender.end_timed_mode`
+
+Ends the [timed mode](#timed-modes) of the target covers now: each one goes back to its base mode (or to the mode's fixed return mode), as when the time is up.
+
+```yaml
+action: cover_extender.end_timed_mode
+target:
+  entity_id: cover.living_room
+```
+
 #### `cover_extender.apply_memory`
 
 Applies the memorized position **even when the cover is locked**, then keeps it in memory.
@@ -509,6 +539,7 @@ Reloads the configuration. The panel does it on every save; this is only useful 
 | `cover_extender_mode_changed` | A mode is applied to a cover | `entity_id`, `mode`, `from_mode`, `position` |
 | `cover_extender_memory_saved` | A position is stored in or cleared from memory | `entity_id`, `position` (`null` = cleared) |
 | `cover_extender_shade_applied` | Shading sends a new position | `entity_id`, `position` |
+| `cover_extender_timed_mode_ended` | A timed mode ends (time up or `end_timed_mode`) | `entity_id`, `mode`, `return_mode` |
 
 ```yaml
 triggers:

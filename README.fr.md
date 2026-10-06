@@ -224,6 +224,7 @@ Un mode dit *ce que le volet doit faire en ce moment*. Chaque mode a un nom, une
 - **Verrouiller les volets** : tant que le mode est actif, le volet est [verrouillé](#verrou-et-mémoire).
 - **Comportement** : *Aucun* (chaque volet reçoit sa position depuis la matrice), *Ombrage* (la position est calculée d'après le soleil) ou *Héliotropie*.
 - **Mode prioritaire** : le mode passe outre les [inhibitions](#exclusions) (jamais les exclusions de sécurité). Typiquement un mode *Alarme* qui doit fermer tous les volets, chambre d'amis comprise.
+- **Mode minuté** : le mode ne dure qu'un temps (de 1 minute à 24 heures), voir [les modes minutés](#modes-minutés).
 - **Masquer du sélecteur** : le mode reste utilisable par les automatisations mais n'apparaît pas dans le sélecteur global.
 
 Un mode ne s'applique qu'aux volets auxquels il est lié (une cellule de la matrice). Pour chaque volet lié, la matrice règle ce qui se passe quand le mode s'active :
@@ -252,6 +253,25 @@ Tant qu'il est allumé, **les positions demandées via Cover Extender sont mémo
 > Le verrou ne filtre que ce qui passe par Cover Extender. Une télécommande, la carte du volet ou un `cover.set_cover_position` natif font toujours bouger le volet. C'est voulu : Cover Extender ne vous retire jamais la main sur vos volets.
 
 Un mode *Ombrage* ou *Héliotropie* verrouille toujours le volet, pour que ses mouvements calculés n'effacent pas la position que vous aviez avant. Seule exception : un volet qui surcharge le mode avec sa propre position Fixe ou Entité suit le réglage de verrou du mode.
+
+### Modes minutés
+
+Un mode avec une durée est une parenthèse par-dessus le **mode de base** du volet, le dernier mode sans durée dans lequel il a été mis. Typiquement un mode *Manuel* d'une heure : vous reprenez la main, et le volet revient ensuite à ce qu'il faisait.
+
+| Ce qui se passe | Mode du volet | Mode de base |
+|---|---|---|
+| L'automatisation du matin applique *Jour* | Jour | **Jour** |
+| Vous choisissez *Manuel* (1 h) | Manuel | Jour |
+| Avant la fin de l'heure, vous choisissez *Invité* (12 h) | Invité | Jour |
+| Fin du délai d'Invité | Jour | Jour |
+| L'automatisation du soir applique *Nuit* | Nuit | **Nuit** |
+
+- **À la fin du délai**, le volet revient à son mode de base, ou à un mode fixe réglé dans l'éditeur du mode (*Manuel : 1 h, puis Jour*). Le mode fixe ne peut être qu'un mode sans durée : chaque compte à rebours se termine donc sur un mode qui n'en relance aucun.
+- **Un mode sans durée choisi entre-temps** s'applique tout de suite, met fin au compte à rebours et devient le mode de base.
+- **Re-choisir le mode minuté en cours** relance son compte à rebours.
+- L'action `cover_extender.end_timed_mode` y met fin tout de suite.
+
+Le `select.<volet>_cx_mode` du volet indique quand le compte à rebours se termine et quel mode suit, dans ses attributs `mode_ends_at` et `return_mode`. Le compte à rebours survit à un redémarrage de Home Assistant. Le retour est un changement de mode comme un autre : le verrou, les exclusions et les inhibitions s'appliquent.
 
 ### Exclusions
 
