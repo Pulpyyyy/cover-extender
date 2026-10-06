@@ -82,7 +82,8 @@ Unintended physical movement is one of the most common frustrations with cover a
 Cover Extender treats this as a **first-class concern**:
 
 - **Lock** holds back the commands sent through Cover Extender and remembers them instead
-- **Exclusion entities** (e.g. open windows) block every move Cover Extender would make
+- **Safety exclusions** (e.g. open windows) block every move Cover Extender would make
+- **Inhibitions** (e.g. a guest in the room) do the same, except for a priority mode
 - Nothing catches up later that you did not ask for
 
 If a cover does not move, it is never a mystery:
@@ -241,6 +242,7 @@ A mode says *what the cover should be doing right now*. Each mode has a name, ic
 
 - **Lock the covers**: while the mode is on, the cover is [locked](#lock-and-memory).
 - **Behavior**: *None* (each cover gets its own position from the matrix), *Shading* (the position is computed from the sun, see [autonomous shading](#autonomous-shading)) or *Solar gain* (see [solar gain](#solar-gain)).
+- **Priority mode**: the mode passes the [inhibitions](#exclusions) (never the safety exclusions). Typically an *Alarm* mode that must close every cover, guest room included.
 - **Hide from the selector**: the mode stays usable by automations but does not show in the global selector.
 
 A mode only applies to the covers it is linked to (a cell in the matrix). For each linked cover, the matrix sets what happens when the mode turns on:
@@ -272,15 +274,18 @@ A *Shading* or *Solar gain* mode always locks the cover, so that its computed mo
 
 ### Exclusions
 
-In the cover editor, **Exclusion entities** lists entities that block the cover while one of them is `on`: typically a window or door contact (`binary_sensor`), or an `input_boolean` for "do not disturb".
+The cover editor has two lists of entities that hold the cover back while one of them is `on`:
 
-While an exclusion is on:
+- **Safety exclusions**: a window or door contact (`binary_sensor`), a rain sensor. Nothing moves, **not even a priority mode**.
+- **Inhibitions**: an `input_boolean` "guest in the room", "children asleep", or a template sensor such as "Wednesday morning". Cover Extender leaves the cover alone, **except for a priority request**: a mode with **Priority mode** ticked, or [`apply_mode`](#cover_extenderapply_mode) with `force: true`.
 
-- a mode change or a Cover Extender action does not move the cover: its position **waits, and is applied as soon as the last exclusion turns off**. Close the window and the *Night* mode you chose meanwhile closes the cover;
-- shading and solar gain skip the cover, and catch up as soon as the last exclusion turns off;
+While one of them holds the cover:
+
+- a mode change or a Cover Extender action does not move the cover: its position **waits, and is applied as soon as nothing holds it any more**. Close the window and the *Night* mode you chose meanwhile closes the cover; when the guest leaves, the morning opening that waited is applied;
+- shading and solar gain skip the cover, and catch up as soon as nothing holds it any more;
 - turning the lock off does not apply the memory.
 
-Only the latest request waits: a new mode replaces it. If the cover got locked meanwhile, an action's position stays in memory until the unlock, as any command made while locked. A pending position does not survive a restart of Home Assistant.
+A priority request that waits for a window applies as soon as the window closes, even if an inhibition is still on; a plain one keeps waiting for the inhibition too. Only the latest request waits: a new mode replaces it. If the cover got locked meanwhile, an action's position stays in memory until the unlock, as any command made while locked. A pending position does not survive a restart of Home Assistant.
 
 ### Facades and orientation
 
@@ -468,6 +473,17 @@ target:
 data:
   mode: Shade
 response_variable: result   # optional: {"applied": [...], "skipped": [...]}
+```
+
+`force: true` makes the request a priority one: it passes the [inhibitions](#exclusions), never the safety exclusions, and re-applies the mode even on covers that are already in it. For example, to close everything when the alarm is armed, guest room included:
+
+```yaml
+action: cover_extender.apply_mode
+target:
+  entity_id: "{{ states.cover | selectattr('attributes.facade', 'defined') | map(attribute='entity_id') | list }}"
+data:
+  mode: Night
+  force: true
 ```
 
 #### `cover_extender.apply_memory`

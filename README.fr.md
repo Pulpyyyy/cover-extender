@@ -63,7 +63,8 @@ Un mouvement physique non voulu est l'une des frustrations les plus courantes av
 Cover Extender en fait une **préoccupation de premier plan** :
 
 - Le **verrou** retient les commandes passées par Cover Extender et les mémorise à la place
-- Les **entités d'exclusion** (par ex. une fenêtre ouverte) bloquent tout mouvement que Cover Extender ferait
+- Les **exclusions de sécurité** (par ex. une fenêtre ouverte) bloquent tout mouvement que Cover Extender ferait
+- Les **inhibitions** (par ex. un invité dans la chambre) font de même, sauf pour un mode prioritaire
 - Rien ne se rattrape plus tard que vous n'ayez demandé
 
 Si un volet ne bouge pas, ce n'est jamais un mystère :
@@ -222,6 +223,7 @@ Un mode dit *ce que le volet doit faire en ce moment*. Chaque mode a un nom, une
 
 - **Verrouiller les volets** : tant que le mode est actif, le volet est [verrouillé](#verrou-et-mémoire).
 - **Comportement** : *Aucun* (chaque volet reçoit sa position depuis la matrice), *Ombrage* (la position est calculée d'après le soleil) ou *Héliotropie*.
+- **Mode prioritaire** : le mode passe outre les [inhibitions](#exclusions) (jamais les exclusions de sécurité). Typiquement un mode *Alarme* qui doit fermer tous les volets, chambre d'amis comprise.
 - **Masquer du sélecteur** : le mode reste utilisable par les automatisations mais n'apparaît pas dans le sélecteur global.
 
 Un mode ne s'applique qu'aux volets auxquels il est lié (une cellule de la matrice). Pour chaque volet lié, la matrice règle ce qui se passe quand le mode s'active :
@@ -253,15 +255,29 @@ Un mode *Ombrage* ou *Héliotropie* verrouille toujours le volet, pour que ses m
 
 ### Exclusions
 
-Dans l'éditeur du volet, **Entités d'exclusion** liste les entités qui bloquent le volet tant que l'une d'elles est à `on` : typiquement un contact de fenêtre ou de porte (`binary_sensor`), ou un `input_boolean` « ne pas déranger ».
+L'éditeur du volet a deux listes d'entités qui retiennent le volet tant que l'une d'elles est à `on` :
 
-Tant qu'une exclusion est active :
+- **Exclusions de sécurité** : un contact de fenêtre ou de porte (`binary_sensor`), un capteur de pluie. Rien ne bouge, **même pas un mode prioritaire**.
+- **Inhibitions** : un `input_boolean` « invité dans la chambre », « enfants couchés », ou un capteur template comme « mercredi matin ». Cover Extender ne touche pas au volet, **sauf pour une demande prioritaire** : un mode avec **Mode prioritaire** coché, ou l'action `cover_extender.apply_mode` avec `force: true`.
 
-- un changement de mode ou une action Cover Extender ne bouge pas le volet : sa position **attend, et s'applique dès que la dernière exclusion repasse à `off`**. Refermez la fenêtre et le mode *Nuit* choisi entre-temps ferme le volet ;
-- l'ombrage et l'héliotropie ignorent le volet, et se recalent dès que la dernière exclusion repasse à `off` ;
+Tant que l'une d'elles retient le volet :
+
+- un changement de mode ou une action Cover Extender ne bouge pas le volet : sa position **attend, et s'applique dès que plus rien ne le retient**. Refermez la fenêtre et le mode *Nuit* choisi entre-temps ferme le volet ; quand l'invité part, l'ouverture du matin qui attendait s'applique ;
+- l'ombrage et l'héliotropie ignorent le volet, et se recalent dès que plus rien ne le retient ;
 - éteindre le verrou n'applique pas la mémoire.
 
-Seule la dernière demande attend : un nouveau mode la remplace. Si le volet a été verrouillé entre-temps, la position d'une action reste en mémoire jusqu'au déverrouillage, comme toute commande passée sous verrou. Une position en attente ne survit pas à un redémarrage de Home Assistant.
+Une demande prioritaire qui attend une fenêtre s'applique dès que la fenêtre se ferme, même si une inhibition est encore active ; une demande normale attend aussi la fin de l'inhibition. Seule la dernière demande attend : un nouveau mode la remplace.
+
+Pour tout fermer quand l'alarme est armée, chambre d'amis comprise :
+
+```yaml
+action: cover_extender.apply_mode
+target:
+  entity_id: "{{ states.cover | selectattr('attributes.facade', 'defined') | map(attribute='entity_id') | list }}"
+data:
+  mode: Nuit
+  force: true
+``` Si le volet a été verrouillé entre-temps, la position d'une action reste en mémoire jusqu'au déverrouillage, comme toute commande passée sous verrou. Une position en attente ne survit pas à un redémarrage de Home Assistant.
 
 ### Façades et orientation
 
