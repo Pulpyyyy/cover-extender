@@ -12,7 +12,10 @@ instead, named after the cover so that six "CX lock" can still be told apart.
 """
 from __future__ import annotations
 
-from homeassistant.core import HomeAssistant
+from collections.abc import Callable
+
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device import async_entity_id_to_device
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
@@ -24,6 +27,34 @@ from .helpers import HELPER_NAMES, cover_object_id, helper_entity_id
 def hub_device_info() -> DeviceInfo:
     """The integration's own device, for helpers that belong to no cover."""
     return DeviceInfo(identifiers={(DOMAIN, HUB_IDENTIFIER)})
+
+
+def sync_schedule_entities(
+    hass: HomeAssistant, coordinator, domain: str, unique_ids: list[str],
+    build: Callable[[], list[Entity]], async_add_entities,
+) -> Callable[[], None]:
+    """Keep a platform's schedule entities in step with the configuration.
+
+    They exist only while the house has a schedule: added when one is set,
+    removed from the registry when the last one is cleared. Returns the
+    callback to run at setup and after each reload.
+    """
+    added = {"on": False}
+
+    @callback
+    def sync() -> None:
+        wanted = bool(coordinator._schedule_settings())
+        if wanted and not added["on"]:
+            async_add_entities(build())
+            added["on"] = True
+        elif not wanted and added["on"]:
+            registry = er.async_get(hass)
+            for unique_id in unique_ids:
+                if entity_id := registry.async_get_entity_id(domain, DOMAIN, unique_id):
+                    registry.async_remove(entity_id)
+            added["on"] = False
+
+    return sync
 
 
 def attach_cover_helper(

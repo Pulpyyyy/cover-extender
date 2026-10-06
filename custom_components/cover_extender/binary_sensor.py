@@ -16,6 +16,7 @@ from homeassistant.core import HomeAssistant, callback, Event
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
@@ -29,8 +30,9 @@ from .const import (
     CONF_FACADE,
     ATTR_SUN_FACING,
     SIGNAL_COVER_RELOAD,
+    SIGNAL_SCHEDULE,
 )
-from .entity import attach_cover_helper
+from .entity import attach_cover_helper, hub_device_info, sync_schedule_entities
 from .helpers import (
     cover_stable_key,
     helper_entity_id,
@@ -120,6 +122,15 @@ async def async_setup_entry(
             )
 
     async_dispatcher_connect(hass, SIGNAL_COVER_RELOAD, _handle_platform_reload)
+
+    # binary_sensor.cx_day, while the house has a schedule.
+    coordinator = entry.runtime_data
+    sync_day = sync_schedule_entities(
+        hass, coordinator, "binary_sensor", [DAY_UNIQUE_ID],
+        lambda: [CoverExtenderDaySensor(coordinator)], async_add_entities,
+    )
+    sync_day()
+    entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_COVER_RELOAD, sync_day))
 
 
 def _build_entities(
@@ -294,3 +305,58 @@ class CoverEnableSolarGainBinarySensor(_BaseSwitchMirrorBinarySensor):
     _uid_kind = "bs_solar_gain"
     _icon_on = "mdi:thermometer-check"
     _icon_off = "mdi:thermometer-off"
+
+
+DAY_UNIQUE_ID = f"{DOMAIN}_binary_sensor_cx_day"
+
+
+class CoverExtenderDaySensor(BinarySensorEntity):
+    """On between the morning opening and the evening closing.
+
+    Computed from the clock and the day's two times, without memory: right
+    as soon as Home Assistant starts. `cause` says what flipped it last:
+    "time" (the clock reached a schedule) or "setting" (a schedule was
+    edited), so an automation can ignore the latter.
+    """
+
+    _attr_should_poll = False
+    _attr_has_entity_name = True
+    _attr_name = "CX day"
+
+    def __init__(self, coordinator) -> None:
+        self._coordinator = coordinator
+        self.entity_id = "binary_sensor.cx_day"
+        self._attr_unique_id = DAY_UNIQUE_ID
+        self._attr_device_info = hub_device_info()
+
+    @property
+    def is_on(self) -> bool | None:
+        state = self._coordinator.schedule_state()
+        if not state or state.get("opening") is None or state.get("closing") is None:
+            return None
+        now = dt_util.now(state["opening"].tzinfo)
+        return state["opening"] <= now < state["closing"]
+
+    @property
+    def icon(self) -> str:
+        return "mdi:weather-sunny" if self.is_on else "mdi:weather-night"
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        state = self._coordinator.schedule_state() or {}
+        stamp = lambda key: state[key].isoformat() if state.get(key) else None  # noqa: E731
+        return {
+            "opening": stamp("opening"),
+            "closing": stamp("closing"),
+            "next_change": stamp("next_change"),
+            "cause": state.get("cause"),
+        }
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_SCHEDULE, self._refresh)
+        )
+
+    @callback
+    def _refresh(self) -> None:
+        self.async_write_ha_state()

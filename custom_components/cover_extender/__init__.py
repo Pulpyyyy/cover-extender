@@ -84,7 +84,7 @@ from .helpers import (
 import logging
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["select", "switch", "binary_sensor"]
+PLATFORMS = ["select", "switch", "binary_sensor", "sensor"]
 
 _MIGRATED_SUBENTRY_TYPES = (SECTION_GLOBAL, *SECTIONS_WITH_ITEMS)
 
