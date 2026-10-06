@@ -1113,7 +1113,7 @@ class CoverExtenderCoordinator:
     async def _extract_cover_ids(self, call: ServiceCall) -> list[str]:
         """Resolve the service target (entity_id / device_id / area_id / label_id)
         to the cover entity ids it references."""
-        entity_ids = await async_extract_entity_ids(self.hass, call)
+        entity_ids = await async_extract_entity_ids(call)
         return sorted(e for e in entity_ids if e.startswith("cover."))
 
     async def service_apply_mode(self, call: ServiceCall) -> dict:

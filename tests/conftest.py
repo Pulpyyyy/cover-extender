@@ -125,7 +125,7 @@ except ImportError:
 
     service = _module("homeassistant.helpers.service")
 
-    async def _async_extract_entity_ids(hass, call, expand_group=True):
+    async def _async_extract_entity_ids(call, expand_group=True):
         return []
 
     service.async_extract_entity_ids = _async_extract_entity_ids
