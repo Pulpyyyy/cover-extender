@@ -214,7 +214,8 @@ This walk-through sets up one cover with two modes, *Day* (open) and *Night* (cl
 
 ### Next steps
 
-- Switch modes from your automations with the [`cover_extender.apply_mode`](#cover_extenderapply_mode) action, e.g. *Night* at sunset:
+- Open and close at the right time with the [schedules](#schedules): a morning and an evening time that follow the sun, and a mode per cover.
+- Or switch modes from your own automations with the [`cover_extender.apply_mode`](#cover_extenderapply_mode) action, e.g. *Night* at sunset:
 
   ```yaml
   triggers:
@@ -272,6 +273,26 @@ While it is on, **positions requested through Cover Extender are stored in memor
 > The lock only filters what goes through Cover Extender. A remote control, the cover's own card or a native `cover.set_cover_position` still move the cover. That is deliberate: Cover Extender never takes your covers away from you.
 
 A *Shading* or *Solar gain* mode always locks the cover, so that its computed moves do not erase the position you had before. The only exception is a cover that overrides the mode with its own Fixed or Entity position: the mode's own lock setting applies to it.
+
+### Schedules
+
+The **Schedules** tab holds the house's **morning opening** and **evening closing**, each switched on or off. At each, every cover applies the mode chosen for it in the table below the chart (or keeps its mode, with *None*). It is a mode change like any other: the lock, the exclusions, the inhibitions and the timed modes apply.
+
+Each time follows the sun over the year, within bounds you set:
+
+- **Max time / min time**: the time on the day the sun rises or sets the latest, and the earliest. In between, the curve follows the sun. Drag the two handles together for a **fixed time** all year.
+- **Spring / autumn crossing** (optional): the curve lands exactly on sunrise or sunset that day.
+- **Floor ("not before") / ceiling ("not after")**: legal times the schedule never goes past, whatever the sun does.
+
+The chart shows the sun, the curve, today's time and where the cover closes before sunset (or opens before sunrise). Every setting is a field and a handle to drag.
+
+If Home Assistant was down at the time of a schedule, the latest one of the day is applied at startup (never on the very first start). Three entities follow the schedules, on the Cover Extender device:
+
+| Entity | Content |
+|---|---|
+| `binary_sensor.cx_day` | On between today's opening and closing. Attributes `opening`, `closing`, `next_change`, and `cause`: `time` when the clock reached a schedule, `setting` when a schedule was edited (an automation can ignore the latter). |
+| `sensor.cx_morning_opening` | Today's morning opening (timestamp). |
+| `sensor.cx_evening_closing` | Today's evening closing (timestamp). |
 
 ### Timed modes
 
@@ -446,7 +467,7 @@ Per cover:
 | `binary_sensor.<cover>_cx_auto_shade_status` | option in General settings | Shading is enabled on the cover. |
 | `binary_sensor.<cover>_cx_solar_gain_status` | option in General settings | Solar gain is enabled on the cover. |
 
-Global: `select.cx_modes`, see [the global mode selector](#the-global-mode-selector).
+Global: `select.cx_modes`, see [the global mode selector](#the-global-mode-selector); `binary_sensor.cx_day`, `sensor.cx_morning_opening` and `sensor.cx_evening_closing` while a [schedule](#schedules) is on.
 
 Every id contains `_cx_`: search for it to find all the entities Cover Extender created. They are attached to the cover's own device and show on its page; a cover without a device (a template cover, for example) has its entities on the **Cover Extender** device instead. Their names are fixed English (`CX lock`, `CX mode`...), the same in every language, so logs and screenshots read the same for everyone.
 

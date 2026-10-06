@@ -195,7 +195,8 @@ Ce parcours configure un volet avec deux modes, *Jour* (ouvert) et *Nuit* (ferm�
 
 ### Ensuite
 
-- Changez de mode depuis vos automatisations avec l'action `cover_extender.apply_mode`, par exemple *Nuit* au coucher du soleil :
+- Ouvrez et fermez à la bonne heure avec les [horaires](#horaires) : une heure du matin et du soir qui suivent le soleil, et un mode par volet.
+- Ou changez de mode depuis vos propres automatisations avec l'action `cover_extender.apply_mode`, par exemple *Nuit* au coucher du soleil :
 
   ```yaml
   triggers:
@@ -253,6 +254,26 @@ Tant qu'il est allumé, **les positions demandées via Cover Extender sont mémo
 > Le verrou ne filtre que ce qui passe par Cover Extender. Une télécommande, la carte du volet ou un `cover.set_cover_position` natif font toujours bouger le volet. C'est voulu : Cover Extender ne vous retire jamais la main sur vos volets.
 
 Un mode *Ombrage* ou *Héliotropie* verrouille toujours le volet, pour que ses mouvements calculés n'effacent pas la position que vous aviez avant. Seule exception : un volet qui surcharge le mode avec sa propre position Fixe ou Entité suit le réglage de verrou du mode.
+
+### Horaires
+
+L'onglet **Horaires** contient l'**ouverture du matin** et la **fermeture du soir** de la maison, chacune activable. À chacune, chaque volet applique le mode choisi pour lui dans le tableau sous le graphique (ou garde son mode, avec *Aucun*). C'est un changement de mode comme un autre : le verrou, les exclusions, les inhibitions et les modes minutés s'appliquent.
+
+Chaque heure suit le soleil sur l'année, dans des bornes que vous fixez :
+
+- **Heure max / heure min** : l'heure le jour où le soleil se lève ou se couche le plus tard, et le plus tôt. Entre les deux, la courbe suit le soleil. Collez les deux poignées pour une **heure fixe** toute l'année.
+- **Croisement de printemps / d'automne** (optionnel) : la courbe tombe pile sur le lever ou le coucher ce jour-là.
+- **Plancher (« pas avant ») / plafond (« pas après »)** : des heures légales que l'horaire ne dépasse jamais, quoi que fasse le soleil.
+
+Le graphique montre le soleil, la courbe, l'heure du jour et les jours où le volet se ferme avant le coucher (ou s'ouvre avant le lever). Chaque réglage est un champ et une poignée à faire glisser.
+
+Si Home Assistant était arrêté à l'heure d'un horaire, le dernier de la journée est appliqué au démarrage (jamais au tout premier démarrage). Trois entités suivent les horaires, sur l'appareil Cover Extender :
+
+| Entité | Contenu |
+|---|---|
+| `binary_sensor.cx_day` | Allumé entre l'ouverture et la fermeture du jour. Attributs `opening`, `closing`, `next_change`, et `cause` : `time` quand l'heure a atteint un horaire, `setting` quand un horaire a été modifié (une automatisation peut ignorer ce cas). |
+| `sensor.cx_morning_opening` | L'ouverture du matin du jour (horodatage). |
+| `sensor.cx_evening_closing` | La fermeture du soir du jour (horodatage). |
 
 ### Modes minutés
 
