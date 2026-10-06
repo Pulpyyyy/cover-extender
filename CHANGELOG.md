@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.3] - 2026-10-06
+
+### Fixed
+- **Actions keep working with Home Assistant 2026.10.** Every action that takes a target (`apply_mode`, `set_cover_position`, `open_cover`, `close_cover`, `apply_memory`) passed `hass` to `async_extract_entity_ids`, an argument Home Assistant deprecated and removes in Core 2026.10; it also logged a warning at each call. The call now uses the current signature, available since 2026.1, the minimum supported version.
+
 ## [3.1.2] - 2026-09-24
 
 ### Added
