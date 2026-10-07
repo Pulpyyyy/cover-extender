@@ -276,7 +276,7 @@ A *Shading* or *Solar gain* mode always locks the cover, so that its computed mo
 
 ### Schedules
 
-The **Schedules** tab holds the house's **morning opening** and **evening closing**, each switched on or off. At each, every cover applies the mode chosen for it in the table below the chart (or keeps its mode, with *None*). It is a mode change like any other: the lock, the exclusions, the inhibitions and the timed modes apply.
+The **Schedules** tab holds the house's **morning opening** and **evening closing**, each switched on or off. At each, every cover applies the mode chosen for it in the table below the chart (or keeps its mode, with *None*). The table is grouped by facade; its *All covers* row sets every cover that offers the chosen mode at once, and a cover that does something different from the others is highlighted. It is a mode change like any other: the lock, the exclusions, the inhibitions and the timed modes apply.
 
 Each time follows the sun over the year, within bounds you set:
 

@@ -257,7 +257,7 @@ Un mode *Ombrage* ou *Héliotropie* verrouille toujours le volet, pour que ses m
 
 ### Horaires
 
-L'onglet **Horaires** contient l'**ouverture du matin** et la **fermeture du soir** de la maison, chacune activable. À chacune, chaque volet applique le mode choisi pour lui dans le tableau sous le graphique (ou garde son mode, avec *Aucun*). C'est un changement de mode comme un autre : le verrou, les exclusions, les inhibitions et les modes minutés s'appliquent.
+L'onglet **Horaires** contient l'**ouverture du matin** et la **fermeture du soir** de la maison, chacune activable. À chacune, chaque volet applique le mode choisi pour lui dans le tableau sous le graphique (ou garde son mode, avec *Aucun*). Le tableau est groupé par façade ; sa ligne *Tous les volets* règle d'un coup tous les volets qui proposent le mode choisi, et un volet qui fait autre chose que les autres est mis en évidence. C'est un changement de mode comme un autre : le verrou, les exclusions, les inhibitions et les modes minutés s'appliquent.
 
 Chaque heure suit le soleil sur l'année, dans des bornes que vous fixez :
 

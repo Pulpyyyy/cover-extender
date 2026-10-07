@@ -63,7 +63,6 @@ const WORDS = {
     title: "Cover Extender",
     tabs: { matrice: "Matrix", volets: "Covers", modes: "Modes", horaires: "Schedules", reglages: "Settings" },
     sched: {
-      intro: "At the morning and evening times, Cover Extender applies to each cover the mode chosen below. It is a mode change like any other: exclusions, inhibitions, lock and timed modes apply.",
       kinds: { morning: "Morning opening", evening: "Evening closing" },
       enable: { morning: "Morning opening on", evening: "Evening closing on" },
       enableHint: {
@@ -75,7 +74,6 @@ const WORDS = {
       refCap: { morning: "Sunrise", evening: "Sunset" },
       refLong: { morning: "sunrise", evening: "sunset" },
       refLongCap: { morning: "Sunrise", evening: "Sunset" },
-      refWord: "reference",
       band: { morning: "Open before sunrise", evening: "Closed before sunset" },
       hi: "Max time", hiFixed: "Max time = min", lo: "Min time",
       x1: "Spring crossing", x2: "Autumn crossing",
@@ -87,7 +85,6 @@ const WORDS = {
       fixedAll: "fixed time all year, legal time", ignoredShort: " · ignored",
       fixedLabel: (t) => `fixed time ${t}`,
       fixedName: "Fixed time",
-      dblHint: " Double-click a handle to type its value.",
       editApply: "Apply",
       editBadTime: "Invalid time: type HH:MM.",
       editRange: (a, b) => `Choose a time between ${a} and ${b}.`,
@@ -117,6 +114,17 @@ const WORDS = {
       clampCeFl: (t) => `The ceiling stays above the floor (${t}).`,
       clampGap: "A curve needs at least 1 h between max and min: below that, the clock change would push it under the min in winter.",
       clampCross: (k, a, b) => `The ${k.toLowerCase()} stays between ${a} and ${b}.`,
+      introShort: "Morning and evening, each cover takes the mode chosen for it at the bottom of the page.",
+      introInfo: "A mode change like any other: exclusions, inhibitions, the lock and timed modes apply.",
+      enabledLabel: "On",
+      todayAt: (t) => `today ${t}`,
+      offShort: "off",
+      follows: (r, t) => (t ? `follows the ${r} (today ${t})` : `follows the ${r}`),
+      grpCurve: "Curve over the year", grpBounds: "Bounds in legal time", grpFine: "Fine-tune",
+      crossSum: (a, b) => `Crossings: spring ${a} · autumn ${b}`,
+      no: "no",
+      dragHint: "Drag the handles on the chart, or double-click one to type its value.",
+      allCovers: "All covers", mixed: "Several", differs: "differs from the other covers",
       perCover: "Mode applied per cover",
       perCoverSub: "“None”: the cover does not follow this schedule. Only the modes linked to the cover and without a duration are offered.",
       cover: "Cover", noneOpt: "None",
@@ -323,7 +331,16 @@ const WORDS = {
       solar_gain_position_solar: "Cool, fine weather, sun in front.",
       solar_gain_position_cold: "Cool, but no sun on the window or bad weather.",
     },
-    fromTemplate: (v) => `template: ${v}`,
+    fromTemplate: (v) => `Template: ${v}.`,
+    backToTpl: "back to the template",
+    inheritedTitle: (n) => `Value of the ${n} template: change it to override it on this cover.`,
+    inheritedLegend: "from the template",
+    ownLegend: (n) => `this cover's own: ${n}`,
+    filterAll: "All",
+    filterOwn: (n) => `Overrides only (${n})`,
+    sectInherited: (n) => `${n} from the template`,
+    sectOwn: (n) => `${n} own`,
+    noOwn: "No override: this cover follows its template everywhere.",
     elevationRange: "Sun height",
     elevationHint: "Outside this range the cover goes to its default position.",
     rangeTo: "to",
@@ -405,7 +422,6 @@ const WORDS = {
   fr: {
     tabs: { matrice: "Matrice", volets: "Volets", modes: "Modes", horaires: "Horaires", reglages: "Réglages" },
     sched: {
-      intro: "À l'heure du matin et du soir, Cover Extender applique à chaque volet le mode choisi plus bas. C'est un changement de mode comme un autre : les exclusions, les inhibitions, le verrou et les modes minutés s'appliquent.",
       kinds: { morning: "Ouverture du matin", evening: "Fermeture du soir" },
       enable: { morning: "Ouverture du matin activée", evening: "Fermeture du soir activée" },
       enableHint: {
@@ -417,7 +433,6 @@ const WORDS = {
       refCap: { morning: "Lever", evening: "Coucher" },
       refLong: { morning: "lever du soleil", evening: "coucher du soleil" },
       refLongCap: { morning: "Lever du soleil", evening: "Coucher du soleil" },
-      refWord: "référence",
       band: { morning: "Ouvert avant le lever", evening: "Fermé avant le coucher" },
       hi: "Heure max", hiFixed: "Heure max = min", lo: "Heure min",
       x1: "Croisement printemps", x2: "Croisement automne",
@@ -429,7 +444,6 @@ const WORDS = {
       fixedAll: "heure fixe toute l'année, heure légale", ignoredShort: " · ignoré",
       fixedLabel: (t) => `heure fixe ${t}`,
       fixedName: "Heure fixe",
-      dblHint: " Double-clic sur une poignée pour taper sa valeur.",
       editApply: "Appliquer",
       editBadTime: "Heure invalide : saisis HH:MM.",
       editRange: (a, b) => `Choisis une heure entre ${a} et ${b}.`,
@@ -459,6 +473,17 @@ const WORDS = {
       clampCeFl: (t) => `Le plafond reste au-dessus du plancher (${t}).`,
       clampGap: "Entre l'heure fixe et la courbe, il faut au moins 1 h d'écart : en dessous, le changement d'heure ferait passer la courbe sous le min en hiver.",
       clampCross: (k, a, b) => `Le ${k.toLowerCase()} reste entre le ${a} et le ${b}.`,
+      introShort: "Matin et soir, chaque volet passe dans le mode choisi pour lui en bas de la page.",
+      introInfo: "C'est un changement de mode comme un autre : les exclusions, les inhibitions, le verrou et les modes minutés s'appliquent.",
+      enabledLabel: "Activée",
+      todayAt: (t) => `aujourd'hui ${t}`,
+      offShort: "désactivée",
+      follows: (r, t) => (t ? `suit le ${r} (aujourd'hui ${t})` : `suit le ${r}`),
+      grpCurve: "Courbe sur l'année", grpBounds: "Bornes en heure légale", grpFine: "Affiner",
+      crossSum: (a, b) => `Croisements : printemps ${a} · automne ${b}`,
+      no: "non",
+      dragHint: "Faire glisser les poignées sur le graphique, ou double-cliquer sur l'une d'elles pour taper sa valeur.",
+      allCovers: "Tous les volets", mixed: "Plusieurs", differs: "diffère des autres volets",
       perCover: "Mode appliqué par volet",
       perCoverSub: "« Aucun » : le volet ne suit pas cet horaire. Seuls les modes liés au volet et sans durée sont proposés.",
       cover: "Volet", noneOpt: "Aucun",
@@ -660,7 +685,16 @@ const WORDS = {
       solar_gain_position_solar: "Frais, beau temps, soleil devant.",
       solar_gain_position_cold: "Frais, mais pas de soleil sur la fenêtre ou mauvais temps.",
     },
-    fromTemplate: (v) => `gabarit : ${v}`,
+    fromTemplate: (v) => `Gabarit : ${v}.`,
+    backToTpl: "revenir au gabarit",
+    inheritedTitle: (n) => `Valeur du gabarit ${n} : la modifier pour la remplacer sur ce volet.`,
+    inheritedLegend: "du gabarit",
+    ownLegend: (n) => `propre au volet : ${n}`,
+    filterAll: "Tout",
+    filterOwn: (n) => `Écarts seulement (${n})`,
+    sectInherited: (n) => `${n} du gabarit`,
+    sectOwn: (n) => `${n} propre${n > 1 ? "s" : ""}`,
+    noOwn: "Aucun écart : ce volet suit son gabarit partout.",
     elevationRange: "Hauteur du soleil",
     elevationHint: "En dehors, le volet va à sa position par défaut.",
     rangeTo: "à",
@@ -1564,6 +1598,98 @@ const STYLE = `
   .actions .why { font-size: var(--f-12); color: var(--secondary-text-color); }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary-color); flex: none; }
 
+
+  /* Inherited from the template vs the cover's own: a dashed grey box with a
+     link, or amber with a bar, the template's value and a way back. */
+  .numf { position: relative; }
+  .numf .lnk { --mdc-icon-size: 15px; width: 15px; height: 15px; color: var(--secondary-text-color); }
+  .numf.ovr .lnk { color: var(--fp-warn); }
+  .numf.inh input[type=number] { border-style: dashed; background: transparent; font-weight: 500;
+         border-color: color-mix(in srgb, var(--secondary-text-color) 60%, transparent); color: var(--secondary-text-color); }
+  .numf.inh input[type=range] { accent-color: color-mix(in srgb, var(--secondary-text-color) 75%, transparent); }
+  .numf.inh .dual .track i { background: color-mix(in srgb, var(--secondary-text-color) 60%, transparent); }
+  .numf.inh .dual input[type=range]::-webkit-slider-thumb { background: var(--secondary-text-color); }
+  .numf.inh .dual input[type=range]::-moz-range-thumb { background: var(--secondary-text-color); }
+  .numf.ovr { padding-left: var(--fp-s3); }
+  .numf.ovr::before { content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px;
+                      border-radius: 2px; background: var(--fp-warn); }
+  .rwrap { grid-column: 1 / -1; position: relative; }
+  .rwrap .ghost { position: absolute; top: 9px; width: 2px; height: 12px; margin-left: -1px; display: none;
+                  background: var(--secondary-text-color); pointer-events: none; }
+  .numf.ovr .rwrap .ghost { display: block; }
+  .revert.backtpl { width: auto; height: auto; margin: 0; padding: 1px 7px; gap: 3px; border-radius: 10px;
+         font: inherit; font-size: var(--f-11-5); font-weight: 500;
+         border: 1px solid color-mix(in srgb, var(--fp-warn) 45%, transparent); }
+  .revert.backtpl ha-icon { --mdc-icon-size: 13px; width: 13px; height: 13px; }
+  .sect h3 .cnt { margin-left: auto; font-size: var(--f-11-5); font-weight: 500; color: var(--secondary-text-color); }
+  .sect h3 .cnt b { color: var(--fp-warn); font-weight: 600; }
+  .inh-legend { display: inline-flex; align-items: center; gap: var(--fp-s4); font-size: var(--f-12); color: var(--secondary-text-color); }
+  .inh-legend span { display: inline-flex; align-items: center; gap: var(--fp-sh); }
+  .sw-inh, .sw-own { display: inline-block; width: 22px; height: 14px; border-radius: var(--fp-field-r); }
+  .sw-inh { border: 1px dashed color-mix(in srgb, var(--secondary-text-color) 70%, transparent); }
+  .sw-own { border: 1px solid var(--fp-warn); background: color-mix(in srgb, var(--fp-warn) 18%, transparent); }
+  .seg.own-filter { margin: 0; flex: none; }
+  .seg.own-filter button { flex: none; padding: 0 var(--fp-s3); }
+  .ed-cols.own-only .numf.inh, .ed-cols.own-only .sect.no-own, .ed-cols.own-only .fig { display: none; }
+  .ed-cols.own-only .withfig { grid-template-columns: minmax(0, 1fr); }
+  .ed-note[hidden] { display: none; }
+
+
+  /* ---------- schedules, 4.0 layout ---------- */
+  .sched-lead { margin: 0 var(--fp-s0) var(--fp-s3); font-size: var(--f-13); }
+  .sched-head { display: flex; align-items: center; gap: var(--fp-s3) var(--fp-s4); flex-wrap: wrap; }
+  .kseg { display: flex; padding: var(--fp-s1); gap: var(--fp-s0); background: var(--secondary-background-color); border-radius: 10px; }
+  .kseg button { display: flex; align-items: center; gap: var(--fp-s2); padding: var(--fp-s2) var(--fp-s3); border: 0;
+                 border-radius: 7px; background: transparent; font: inherit; font-size: var(--f-13); font-weight: 500;
+                 color: var(--secondary-text-color); cursor: pointer; text-align: left; }
+  .kseg button ha-icon { --mdc-icon-size: 20px; width: 20px; height: 20px; }
+  .kseg .kt { display: grid; }
+  .kseg small { font-size: var(--f-11-5); font-weight: 400; }
+  .kseg button[aria-selected="true"] { background: var(--card-background-color); color: var(--primary-text-color);
+                 font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+  .kdot { width: 8px; height: 8px; border-radius: 50%; flex: none;
+          background: color-mix(in srgb, var(--secondary-text-color) 45%, transparent); }
+  .kdot.on { background: var(--fp-ok); }
+  .sched-ref { display: inline-flex; align-items: center; gap: var(--fp-sh); font-size: var(--f-12-5); color: var(--secondary-text-color); }
+  .sched-ref ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; }
+  .sched-en { margin-left: auto; display: flex; align-items: center; gap: var(--fp-s2); font-size: var(--f-13); font-weight: 500; }
+  .sched-groups { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, .8fr);
+                  gap: var(--fp-s3); margin: var(--fp-s4) 0 var(--fp-s1); align-items: start; }
+  .sgrp { border: 1px solid var(--divider-color); border-radius: 10px; padding: 10px var(--fp-s3); }
+  .sgrp h4 { display: flex; align-items: center; gap: var(--fp-sh); margin: 0 0 var(--fp-s2);
+             font-size: var(--f-12); font-weight: 600; color: var(--secondary-text-color); }
+  .sgrp h4 ha-icon { --mdc-icon-size: 15px; width: 15px; height: 15px; }
+  .sgrp h4 .info { margin-left: auto; }
+  .spair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--fp-s2); }
+  .spair.one { grid-template-columns: minmax(0, 1fr); margin-top: var(--fp-s2); }
+  details.sfine > summary { display: flex; align-items: center; gap: var(--fp-sh); cursor: pointer; list-style: none;
+                            font-size: var(--f-12-5); color: var(--secondary-text-color); padding: var(--fp-s1) 0; }
+  details.sfine > summary::-webkit-details-marker { display: none; }
+  details.sfine > summary ha-icon { --mdc-icon-size: 18px; width: 18px; height: 18px; color: var(--primary-color); }
+  details.sfine[open] > summary .chev-d { transform: rotate(180deg); }
+  /* The on/off of a bound or a crossing reads as a switch, in the field's own colour. */
+  .sf input[type=checkbox] { -webkit-appearance: none; appearance: none; position: relative; flex: none;
+         width: 28px; height: 16px; border-radius: 8px; margin: 0; cursor: pointer;
+         background: color-mix(in srgb, var(--secondary-text-color) 45%, transparent); }
+  .sf input[type=checkbox]::before { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px;
+         border-radius: 50%; background: var(--card-background-color); transition: left .15s; }
+  .sf input[type=checkbox]:checked { background: var(--c); }
+  .sf input[type=checkbox]:checked::before { left: 14px; background: #fff; }
+  .sf input[type=checkbox]:disabled { opacity: .4; cursor: default; }
+  .sf input[type=checkbox]:focus-visible { outline: var(--fp-focus); outline-offset: var(--fp-focus-off); }
+  table.assign tr.fac td { background: var(--secondary-background-color); font-size: var(--f-11); font-weight: 700;
+         letter-spacing: .08em; text-transform: uppercase; color: var(--secondary-text-color); padding: var(--fp-s1) var(--fp-s2); }
+  table.assign tr.all td { background: color-mix(in srgb, var(--primary-color) 7%, transparent); }
+  table.assign tr.all .nm { font-weight: 600; }
+  table.assign .fselect.msel { width: auto; min-width: 180px; max-width: 260px; height: 34px; border-left-width: 4px; }
+  table.assign .fselect.msel.diff { border-color: color-mix(in srgb, var(--fp-warn) 60%, transparent);
+         background: color-mix(in srgb, var(--fp-warn) 9%, var(--card-background-color)); }
+  table.assign .fselect.msel.none { color: var(--secondary-text-color); font-style: italic; }
+  .sched-diff-legend { display: inline-flex; align-items: center; gap: var(--fp-sh); font-size: var(--f-12); color: var(--secondary-text-color); }
+  .sw-diff { display: inline-block; width: 22px; height: 12px; border-radius: 3px;
+             border: 1px solid color-mix(in srgb, var(--fp-warn) 60%, transparent);
+             background: color-mix(in srgb, var(--fp-warn) 9%, transparent); }
+
   @media (max-width: 900px) {
     .set-cols { grid-template-columns: minmax(0, 1fr); }
   }
@@ -1584,6 +1710,14 @@ const STYLE = `
     .sline { grid-template-columns: minmax(0, 1fr); gap: var(--fp-s1); }
     .verdict { grid-column: 1; }
     .opt-more { margin-left: 0; }
+    .sched-groups { grid-template-columns: minmax(0, 1fr); }
+    /* The cover table fits a phone: lists shrink, the picture goes. */
+    table.assign .rowh { min-width: 0; }
+    table.assign .rowh .pic, table.assign .rowh img { display: none; }
+    table.assign .fselect.msel { min-width: 0; width: 100%; }
+    table.assign td, table.assign th { padding-left: var(--fp-s1); padding-right: var(--fp-s1); }
+    table.assign th { white-space: normal; }
+    .sched-en { margin-left: 0; }
     .actions .why { display: none; }
   }
 
@@ -1865,6 +1999,8 @@ class CoverExtenderPanel extends HTMLElement {
 
   /** Snapshot taken when an editor opens; equality against it is the dirty bit. */
   _openEditor(edit) {
+    this._advOpen = undefined;
+    this._ownOnly = false;
     this._edit = { ...edit, clean: JSON.stringify(edit.draft) };
   }
 
@@ -2362,22 +2498,6 @@ class CoverExtenderPanel extends HTMLElement {
     return { ...base, ...this._templateDefaults(this._templateOf(draft)) };
   }
 
-  /* ---------- form controls ---------- */
-
-  _boolRow(label, value, onChange, hint) {
-    const row = el("label", "field switch");
-    const box = el("span", "flabel");
-    box.append(document.createTextNode(label));
-    if (hint) box.append(el("small", "fhint", hint));
-    row.append(box);
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.checked = !!value;
-    cb.addEventListener("change", () => onChange(cb.checked));
-    row.append(cb);
-    return row;
-  }
-
   /* ---------- editor building blocks ---------- */
 
   /** A card that answers one question: icon, title, one line under it. */
@@ -2525,35 +2645,23 @@ class CoverExtenderPanel extends HTMLElement {
 
   /**
    * One behavior number: a typed box and its unit, one hint line, a short
-   * slider. The value shown is always the EFFECTIVE one; the row turns amber
-   * when the cover departs from its template, says what the template holds,
-   * and the arrow beside it drops the override instead of hunting for the
-   * template's number.
+   * slider. The value shown is always the EFFECTIVE one. Under a template the
+   * row says where that value comes from: inherited, it sits in a dashed grey
+   * box with a link; overridden, it turns amber, recalls the template's value
+   * (also marked on the slider) and offers the way back.
+   * `tplName` is the template's name, or null when there is none to inherit.
    */
-  _behaviorRow(name, spec, draft, baseline, hasTemplate, onValue) {
+  _behaviorRow(name, spec, draft, baseline, tplName, onValue) {
     const has = (k) => Object.prototype.hasOwnProperty.call(draft, k);
-    const fmt = (v) => `${v}${spec.unit ? ` ${spec.unit}` : ""}`;
+    const num = new Intl.NumberFormat(LANG, { maximumFractionDigits: 2 });
+    const fmt = (v) => `${num.format(v)}${spec.unit ? ` ${spec.unit}` : ""}`;
     const round = (raw) => (spec.step && spec.step < 1 ? Math.round(raw * 10) / 10 : Math.round(raw));
     const clamp = (n) => Math.min(spec.max, Math.max(spec.min, n));
     const row = el("div", "numf");
     const t = el("div", "t");
     t.append(el("span", "", T.fields[name] || name));
-
-    // Built once and merely hidden, never re-created: rebuilding the row on the
-    // first slider move would tear the input out from under the pointer and
-    // abort the drag. Without a template there is nothing to revert TO, so the
-    // affordance stays out of the way entirely.
-    let reset = null;
-    if (hasTemplate) {
-      reset = el("button", "revert");
-      reset.type = "button";
-      reset.title = T.revertTitle;
-      reset.setAttribute("aria-label", T.revertTitle);
-      reset.append(icon("mdi:backup-restore"));
-      t.append(el("span", "from", T.fromTemplate(fmt(baseline[name]))), reset);
-    }
-    row.append(t);
-    if (T.fieldHints?.[name]) row.append(el("div", "h", T.fieldHints[name]));
+    const hint = el("div", "h", T.fieldHints?.[name] || "");
+    row.append(t, hint);
 
     const box = document.createElement("input");
     box.type = "number";
@@ -2562,9 +2670,12 @@ class CoverExtenderPanel extends HTMLElement {
     box.step = String(spec.step || 1);
     box.setAttribute("aria-label", T.fields[name] || name);
     const val = el("div", "val");
+    const lnk = icon("mdi:link-variant", "lnk");
+    if (tplName) val.append(lnk);
     val.append(box, el("span", "u", spec.unit || ""));
     row.append(val);
 
+    const rwrap = el("div", "rwrap");
     const range = document.createElement("input");
     range.type = "range";
     range.min = String(spec.min);
@@ -2572,12 +2683,34 @@ class CoverExtenderPanel extends HTMLElement {
     range.step = String(spec.step || 1);
     range.tabIndex = -1;  // the box is the keyboard's way in; one stop per field
     range.setAttribute("aria-hidden", "true");
-    row.append(range);
+    rwrap.append(range);
+    row.append(rwrap);
+
+    // Built once and merely hidden, never re-created: rebuilding the row on the
+    // first slider move would tear the input out from under the pointer and
+    // abort the drag. Without a template there is nothing to revert TO, so the
+    // affordance stays out of the way entirely.
+    let reset = null;
+    if (tplName) {
+      reset = el("button", "revert backtpl");
+      reset.type = "button";
+      reset.title = T.revertTitle;
+      reset.append(icon("mdi:link-variant"), document.createTextNode(T.backToTpl));
+      t.append(reset);
+      hint.append(el("span", "from", ` ${T.fromTemplate(fmt(baseline[name]))}`));
+      const ghost = el("span", "ghost");
+      ghost.style.left = `${((baseline[name] - spec.min) / ((spec.max - spec.min) || 1)) * 100}%`;
+      rwrap.append(ghost);
+    }
 
     const show = (v) => { box.value = String(v); range.value = String(v); };
     const mark = (on) => {
-      row.classList.toggle("ovr", on && hasTemplate);
-      if (reset) reset.hidden = !(on && hasTemplate);
+      if (!tplName) return;
+      row.classList.toggle("ovr", on);
+      row.classList.toggle("inh", !on);
+      reset.hidden = !on;
+      lnk.setAttribute("icon", on ? "mdi:pencil" : "mdi:link-variant");
+      box.title = on ? "" : T.inheritedTitle(tplName);
     };
     const set = (n, from) => {
       draft[name] = n;
@@ -2606,23 +2739,24 @@ class CoverExtenderPanel extends HTMLElement {
   }
 
   /** Minimum and maximum sun elevation: one range, two thumbs, two boxes. */
-  _elevationRow(lo, hi, specs, draft, baseline, hasTemplate) {
+  _elevationRow(lo, hi, specs, draft, baseline, tplName, onValue) {
     const has = (k) => Object.prototype.hasOwnProperty.call(draft, k);
     const cur = (k) => (has(k) ? draft[k] : baseline[k]);
     const spec = specs[lo];
     const row = el("div", "numf");
     const t = el("div", "t");
     t.append(el("span", "", T.elevationRange));
+    const hint = el("div", "h", T.elevationHint);
+    row.append(t, hint);
     let reset = null;
-    if (hasTemplate) {
-      reset = el("button", "revert");
+    if (tplName) {
+      reset = el("button", "revert backtpl");
       reset.type = "button";
       reset.title = T.revertTitle;
-      reset.setAttribute("aria-label", T.revertTitle);
-      reset.append(icon("mdi:backup-restore"));
-      t.append(el("span", "from", T.fromTemplate(`${baseline[lo]} ${T.rangeTo} ${baseline[hi]} ${spec.unit}`)), reset);
+      reset.append(icon("mdi:link-variant"), document.createTextNode(T.backToTpl));
+      t.append(reset);
+      hint.append(el("span", "from", ` ${T.fromTemplate(`${baseline[lo]} ${T.rangeTo} ${baseline[hi]} ${spec.unit}`)}`));
     }
-    row.append(t, el("div", "h", T.elevationHint));
 
     const mkBox = (k) => {
       const b = document.createElement("input");
@@ -2635,6 +2769,8 @@ class CoverExtenderPanel extends HTMLElement {
     };
     const boxes = { [lo]: mkBox(lo), [hi]: mkBox(hi) };
     const val = el("div", "val");
+    const lnk = icon("mdi:link-variant", "lnk");
+    if (tplName) val.append(lnk);
     val.append(boxes[lo], el("span", "u", T.rangeTo), boxes[hi], el("span", "u", spec.unit || ""));
     row.append(val);
 
@@ -2664,15 +2800,20 @@ class CoverExtenderPanel extends HTMLElement {
       fill.style.width = `${((cur(hi) - cur(lo)) / span) * 100}%`;
     };
     const mark = () => {
+      if (!tplName) return;
       const on = has(lo) || has(hi);
-      row.classList.toggle("ovr", on && hasTemplate);
-      if (reset) reset.hidden = !(on && hasTemplate);
+      row.classList.toggle("ovr", on);
+      row.classList.toggle("inh", !on);
+      reset.hidden = !on;
+      lnk.setAttribute("icon", on ? "mdi:pencil" : "mdi:link-variant");
+      for (const k of [lo, hi]) boxes[k].title = on ? "" : T.inheritedTitle(tplName);
     };
     // The two thumbs never cross: each one stops at the other.
     const set = (k, n) => {
       draft[k] = k === lo ? Math.min(n, cur(hi)) : Math.max(n, cur(lo));
       paint();
       mark();
+      onValue?.();
     };
     for (const k of [lo, hi]) {
       ranges[k].addEventListener("input", () => set(k, Math.round(Number(ranges[k].value))));
@@ -2682,7 +2823,7 @@ class CoverExtenderPanel extends HTMLElement {
       });
       boxes[k].addEventListener("change", paint);
     }
-    reset?.addEventListener("click", () => { delete draft[lo]; delete draft[hi]; paint(); mark(); });
+    reset?.addEventListener("click", () => { delete draft[lo]; delete draft[hi]; paint(); mark(); onValue?.(); });
     paint();
     mark();
     return row;
@@ -2806,9 +2947,11 @@ class CoverExtenderPanel extends HTMLElement {
   /**
    * The behavior sections as cards, two columns: the window and its shading on
    * the left, the sun and solar gain on the right. A section's activation flag
-   * becomes the switch in its header, and dims the numbers it governs.
+   * becomes the switch in its header, and dims the numbers it governs. Under a
+   * template each card counts what it inherits and what the cover overrides,
+   * and `onCount(own)` hears the cover's total after every change.
    */
-  _behaviorGrid(sections, draft, baseline, hasTemplate) {
+  _behaviorGrid(sections, draft, baseline, tplName, onCount) {
     const specs = this._cfg.behavior?.fields || {};
     const has = (k) => Object.prototype.hasOwnProperty.call(draft, k);
     const cols = el("div", "ed-cols");
@@ -2816,14 +2959,31 @@ class CoverExtenderPanel extends HTMLElement {
     const right = el("div", "ed-stack");
     cols.append(left, right);
     const side = { geometry: left, shading: left, detection: right, solar_gain: right };
+    const cards = [];
+
+    // Counted off the rows themselves, so the numbers can never disagree with
+    // what the rows show.
+    const recount = () => {
+      let total = 0;
+      for (const { card, cnt } of cards) {
+        const own = card.querySelectorAll(".numf.ovr").length;
+        const inh = card.querySelectorAll(".numf.inh").length;
+        total += own;
+        card.classList.toggle("no-own", !own);
+        if (cnt) {
+          cnt.replaceChildren(document.createTextNode(`${T.sectInherited(inh)} · `), el("b", "", T.sectOwn(own)));
+        }
+      }
+      onCount?.(total);
+    };
 
     for (const { key, fields } of sections) {
       const card = this._edCard(SECTION_ICONS[key] || "mdi:tune",
         T.sectionTitles[key] || T.sections[key] || key, T.sectionSubs[key]);
       card.classList.add("sect");
       const h3 = card.querySelector("h3");
-      const n = hasTemplate ? fields.filter((f) => specs[f]?.type !== "boolean" && has(f)).length : 0;
-      if (n) h3.append(el("span", "mini ovr", T.overrides(n)));
+      const cnt = tplName ? el("span", "cnt") : null;
+      if (cnt) h3.append(cnt);
 
       // Activation flags are cover-specific: no template value to fall back to.
       const flag = fields.find((f) => specs[f]?.type === "boolean");
@@ -2832,11 +2992,13 @@ class CoverExtenderPanel extends HTMLElement {
         card.classList.toggle("dim", !on);
         const sw = this._switch(on, (v) => { draft[flag] = v; card.classList.toggle("dim", !v); }, T.fields[flag]);
         sw.classList.add("end");
+        if (cnt) sw.style.marginLeft = "var(--fp-s2)";
         h3.append(sw);
       }
 
       const fig = key === "geometry" ? this._figGeometry(draft, baseline)
         : key === "detection" ? this._figDetection(draft, baseline) : null;
+      const changed = () => { fig?.redraw(); recount(); };
       const beside = key === "geometry" ? null : ["angle_left", "angle_right"];
       const nums = fields.filter((f) => specs[f] && specs[f].type !== "boolean");
       const merge = nums.includes("shade_min_elevation") && nums.includes("shade_max_elevation");
@@ -2846,9 +3008,8 @@ class CoverExtenderPanel extends HTMLElement {
       for (const f of nums) {
         if (merge && f === "shade_max_elevation") continue;
         const row = merge && f === "shade_min_elevation"
-          ? this._elevationRow("shade_min_elevation", "shade_max_elevation", specs, draft, baseline, hasTemplate)
-          : this._behaviorRow(f, specs[f], draft, baseline, hasTemplate,
-            fig ? () => fig.redraw() : null);
+          ? this._elevationRow("shade_min_elevation", "shade_max_elevation", specs, draft, baseline, tplName, changed)
+          : this._behaviorRow(f, specs[f], draft, baseline, tplName, changed);
         (fig && beside && !beside.includes(f) ? after : next).append(row);
       }
       if (fig) {
@@ -2861,8 +3022,10 @@ class CoverExtenderPanel extends HTMLElement {
         }
       }
       card.append(body);
+      cards.push({ card, cnt });
       (side[key] || (left.childElementCount <= right.childElementCount ? left : right)).append(card);
     }
+    recount();
     return cols;
   }
 
@@ -3431,13 +3594,43 @@ class CoverExtenderPanel extends HTMLElement {
       const from = el("span", "chip");
       from.append(icon("mdi:ruler-square"), document.createTextNode(tpl ? T.tplChip(tpl.name) : T.noTplChip));
       head.append(from);
-      const n = this._overrideCount(draft);
-      if (n) {
-        const o = el("span", "chip ovr");
-        o.append(icon("mdi:pencil-outline"), document.createTextNode(T.overrides(n)));
-        head.append(o);
-      }
+      let grid = null;
+      let onCount = null;
       if (tpl) {
+        // What the two looks mean, how many values are the cover's own, and a
+        // way to see only those.
+        const legend = el("span", "inh-legend");
+        const inh = el("span");
+        inh.append(el("i", "sw-inh"), document.createTextNode(T.inheritedLegend));
+        const own = el("span");
+        const ownText = document.createTextNode("");
+        own.append(el("i", "sw-own"), ownText);
+        legend.append(inh, own);
+        const empty = this._note(T.noOwn);
+        empty.hidden = true;
+        const filter = el("div", "seg own-filter");
+        const all = el("button", "", T.filterAll);
+        const only = el("button");
+        for (const b of [all, only]) b.type = "button";
+        const setFilter = (on) => {
+          this._ownOnly = on;
+          all.classList.toggle("on", !on);
+          only.classList.toggle("on", on);
+          all.setAttribute("aria-pressed", String(!on));
+          only.setAttribute("aria-pressed", String(on));
+          grid?.classList.toggle("own-only", on);
+          empty.hidden = !(on && count === 0);
+        };
+        all.addEventListener("click", () => setFilter(false));
+        only.addEventListener("click", () => setFilter(true));
+        filter.append(all, only);
+        let count = 0;
+        onCount = (n) => {
+          count = n;
+          ownText.textContent = T.ownLegend(n);
+          only.textContent = T.filterOwn(n);
+          empty.hidden = !(this._ownOnly && n === 0);
+        };
         const go = el("button", "linkbtn");
         go.type = "button";
         go.append(icon("mdi:open-in-new"), document.createTextNode(T.openTemplate));
@@ -3448,9 +3641,13 @@ class CoverExtenderPanel extends HTMLElement {
           this._openEditor({ section: "template", idx: i, draft: { ...this._cfg.templates[i] } });
           this._render();
         });
-        head.append(el("span", "spacer"), go);
+        head.append(legend, el("span", "spacer"), go, filter);
+        grid = this._behaviorGrid(schema.sections, draft, baseline, tpl.name, onCount);
+        setFilter(!!this._ownOnly);
+        wrap.append(head, empty, grid);
+      } else {
+        wrap.append(head, this._behaviorGrid(schema.sections, draft, baseline, null));
       }
-      wrap.append(head, this._behaviorGrid(schema.sections, draft, baseline, !!tpl));
     }
 
     const actions = el("div", "actions card");
@@ -3524,33 +3721,74 @@ class CoverExtenderPanel extends HTMLElement {
     const s = draft.s[kind];
     this._schedPv = this._schedPv || {};
 
-    wrap.append(el("p", "note", W.intro));
+    const lead = el("p", "ed-note sched-lead");
+    lead.append(icon("mdi:information-outline"), el("span", "", W.introShort), this._info(W.introInfo));
+    wrap.append(lead);
 
     /* ---- curve editor ---- */
     const card = el("div", "card sched blk");
-    const head = el("div", "toolbar");
-    const seg = el("div", "seg sched-seg");
+    const head = el("div", "sched-head");
+    // Each schedule says its time today and whether it is on, before it is opened.
+    const kseg = el("div", "kseg");
+    kseg.setAttribute("role", "tablist");
+    const kTimes = {};
     for (const k of SCHED_KINDS) {
-      const b = el("button", k === kind ? "on" : "", W.kinds[k]);
+      const b = el("button");
       b.type = "button";
+      b.setAttribute("role", "tab");
+      b.setAttribute("aria-selected", String(k === kind));
+      const txt = el("span", "kt");
+      kTimes[k] = el("small");
+      txt.append(el("span", "", W.kinds[k]), kTimes[k]);
+      b.append(icon(k === "morning" ? "mdi:weather-sunset-up" : "mdi:weather-sunset-down"), txt,
+        el("span", `kdot${draft.enabled[k] ? " on" : ""}`));
       b.addEventListener("click", () => { this._schedKind = k; this._render(); });
-      seg.append(b);
+      kseg.append(b);
     }
-    const sub = el("span", "secsub", `${W.refWord} : ${W.refLong[kind]}`);
-    head.append(seg, el("span", "spacer"), sub);
+    const ref = el("span", "sched-ref");
+    const refText = el("span");
+    ref.append(icon("mdi:weather-sunset"), refText);
+    const en = el("div", "sched-en");
+    en.append(el("span", "", W.enabledLabel),
+      this._switch(draft.enabled[kind], (v) => { draft.enabled[kind] = v; this._render(); }, W.enable[kind]),
+      this._info(W.enableHint[kind]));
+    head.append(kseg, ref, en);
     card.append(head);
-    card.append(this._boolRow(W.enable[kind], draft.enabled[kind], (v) => {
-      draft.enabled[kind] = v; this._render();
-    }, W.enableHint[kind]));
 
     const body = el("div", "sched-body");
     body.hidden = !draft.enabled[kind];
     card.append(body);
-    const hint = el("p", "hint");
-    body.append(hint);
 
-    const fields = el("div", "sched-fields");
-    const mkField = (color, label, type, toggle) => {
+    /* the six settings, in three groups: the curve, its bounds, the crossings */
+    const groups = el("div", "sched-groups");
+    const group = (iconName, title) => {
+      const g = el("div", "sgrp");
+      const h = el("h4");
+      h.append(icon(iconName), el("span", "", title));
+      g.append(h);
+      groups.append(g);
+      return g;
+    };
+    const gCurve = group("mdi:chart-bell-curve-cumulative", W.grpCurve);
+    const curveInfo = this._info(W.fixedHint);  // completed by the DST gap once the curve is known
+    gCurve.querySelector("h4").append(curveInfo);
+    const curvePair = el("div", "spair");
+    gCurve.append(curvePair);
+    const gBounds = group("mdi:arrow-collapse-vertical", W.grpBounds);
+    const boundsPair = el("div", "spair");
+    gBounds.append(boundsPair);
+    const gFine = group("mdi:tune-vertical", W.grpFine);
+    // The crossings are rarely touched: folded, unless one of them is on.
+    const fine = document.createElement("details");
+    fine.className = "sfine";
+    fine.open = this._schedFineOpen ?? (s.x1.on || s.x2.on);
+    fine.addEventListener("toggle", () => { this._schedFineOpen = fine.open; });
+    const fineSum = document.createElement("summary");
+    const finePair = el("div", "spair one");
+    fine.append(fineSum, finePair);
+    gFine.append(fine);
+
+    const mkField = (parent, color, label, type, toggle) => {
       const box = el("div", "sf");
       box.style.setProperty("--c", color);
       const top = el("div", "sf-top");
@@ -3560,6 +3798,7 @@ class CoverExtenderPanel extends HTMLElement {
       if (toggle) {
         cb = document.createElement("input");
         cb.type = "checkbox";
+        cb.setAttribute("role", "switch");
         cb.setAttribute("aria-label", label);
         top.append(cb);
       }
@@ -3567,18 +3806,21 @@ class CoverExtenderPanel extends HTMLElement {
       input.type = type;
       const info = el("span", "sf-info");
       box.append(top, input, info);
-      fields.append(box);
+      parent.append(box);
       return { box, input, cb, info, lab };
     };
     const F = {
-      hi: mkField("var(--ce-h)", W.hi, "time"),
-      x1: mkField("var(--ce-x)", W.x1, "date", true),
-      fl: mkField("var(--ce-clamp)", W.fl, "time", true),
-      lo: mkField("var(--ce-h)", W.lo, "time"),
-      x2: mkField("var(--ce-x)", W.x2, "date", true),
-      ce: mkField("var(--ce-clamp)", W.ce, "time", true),
+      hi: mkField(curvePair, "var(--ce-h)", W.hi, "time"),
+      lo: mkField(curvePair, "var(--ce-h)", W.lo, "time"),
+      fl: mkField(boundsPair, "var(--ce-clamp)", W.fl, "time", true),
+      ce: mkField(boundsPair, "var(--ce-clamp)", W.ce, "time", true),
+      x1: mkField(finePair, "var(--ce-x)", W.x1, "date", true),
+      x2: mkField(finePair, "var(--ce-x)", W.x2, "date", true),
     };
-    body.append(fields);
+    body.append(groups);
+    const howTo = el("p", "ed-note");
+    howTo.append(icon("mdi:gesture-tap-hold"), el("span", "", W.dragHint));
+    body.append(howTo);
 
     const legend = el("div", "legend sched-legend");
     body.append(legend);
@@ -3596,56 +3838,8 @@ class CoverExtenderPanel extends HTMLElement {
     body.append(stats);
     wrap.append(card);
 
-    /* ---- per-cover mode ---- */
-    const tcard = el("div", "card blk");
-    tcard.append(el("h3", "sec", W.perCover), el("p", "secsub", W.perCoverSub));
-    const scroll = el("div", "t-scroll");
-    const table = el("table", "assign");
-    const hr = el("tr");
-    const timeCells = {};
-    hr.append(el("th", "", W.cover));
-    for (const k of SCHED_KINDS) { timeCells[k] = el("th"); hr.append(timeCells[k]); }
-    const thead = el("thead"); thead.append(hr); table.append(thead);
-    const timed = new Set(this._cfg.modes.filter((m) => m.duration).map((m) => m.name));
-    const tbody = el("tbody");
-    for (const c of this._cfg.covers) {
-      const tr = el("tr");
-      const th = el("td");
-      const rowh = el("div", "rowh");
-      rowh.append(this._coverPic(c));
-      const names = el("span");
-      names.append(el("span", "nm", this._coverName(c)), el("br"), el("span", "fx", c.entity_id));
-      rowh.append(names);
-      th.append(rowh);
-      tr.append(th);
-      const opts = [[null, W.noneOpt], ...Object.keys(c.modes || {}).filter((m) => !timed.has(m)).map((m) => [m, m])];
-      for (const k of SCHED_KINDS) {
-        const td = el("td");
-        const sel = document.createElement("select");
-        sel.className = "fselect";
-        sel.setAttribute("aria-label", `${W.kinds[k]}, ${this._coverName(c)}`);
-        for (const [val, text] of opts) {
-          const o = document.createElement("option");
-          o.value = val ?? "";
-          o.textContent = text;
-          if ((draft.assign[c.entity_id][k] ?? "") === (val ?? "")) o.selected = true;
-          sel.append(o);
-        }
-        sel.disabled = !draft.enabled[k];
-        sel.addEventListener("change", () => { draft.assign[c.entity_id][k] = sel.value || null; });
-        td.append(sel);
-        tr.append(td);
-      }
-      tbody.append(tr);
-    }
-    table.append(tbody);
-    scroll.append(table);
-    tcard.append(scroll);
-    wrap.append(tcard);
-
-    /* ---- actions ---- */
-    const actions = el("div", "actions card");
-    actions.append(el("span", "spacer"));
+    /* ---- save bar: shows with the first change, leaves with the last undo ---- */
+    const bar = el("div", "actions card savebar");
     const cancel = el("button", "btn ghost", T.cancel);
     cancel.addEventListener("click", () => { if (this._leaveEditor()) this._render(); });
     const save = el("button", "btn primary", T.save);
@@ -3654,8 +3848,139 @@ class CoverExtenderPanel extends HTMLElement {
       for (const k of SCHED_KINDS) if (draft.enabled[k]) house[k] = schedToCfg(draft.s[k]);
       this._saveSection("schedule", { house, covers: draft.assign });
     });
-    actions.append(cancel, save);
-    wrap.append(actions);
+    bar.append(el("span", "dot"), el("span", "why", T.unsaved), el("span", "spacer"), cancel, save);
+    const touch = () => { bar.hidden = JSON.stringify(draft) === this._schedClean; };
+
+    /* ---- per-cover mode ---- */
+    const tcard = el("div", "card blk");
+    const thead3 = el("div", "toolbar");
+    thead3.style.margin = "0 0 var(--fp-s2)";
+    const title = el("h3", "sec", W.perCover);
+    title.style.margin = "0";
+    const diffLegend = el("span", "sched-diff-legend");
+    diffLegend.append(el("i", "sw-diff"), document.createTextNode(W.differs));
+    thead3.append(title, el("span", "spacer"), diffLegend, this._info(W.perCoverSub));
+    tcard.append(thead3);
+    const scroll = el("div", "t-scroll");
+    const table = el("table", "assign");
+    const hr = el("tr");
+    const timeCells = {};
+    hr.append(el("th", "", W.cover));
+    for (const k of SCHED_KINDS) { timeCells[k] = el("th"); hr.append(timeCells[k]); }
+    const thead = el("thead"); thead.append(hr); table.append(thead);
+    const timed = new Set(this._cfg.modes.filter((m) => m.duration).map((m) => m.name));
+    const offered = (c) => Object.keys(c.modes || {}).filter((m) => !timed.has(m));
+    const colorOf = (n) => this._cfg.modes.find((m) => m.name === n)?.color;
+    const tbody = el("tbody");
+    const sels = { morning: [], evening: [] };
+    const allSel = {};
+
+    const mkSelect = (k, opts, value, label) => {
+      const sel = document.createElement("select");
+      sel.className = "fselect msel";
+      sel.setAttribute("aria-label", label);
+      for (const [val, text] of opts) {
+        const o = document.createElement("option");
+        o.value = val ?? "";
+        o.textContent = text;
+        if ((value ?? "") === (val ?? "")) o.selected = true;
+        sel.append(o);
+      }
+      sel.disabled = !draft.enabled[k];
+      return sel;
+    };
+    // The mode's own colour on the edge of the list, as on the matrix.
+    const paint = (sel) => {
+      const c = sel.value && sel.value !== "*" ? colorOf(sel.value) : null;
+      sel.style.borderLeftColor = c || "";
+      sel.classList.toggle("none", !sel.value);
+    };
+    // What most covers do is the norm; a cover that does something else is marked.
+    const markDiff = (k) => {
+      const count = new Map();
+      for (const c of this._cfg.covers) {
+        const v = draft.assign[c.entity_id][k] ?? null;
+        count.set(v, (count.get(v) || 0) + 1);
+      }
+      const norm = [...count].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+      for (const { sel, c } of sels[k]) sel.classList.toggle("diff", (draft.assign[c.entity_id][k] ?? null) !== norm);
+      const values = new Set(this._cfg.covers.map((c) => draft.assign[c.entity_id][k] ?? null));
+      const one = values.size === 1 ? [...values][0] : "*";
+      allSel[k].value = one ?? "";
+      paint(allSel[k]);
+    };
+
+    /* the "all covers" row: one choice applied to every cover that offers it */
+    const allRow = el("tr", "all");
+    const allName = el("td");
+    const allHead = el("div", "rowh");
+    const pic = el("span", "pic");
+    pic.append(icon("mdi:home-outline"));
+    allHead.append(pic, el("span", "nm", W.allCovers));
+    allName.append(allHead);
+    allRow.append(allName);
+    const union = this._cfg.modes.map((m) => m.name)
+      .filter((n) => this._cfg.covers.some((c) => offered(c).includes(n)));
+    for (const k of SCHED_KINDS) {
+      const td = el("td");
+      const sel = mkSelect(k, [["*", W.mixed], [null, W.noneOpt], ...union.map((n) => [n, n])], null,
+        `${W.kinds[k]}, ${W.allCovers}`);
+      sel.querySelector('option[value="*"]').disabled = true;
+      sel.addEventListener("change", () => {
+        const v = sel.value || null;
+        for (const { sel: one, c } of sels[k]) {
+          if (v !== null && !offered(c).includes(v)) continue;
+          draft.assign[c.entity_id][k] = v;
+          one.value = v ?? "";
+          paint(one);
+        }
+        markDiff(k);
+        touch();
+      });
+      allSel[k] = sel;
+      td.append(sel);
+      allRow.append(td);
+    }
+    tbody.append(allRow);
+
+    /* one row per cover, grouped by facade like the matrix */
+    for (const [facade, covers] of this._grouped()) {
+      if (!covers.length) continue;
+      const fr = el("tr", "fac");
+      const ftd = el("td", "", facade ? `${T.facade} ${facade}` : T.noFacade);
+      ftd.colSpan = 1 + SCHED_KINDS.length;
+      fr.append(ftd);
+      tbody.append(fr);
+      for (const c of covers) {
+        const tr = el("tr");
+        const th = el("td");
+        const rowh = el("div", "rowh");
+        rowh.append(this._coverPic(c), el("span", "nm", this._coverName(c)));
+        th.append(rowh);
+        tr.append(th);
+        const opts = [[null, W.noneOpt], ...offered(c).map((m) => [m, m])];
+        for (const k of SCHED_KINDS) {
+          const td = el("td");
+          const sel = mkSelect(k, opts, draft.assign[c.entity_id][k], `${W.kinds[k]}, ${this._coverName(c)}`);
+          sel.addEventListener("change", () => {
+            draft.assign[c.entity_id][k] = sel.value || null;
+            paint(sel);
+            markDiff(k);
+            touch();
+          });
+          paint(sel);
+          sels[k].push({ sel, c });
+          td.append(sel);
+          tr.append(td);
+        }
+        tbody.append(tr);
+      }
+    }
+    for (const k of SCHED_KINDS) markDiff(k);
+    table.append(tbody);
+    scroll.append(table);
+    tcard.append(scroll);
+    wrap.append(tcard, bar);
 
     /* ---- drawing ---- */
     // Drawn at the size it is shown: the width follows the card, the height
@@ -3803,7 +4128,12 @@ class CoverExtenderPanel extends HTMLElement {
 
       /* fields */
       const G = pv?.dst_gap || 0;
-      hint.textContent = W.fixedHint + (G ? W.dstHint(G / 60) : "") + W.dblHint;
+      curveInfo.title = W.fixedHint + (G ? W.dstHint(G / 60) : "");
+      curveInfo.setAttribute("aria-label", curveInfo.title);
+      fineSum.replaceChildren(icon("mdi:chevron-down", "chev-d"), el("span", "", W.crossSum(
+        s.x1.on && !fixed ? schedDayLabel(s.x1.j, year, "short") : W.no,
+        s.x2.on && !fixed ? schedDayLabel(s.x2.j, year, "short") : W.no)));
+      refText.textContent = W.follows(W.refLong[kind], sun && pv ? hmFmt(sun[pv.today - 1]) : null);
       F.hi.lab.textContent = fixed ? W.hiFixed : W.hi;
       F.hi.input.value = hmFmt(s.hi); F.lo.input.value = hmFmt(s.lo);
       F.x1.input.value = schedDayToIso(s.x1.j, year); F.x2.input.value = schedDayToIso(s.x2.j, year);
@@ -3838,11 +4168,13 @@ class CoverExtenderPanel extends HTMLElement {
         const p2 = this._schedPv[k];
         timeCells[k].textContent = draft.enabled[k] && p2?.points
           ? `${W.kinds[k]} · ${hmFmt(p2.points[p2.today - 1])}` : W.kinds[k];
+        kTimes[k].textContent = !draft.enabled[k] ? W.offShort
+          : p2?.points ? W.todayAt(hmFmt(p2.points[p2.today - 1])) : "";
       }
     };
 
     const refresh = () => this._schedRequest(kind, redraw);
-    const changed = () => { redraw(); refresh(); };
+    const changed = () => { redraw(); refresh(); touch(); };
 
     /* field input */
     const onTime = (key) => F[key].input.addEventListener("input", (e) => {
@@ -3969,6 +4301,7 @@ class CoverExtenderPanel extends HTMLElement {
     chart.addEventListener("pointerdown", (e) => { if (editor && !e.composedPath().includes(editor)) closeEditor(); });
 
     redraw();
+    touch();
     const resized = new ResizeObserver(() => {
       if (!chart.isConnected) { resized.disconnect(); return; }
       if (Math.round(chart.clientWidth) !== Wd && chart.clientWidth >= 560) redraw();
@@ -4285,7 +4618,7 @@ class CoverExtenderPanel extends HTMLElement {
       head.append(el("h2", "", T.calcTitle));
       // Same cards as a cover, minus the amber and the switches: passing no
       // template means _behaviorRow finds nothing to revert to.
-      wrap.append(head, this._behaviorGrid(schema.template_sections || schema.sections, draft, {}, false));
+      wrap.append(head, this._behaviorGrid(schema.template_sections || schema.sections, draft, {}, null));
     }
 
     wrap.append(this._itemActions("template", "templates", idx, draft, creating, used));
