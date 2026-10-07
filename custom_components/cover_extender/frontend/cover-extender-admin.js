@@ -2688,31 +2688,85 @@ class CoverExtenderPanel extends HTMLElement {
     return row;
   }
 
-  /** Side view of the window: what the three geometry numbers measure. */
-  _figGeometry() {
+  /**
+   * Side view of the window, drawn to scale from the three geometry numbers:
+   * the opening between the minimum and maximum heights, and the cover lowered
+   * just enough for a sun 40° high to light the floor up to the distance. The
+   * scale shrinks to keep a tall window or a long distance inside the sketch.
+   */
+  _figGeometry(draft, baseline) {
     const F = T.fig;
     const box = el("div", "fig");
-    box.innerHTML = `<svg viewBox="0 0 170 152" aria-hidden="true">
-      <line x1="0" y1="132" x2="170" y2="132" stroke="currentColor" stroke-opacity=".45" stroke-width="2"/>
-      <rect x="52" y="10" width="8" height="122" fill="currentColor" fill-opacity=".25"/>
-      <rect x="52" y="20" width="8" height="112" fill="var(--card-background-color)" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="2 2"/>
-      <rect x="52" y="20" width="8" height="52" fill="var(--primary-color)" opacity=".85"/>
-      <circle cx="14" cy="22" r="7" fill="var(--ce-b-shade)"/>
-      <line x1="14" y1="22" x2="56" y2="72" stroke="var(--ce-b-shade)" stroke-width="1.5"/>
-      <line x1="56" y1="72" x2="104" y2="132" stroke="var(--ce-b-shade)" stroke-width="1.5" stroke-dasharray="4 2"/>
-      <line x1="60" y1="141" x2="104" y2="141" stroke="var(--fp-warn)" stroke-width="1.5"/>
-      <text x="82" y="151" fill="var(--fp-warn)" text-anchor="middle"></text>
-      <line x1="64" y1="20" x2="74" y2="20" stroke="currentColor" stroke-opacity=".6"/>
-      <text x="77" y="23" fill="currentColor"></text>
-      <line x1="64" y1="131" x2="74" y2="126" stroke="currentColor" stroke-opacity=".6"/>
-      <text x="77" y="125" fill="currentColor"></text>
-      <text x="112" y="70" fill="currentColor" fill-opacity=".6"></text>
-      <text x="4" y="120" fill="currentColor" fill-opacity=".6"></text>
-    </svg>`;
-    // Words go in as text, never as markup.
-    const texts = box.querySelectorAll("text");
-    [F.distance, F.max, F.min, F.room, F.outside].forEach((w, i) => { texts[i].textContent = w; });
     box.style.color = "var(--secondary-text-color)";
+    box.innerHTML = `<svg viewBox="0 0 170 152" aria-hidden="true">
+      <rect class="wall" x="52" y="4" width="8" fill="currentColor" fill-opacity=".25"/>
+      <rect class="glass" x="52" width="8" fill="var(--card-background-color)" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="2 2"/>
+      <rect class="cover" x="52" width="8" fill="var(--primary-color)" opacity=".85"/>
+      <line x1="0" y1="128" x2="170" y2="128" stroke="currentColor" stroke-opacity=".45" stroke-width="2"/>
+      <circle class="sun" r="7" fill="var(--ce-b-shade)"/>
+      <line class="ray-out" stroke="var(--ce-b-shade)" stroke-width="1.5"/>
+      <line class="ray-in" stroke="var(--ce-b-shade)" stroke-width="1.5" stroke-dasharray="4 2"/>
+      <line class="dist" y1="137" y2="137" stroke="var(--fp-warn)" stroke-width="1.5"/>
+      <line class="dist-a" y1="133" y2="141" stroke="var(--fp-warn)" stroke-width="1.5"/>
+      <line class="dist-b" y1="133" y2="141" stroke="var(--fp-warn)" stroke-width="1.5"/>
+      <line class="tick-max" x1="62" x2="70" stroke="currentColor" stroke-opacity=".6"/>
+      <line class="tick-min" x1="62" x2="70" stroke="currentColor" stroke-opacity=".6"/>
+      <text class="t-dist" y="150" fill="var(--fp-warn)" text-anchor="middle"></text>
+      <text class="t-max" x="73" fill="currentColor"></text>
+      <text class="t-min" x="73" fill="currentColor"></text>
+      <text x="166" y="122" fill="currentColor" fill-opacity=".6" text-anchor="end"></text>
+      <text x="4" y="122" fill="currentColor" fill-opacity=".6"></text>
+    </svg>`;
+    const $ = (sel) => box.querySelector(sel);
+    const texts = box.querySelectorAll("text");
+    // Words go in as text, never as markup.
+    texts[3].textContent = F.room;
+    texts[4].textContent = F.outside;
+    const set = (sel, attrs) => { for (const [k, v] of Object.entries(attrs)) $(sel).setAttribute(k, String(Math.round(v * 10) / 10)); };
+    const num = new Intl.NumberFormat(LANG, { maximumFractionDigits: 2 });
+    const cur = (k) => Number(Object.prototype.hasOwnProperty.call(draft, k) ? draft[k] : baseline[k]);
+    const FLOOR = 128, WALL = 52, IN = 60, TAN = Math.tan((40 * Math.PI) / 180);
+
+    box.redraw = () => {
+      const d = Math.max(0, cur("shade_distance"));
+      const hi = Math.max(0, cur("shade_max_height"));
+      const lo = Math.min(Math.max(0, cur("shade_min_height")), hi);
+      // Pixels per metre: as large as fits, the window under the top margin
+      // and the lit floor inside the room.
+      const k = Math.min(42, (FLOOR - 18) / Math.max(hi, 0.3), 100 / Math.max(d, 0.05));
+      const yTop = FLOOR - hi * k;
+      const ySill = FLOOR - lo * k;
+      // The cover's bottom edge: where a 40° ray grazing it lands at the distance,
+      // held between the closed and the open positions like the real computation.
+      const hb = Math.min(hi, Math.max(lo, d * TAN));
+      const yB = FLOOR - hb * k;
+      const hit = IN + (hb / TAN) * k;
+      set(".wall", { height: FLOOR - 4 });
+      set(".glass", { y: yTop, height: Math.max(ySill - yTop, 0) });
+      set(".cover", { y: yTop, height: Math.max(yB - yTop, 0) });
+      // Outside, the ray climbs back towards the sun at the same 40°.
+      const sx = Math.max(10, WALL - Math.min(44, (yB - 10) / TAN));
+      const sy = yB - (WALL - sx) * TAN;
+      set(".sun", { cx: sx, cy: sy });
+      set(".ray-out", { x1: sx, y1: sy, x2: WALL, y2: yB });
+      set(".ray-in", { x1: IN, y1: yB, x2: hit, y2: FLOOR });
+      const end = IN + d * k;
+      set(".dist", { x1: IN, x2: end });
+      set(".dist-a", { x1: IN, x2: IN });
+      set(".dist-b", { x1: end, x2: end });
+      set(".t-dist", { x: Math.min(140, Math.max(40, (IN + end) / 2)) });
+      texts[0].textContent = `${F.distance} ${num.format(d)} m`;
+      // Two labels on the inner face of the wall; kept apart when the window is short.
+      const yMaxT = Math.max(12, yTop + 3);
+      const yMinT = Math.min(FLOOR - 9, Math.max(ySill - 2, yMaxT + 11));
+      set(".tick-max", { y1: yTop, y2: yTop });
+      set(".tick-min", { y1: ySill, y2: ySill });
+      set(".t-max", { y: yMaxT });
+      set(".t-min", { y: yMinT });
+      texts[1].textContent = `${F.max} ${num.format(hi)} m`;
+      texts[2].textContent = `${F.min} ${num.format(lo)} m`;
+    };
+    box.redraw();
     return box;
   }
 
@@ -2781,7 +2835,7 @@ class CoverExtenderPanel extends HTMLElement {
         h3.append(sw);
       }
 
-      const fig = key === "geometry" ? this._figGeometry()
+      const fig = key === "geometry" ? this._figGeometry(draft, baseline)
         : key === "detection" ? this._figDetection(draft, baseline) : null;
       const beside = key === "geometry" ? null : ["angle_left", "angle_right"];
       const nums = fields.filter((f) => specs[f] && specs[f].type !== "boolean");
@@ -2794,7 +2848,7 @@ class CoverExtenderPanel extends HTMLElement {
         const row = merge && f === "shade_min_elevation"
           ? this._elevationRow("shade_min_elevation", "shade_max_elevation", specs, draft, baseline, hasTemplate)
           : this._behaviorRow(f, specs[f], draft, baseline, hasTemplate,
-            key === "detection" && fig ? () => fig.redraw() : null);
+            fig ? () => fig.redraw() : null);
         (fig && beside && !beside.includes(f) ? after : next).append(row);
       }
       if (fig) {
