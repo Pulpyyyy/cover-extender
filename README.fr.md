@@ -373,30 +373,26 @@ L'entité de température, le seuil et l'entité météo sont communs à tous le
 
 ### Le sélecteur global
 
-`select.cx_modes` liste tous les modes non masqués, avec leur icône et leur couleur : il est fait pour les tableaux de bord.
+`select.cx_modes` liste tous les modes non masqués, avec leur icône et leur couleur. **Choisir un mode dessus l'applique à tous les volets**, depuis un tableau de bord ou une automatisation (`select.select_option`), en suivant les deux règles ci-dessous. Il n'y a plus d'automatisation à prévoir pour le relier : si vous aviez celle que proposaient les versions précédentes de ce guide, supprimez-la.
 
-> [!NOTE]
-> Le changer **ne change aucun volet à lui seul**. Reliez-le avec une automatisation :
+### Qui remplace qui
 
-```yaml
-alias: Cover Extender - appliquer le mode global
-triggers:
-  - trigger: state
-    entity_id: select.cx_modes
-    not_from: [unknown, unavailable]
-    not_to: [unknown, unavailable]
-actions:
-  - action: cover_extender.apply_mode
-    target:
-      # Tous les volets gérés par Cover Extender (ils portent tous un attribut facade).
-      entity_id: >
-        {{ states.cover | selectattr('attributes.facade', 'defined')
-           | map(attribute='entity_id') | list }}
-    data:
-      mode: "{{ trigger.to_state.state }}"
-```
+Une demande groupée (le sélecteur global, un [horaire](#horaires) ou l'action `cover_extender.apply_mode`) applique un mode à plusieurs volets d'un coup. Deux réglages de chaque mode la façonnent, sous **Demandes groupées** dans l'éditeur du mode :
 
-Les volets qui ne sont pas liés au mode choisi ne bougent pas.
+- **Ne remplace pas** : les modes qu'il laisse tranquilles. Un volet déjà dans l'un d'eux le garde. Un volet en [mode minuté](#modes-minutés) le garde aussi, et prend le mode demandé à la fin du délai.
+- **Mode de repli**, dans l'éditeur de mode : appliqué à la place, aux volets auxquels le mode demandé n'est pas lié.
+
+Par exemple :
+
+| Appliquer… | laisse tranquilles les volets en… |
+|---|---|
+| *Automatique* | *Invités*, *Absence*, *Sieste*, *TV*, *Climatisation* |
+| *Nuit* | *Absence*, *Invités*, *Climatisation* |
+| *Ombre* | *Invités*, *TV*, *Sieste*, *Manuel*, *Climatisation* |
+
+avec *Absence* qui se replie sur *Automatique* pour les volets auxquels il n'est pas lié. *Nuit* ferme alors la chambre pendant une sieste, mais pas la chambre d'amis ; *Ombre* fonctionne pendant une absence ; et choisir *Absence* sur le sélecteur global met en *Automatique* les volets qui n'ont pas de position *Absence*.
+
+Un choix fait sur le sélecteur d'un volet s'applique toujours, tout comme `apply_mode` avec `force: true` : ces deux réglages ne régissent que les demandes groupées.
 
 ---
 
@@ -408,7 +404,7 @@ Toute la configuration se fait dans le panneau, à `/cover-extender`. Chaque val
 |---|---|
 | **Volets** | Les volets : entité, façade, gabarit, [exclusions de sécurité et inhibitions](#exclusions), géométrie, ombrage et héliotropie. Chaque carte montre ce que fait le volet en ce moment : son mode et sa position, puis ce qui le retient (un [mode minuté](#modes-minutés) et son heure de fin, le verrou et la position mémorisée, une exclusion ou une inhibition active). |
 | **Matrice** | Modes × volets : lier les modes et régler chaque position par volet depuis une seule grille. Une cellule vide lie le mode ; une cellule *auto* d'un mode d'ombrage ou d'héliotropie peut être remplacée par une position fixe pour ce seul volet. |
-| **Modes** | Icône, couleur, verrou, comportement, priorité, [durée](#modes-minutés) et ce qui se passe à sa fin, visibilité. Faites glisser les tuiles pour les réordonner : l'ordre est celui des sélecteurs de mode. |
+| **Modes** | Icône, couleur, verrou, comportement, priorité, repli, [durée](#modes-minutés) et ce qui se passe à sa fin, visibilité. Faites glisser les tuiles pour les réordonner : l'ordre est celui des sélecteurs de mode. Sous **Demandes groupées** : les modes qu'il ne remplace pas, et son mode de repli (voir [qui remplace qui](#qui-remplace-qui)). |
 | **Horaires** | L'[ouverture du matin et la fermeture du soir](#horaires) : la courbe de chacune sur l'année, et le mode du matin et du soir de chaque volet. |
 | **Réglages** | Façades, gabarits, réglages généraux, et la liste des entités que la configuration a créées. |
 
@@ -420,7 +416,7 @@ Toute la configuration se fait dans le panneau, à `/cover-extender`. Chaque val
 
 **Mon volet a changé de mode tout seul.** Un [mode minuté](#modes-minutés) s'est terminé (le volet est revenu à son mode de base, ou au mode de retour fixe du mode), ou un [horaire](#horaires) a appliqué son mode du matin ou du soir. Les événements `cover_extender_timed_mode_ended` et `cover_extender_mode_changed`, et le journal de `select.<volet>_cx_mode`, disent lequel.
 
-**Changer `select.cx_modes` ne fait rien.** C'est normal : c'est un sélecteur d'affichage. Voir [le sélecteur global](#le-sélecteur-global) pour l'automatisation qui le relie.
+**Un volet n'a pas suivi le sélecteur global (ou un `apply_mode` sur plusieurs volets).** Il était dans un mode que le mode demandé laisse tranquille, ou le mode ne lui est pas lié et n'a pas de mode de repli : voir [qui remplace qui](#qui-remplace-qui). `apply_mode` renvoie la raison pour chaque volet dans `reasons` (`spared`, `not_linked`).
 
 **Je ne trouve pas le panneau.** Ouvrez directement `http://<votre-ha>:8123/cover-extender`. Il faut un compte administrateur. Si l'entrée manque dans la barre latérale, elle est peut-être masquée : ouvrez votre **Profil** et modifiez les éléments de la barre latérale.
 

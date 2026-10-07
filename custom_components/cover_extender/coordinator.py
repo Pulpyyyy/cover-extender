@@ -80,6 +80,7 @@ from .helpers import (
     effective_behavior,
     resolve_helper_entity,
     resolve_mode_position,
+    resolve_request,
 )
 from .shade import compute_sun_facing, compute_shade_sync
 from .schedule import (
@@ -614,18 +615,12 @@ class CoverExtenderCoordinator:
         """Every cover applies its *kind* mode, as a plain mode change."""
         self._schedule_last[kind] = day.isoformat()
         self._schedule_store.async_delay_save(lambda: dict(self._schedule_last), _MEMORY_SAVE_DELAY)
-        for entity_id, cfg in self._profiles.items():
+        for entity_id, cfg in list(self._profiles.items()):
             mode = (cfg.get(CONF_SCHEDULE) or {}).get(kind)
-            if not mode or mode not in cfg.get(CONF_MODES, {}):
+            if not mode:
                 continue
-            select_id = resolve_helper_entity(self.hass, entity_id, "select_mode")
-            state = self.hass.states.get(select_id)
-            if state is None or state.state == mode:
-                continue
-            _LOGGER.debug("schedule %s: %s → %s", kind, entity_id, mode)
-            await self.hass.services.async_call(
-                "select", "select_option", {"entity_id": select_id, "option": mode}
-            )
+            reason = await self.async_request_mode(entity_id, mode)
+            _LOGGER.debug("schedule %s: %s → %s%s", kind, entity_id, mode, f" ({reason})" if reason else "")
 
     def schedule_preview(self, kind: str, cfg: dict[str, Any]) -> dict[str, Any]:
         """The curve the panel draws: the year's points, the sun, and what was ignored."""
@@ -1525,33 +1520,63 @@ class CoverExtenderCoordinator:
 
         applied: list[str] = []
         skipped: list[str] = []
+        reasons: dict[str, str] = {}
 
         for entity_id in target_ids:
-            cfg = self._profiles.get(entity_id)
-            if not cfg or mode not in cfg.get(CONF_MODES, {}):
-                _LOGGER.debug("apply_mode: mode '%s' not configured for %s", mode, entity_id)
+            if reason := await self.async_request_mode(entity_id, mode, force=force):
                 skipped.append(entity_id)
-                continue
-            select_id = resolve_helper_entity(self.hass, entity_id, "select_mode")
-            if not self.hass.states.get(select_id):
-                _LOGGER.warning(
-                    "apply_mode: entity '%s' not found — component not ready yet?", select_id
-                )
-                skipped.append(entity_id)
-                continue
-            if force:
-                self._forced.add(entity_id)
-                if self.hass.states.get(select_id).state == mode:
-                    # No state change, so no listener would fire: apply directly.
-                    await self._apply_mode_core(entity_id, mode, mode)
-                    applied.append(entity_id)
-                    continue
-            await self.hass.services.async_call(
-                "select", "select_option", {"entity_id": select_id, "option": mode}
-            )
-            applied.append(entity_id)
+                reasons[entity_id] = reason
+            else:
+                applied.append(entity_id)
 
-        return {"applied": applied, "skipped": skipped}
+        return {"applied": applied, "skipped": skipped, "reasons": reasons}
+
+    async def async_request_mode(self, entity_id: str, mode: str, force: bool = False) -> str | None:
+        """A grouped request (apply_mode, a schedule, the global selector) for one cover.
+
+        Applies *mode*, or its fallback where *mode* is not linked, unless the
+        cover is in a mode that *mode* spares (see helpers.resolve_request).
+        A request spared by a running timed mode becomes that countdown's base
+        mode: the cover goes there when the time is up. Returns why nothing
+        was applied, or None.
+        """
+        cfg = self._profiles.get(entity_id)
+        select_id = resolve_helper_entity(self.hass, entity_id, "select_mode")
+        state = self.hass.states.get(select_id)
+        if not cfg or state is None:
+            return "not_ready" if cfg else "not_configured"
+        target, reason = resolve_request(
+            mode, cfg.get(CONF_MODES, {}), state.state, self._modes_list, force
+        )
+        if reason == "spared":
+            if (timer := self._timers.get(entity_id)) is not None and target != timer["base"]:
+                timer["base"] = target
+                self._timers_changed(entity_id)
+                _LOGGER.debug("request '%s' on %s spared by timed mode '%s': new base mode", target, entity_id, state.state)
+            else:
+                _LOGGER.debug("request '%s' on %s: spared, the cover is in '%s'", mode, entity_id, state.state)
+            return reason
+        if reason:
+            _LOGGER.debug("request '%s' on %s: %s", mode, entity_id, reason)
+            return reason
+        if force:
+            self._forced.add(entity_id)
+        if state.state == target:
+            if force:
+                # No state change, so no listener would fire: apply directly.
+                await self._apply_mode_core(entity_id, target, target)
+            else:
+                self.extend_timed_mode(entity_id, target)
+            return None
+        await self.hass.services.async_call(
+            "select", "select_option", {"entity_id": select_id, "option": target}
+        )
+        return None
+
+    async def async_apply_everywhere(self, mode: str) -> None:
+        """The global selector: *mode* on every cover, as a grouped request."""
+        for entity_id in list(self._profiles):
+            await self.async_request_mode(entity_id, mode)
 
     async def service_get_mode_position(self, call: ServiceCall) -> dict:
         """Return the position configured for a mode on a specific cover."""

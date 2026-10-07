@@ -157,6 +157,32 @@ def _lookup_helper(hass: HomeAssistant, cover_entity_id: str, kind: str) -> str 
     return None
 
 
+def resolve_request(
+    mode: str, linked: Any, current: str | None, modes_list: dict[str, Any], force: bool = False,
+) -> tuple[str | None, str | None]:
+    """What a grouped request for *mode* does on one cover: (mode to apply, reason not to).
+
+    - *mode* not linked to the cover: its fallback mode, if it has one that
+      is; otherwise nothing ("not_linked");
+    - the cover is in a mode that *mode* spares: nothing ("spared"), unless
+      *force*. The target is still returned, for the caller to remember;
+    - otherwise the target, and no reason.
+
+    Grouped requests only (apply_mode, schedules, the global selector): a
+    choice made on the cover's own selector always applies.
+    """
+    props = modes_list.get(mode, {})
+    if mode in linked:
+        target = mode
+    elif (fallback := props.get("fallback")) and fallback in linked:
+        target = fallback
+    else:
+        return None, "not_linked"
+    if not force and current is not None and current in (props.get("spares") or []):
+        return target, "spared"
+    return target, None
+
+
 def carry_restored_states(
     last_states: dict[str, Any],
     renamed: list[tuple[str, str]],

@@ -24,7 +24,7 @@
     },
     "apply_mode": {
       "name": "Apply mode",
-      "description": "Moves the given covers to the position defined for the given mode. Returns the lists of applied and skipped covers as a response variable.",
+      "description": "Applies a mode to the given covers, as a grouped request: covers in a mode it leaves alone keep theirs, covers it is not linked to take its fallback mode. Returns the applied and skipped covers, and why each was skipped, as a response variable.",
       "fields": {
         "mode": {
           "name": "Mode",

@@ -395,30 +395,26 @@ The temperature entity, threshold and weather entity are shared by all covers (*
 
 ### The global mode selector
 
-`select.cx_modes` lists every mode that is not hidden, with its icon and color: it is meant for dashboards.
+`select.cx_modes` lists every mode that is not hidden, with its icon and color. **Choosing a mode on it applies that mode to every cover**, from a dashboard or an automation (`select.select_option`), following the two rules below. No automation is needed to connect it any more: if you had the one earlier versions of this README suggested, delete it.
 
-> [!NOTE]
-> Changing it **does not change any cover by itself**. Connect it with an automation:
+### Who replaces whom
 
-```yaml
-alias: Cover Extender - apply the global mode
-triggers:
-  - trigger: state
-    entity_id: select.cx_modes
-    not_from: [unknown, unavailable]
-    not_to: [unknown, unavailable]
-actions:
-  - action: cover_extender.apply_mode
-    target:
-      # Every cover managed by Cover Extender (they all carry a facade attribute).
-      entity_id: >
-        {{ states.cover | selectattr('attributes.facade', 'defined')
-           | map(attribute='entity_id') | list }}
-    data:
-      mode: "{{ trigger.to_state.state }}"
-```
+A grouped request (the global selector, a [schedule](#schedules), or the [`apply_mode`](#cover_extenderapply_mode) action) applies one mode to many covers at once. Two settings of each mode shape it, under **Grouped requests** in the mode editor:
 
-Covers that are not linked to the chosen mode are left alone.
+- **Does not replace**: the modes it leaves alone. A cover already in one of them keeps it. A cover in a [timed mode](#timed-modes) keeps it too, and takes the requested mode when the time is up.
+- **Fallback mode**, in the mode editor: applied instead, to the covers the requested mode is not linked to.
+
+For example:
+
+| Applying… | leaves alone covers in… |
+|---|---|
+| *Automatic* | *Guests*, *Away*, *Nap*, *TV*, *Air conditioning* |
+| *Night* | *Away*, *Guests*, *Air conditioning* |
+| *Shade* | *Guests*, *TV*, *Nap*, *Manual*, *Air conditioning* |
+
+with *Away* falling back to *Automatic* on the covers it is not linked to. *Night* then closes the bedroom during a nap, but not the guest room; *Shade* goes on while the house is away; and choosing *Away* on the global selector puts the covers without an *Away* position in *Automatic*.
+
+A choice made on one cover's own selector always applies, and so does `apply_mode` with `force: true`: these two settings only govern grouped requests.
 
 ---
 
@@ -430,7 +426,7 @@ All configuration lives in the panel at `/cover-extender`. Every value is checke
 |---|---|
 | **Covers** | The covers: entity, facade, template, [safety exclusions and inhibitions](#exclusions), geometry, shading and solar-gain settings. Each card shows what the cover is doing right now: its mode and position, then whatever holds it back (a [timed mode](#timed-modes) with its end time, the lock with the remembered position, an exclusion or an inhibition that is on). |
 | **Matrix** | Modes × covers: link modes and set every per-cover position from one grid. |
-| **Modes** | Icon, color, lock, behavior, priority, [duration](#timed-modes) and what happens at its end, visibility. Drag the tiles to reorder: the order drives the mode selectors. |
+| **Modes** | Icon, color, lock, behavior, priority, fallback, [duration](#timed-modes) and what happens at its end, visibility. Drag the tiles to reorder: the order drives the mode selectors. Under **Grouped requests**: the modes it does not replace, and its fallback (see [who replaces whom](#who-replaces-whom)). |
 | **Schedules** | The [morning opening and evening closing](#schedules): the curve of each over the year, and each cover's morning and evening mode. |
 | **Settings** | Facades, templates, general settings, and the list of the entities the configuration produced. |
 
@@ -506,7 +502,7 @@ Same as `set_cover_position` with 100 or 0.
 
 #### `cover_extender.apply_mode`
 
-Applies `mode` to the target covers. Returns the covers that were changed and those skipped (mode not linked to them).
+Applies `mode` to the target covers, as a grouped request: covers in a mode it leaves alone keep theirs, covers it is not linked to take its fallback mode (see [who replaces whom](#who-replaces-whom)). Returns the covers that were changed, those skipped, and why (`spared`, `not_linked`).
 
 ```yaml
 action: cover_extender.apply_mode
@@ -514,7 +510,7 @@ target:
   entity_id: [cover.office, cover.living_room]
 data:
   mode: Shade
-response_variable: result   # optional: {"applied": [...], "skipped": [...]}
+response_variable: result   # optional: {"applied": [...], "skipped": [...], "reasons": {...}}
 ```
 
 `force: true` makes the request a priority one: it passes the [inhibitions](#exclusions), never the safety exclusions, and re-applies the mode even on covers that are already in it. For example, to close everything when the alarm is armed, guest room included:
@@ -673,7 +669,7 @@ triggers:
 
 **My cover changed mode on its own.** A [timed mode](#timed-modes) ended (the cover went back to its base mode, or to the mode's fixed return), or a [schedule](#schedules) applied its morning or evening mode. The `cover_extender_timed_mode_ended` and `cover_extender_mode_changed` events, and the logbook of `select.<cover>_cx_mode`, tell which.
 
-**Changing `select.cx_modes` does nothing.** Expected: it is a display selector. See [the global mode selector](#the-global-mode-selector) for the automation that connects it.
+**A cover did not follow the global selector (or an `apply_mode` on several covers).** It was in a mode the requested one leaves alone, or the mode is not linked to it and has no fallback mode: see [who replaces whom](#who-replaces-whom). `apply_mode` returns the reason per cover in `reasons` (`spared`, `not_linked`).
 
 **I cannot find the panel.** Open `http://<your-ha>:8123/cover-extender` directly. The panel needs an administrator account. If the sidebar entry is missing, it may be hidden: open your **Profile** and change the sidebar items there.
 

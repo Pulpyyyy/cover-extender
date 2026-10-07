@@ -75,6 +75,20 @@ def test_modes_behavior_and_color_validation():
     assert flagged["priority"] is True
 
 
+def test_modes_spares_are_cleaned():
+    auto = {"name": "Auto", "spares": ["Guest", "Guest", "Gone", "Auto"]}
+    guest = {"name": "Guest"}
+    assert ws._validate_modes([auto, guest]) is None
+    assert auto["spares"] == ["Guest"]          # no duplicate, no unknown, not itself
+    assert guest["spares"] == [] and guest["fallback"] is None
+
+
+def test_modes_fallback_must_be_another_existing_mode():
+    assert ws._validate_modes([{"name": "Away", "fallback": "Auto"}, {"name": "Auto"}]) is None
+    assert ws._validate_modes([{"name": "Away", "fallback": "Gone"}]) == "fallback_invalid:Away"
+    assert ws._validate_modes([{"name": "Away", "fallback": "Away"}]) == "fallback_invalid:Away"
+
+
 def test_modes_duration_validation():
     plain = {"name": "Day", "duration": 0}
     assert ws._validate_modes([plain]) is None

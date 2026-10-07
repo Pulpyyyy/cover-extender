@@ -280,6 +280,8 @@ def build_profiles_from_options(
                 "priority": bool(item.get("priority", False)),
                 "duration": item.get("duration") or None,
                 "return_mode": item.get("return_mode") or None,
+                "spares": list(item.get("spares") or []),
+                "fallback": item.get("fallback") or None,
             }
 
     for cover_data in sections.get(SECTION_COVER) or []:

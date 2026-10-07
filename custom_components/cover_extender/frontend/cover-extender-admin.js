@@ -256,6 +256,16 @@ const WORDS = {
     statusTimer: (m, t) => `back to ${m} at ${t}`,
     statusLocked: (p) => (p == null ? "locked" : `locked, ${p} % remembered`),
     entitiesShow: "Show the entities",
+    groupedTitle: "Grouped requests",
+    groupedHint: "When this mode is applied to several covers at once (the global selector, a schedule, the apply_mode action). A choice made on one cover's own selector always applies, and so does force: true.",
+    sparesField: "Does not replace",
+    sparesHint: "Covers already in one of these modes keep it. A cover in a timed mode keeps it too, and takes this mode when the time is up.",
+    sparesNone: "Replaces every mode.",
+    sparesChip: (n) => `leaves ${n} mode${n > 1 ? "s" : ""} alone`,
+    fallbackChip: (m) => `fallback: ${m}`,
+    fallbackField: "Fallback mode",
+    fallbackHint: "Applied instead to the covers this mode is not linked to.",
+    fallbackNone: "None",
     usedAsReturn: (names) => `This mode is the one ${names.map((n) => `“${n}”`).join(", ")} returns to: it cannot have a duration while it is.`,
     noTemplateOpt: "No template",
     overrides: (n) => `${n} override${n > 1 ? "s" : ""}`,
@@ -280,6 +290,7 @@ const WORDS = {
       color_invalid: (n) => `Invalid color for “${n}”.`,
       duration_invalid: (n) => `Duration of “${n}”: between 1 and 1440 minutes.`,
       return_mode_invalid: (n) => `“${n}”: the mode it returns to must be an existing mode without a duration.`,
+      fallback_invalid: (n) => `“${n}”: the fallback mode must be another existing mode.`,
       schedule_mode_timed: (m) => `“${m}” is applied by a schedule: it cannot have a duration, and a mode with a duration cannot be scheduled.`,
       schedule_invalid: (k) => `The ${k} schedule cannot be read.`,
       schedule_min_after_max: (k) => `The ${k} schedule: the min time is after the max time.`,
@@ -499,6 +510,16 @@ const WORDS = {
     statusTimer: (m, t) => `retour à ${m} à ${t}`,
     statusLocked: (p) => (p == null ? "verrouillé" : `verrouillé, ${p} % mémorisé`),
     entitiesShow: "Voir les entités",
+    groupedTitle: "Demandes groupées",
+    groupedHint: "Quand ce mode est appliqué à plusieurs volets d'un coup (le sélecteur global, un horaire, l'action apply_mode). Un choix fait sur le sélecteur d'un volet s'applique toujours, tout comme force: true.",
+    sparesField: "Ne remplace pas",
+    sparesHint: "Les volets déjà dans l'un de ces modes le gardent. Un volet en mode minuté le garde aussi, et prend ce mode à la fin du délai.",
+    sparesNone: "Remplace tous les modes.",
+    sparesChip: (n) => `laisse ${n} mode${n > 1 ? "s" : ""}`,
+    fallbackChip: (m) => `repli : ${m}`,
+    fallbackField: "Mode de repli",
+    fallbackHint: "Appliqué à la place aux volets auxquels ce mode n'est pas lié.",
+    fallbackNone: "Aucun",
     usedAsReturn: (names) => `Ce mode est le mode de retour de ${names.map((n) => `« ${n} »`).join(", ")} : il ne peut pas avoir de durée tant qu'il l'est.`,
     noTemplateOpt: "Aucun gabarit",
     overrides: (n) => `${n} écart${n > 1 ? "s" : ""}`,
@@ -523,6 +544,7 @@ const WORDS = {
       color_invalid: (n) => `Couleur invalide pour « ${n} ».`,
       duration_invalid: (n) => `Durée de « ${n} » : entre 1 et 1440 minutes.`,
       return_mode_invalid: (n) => `« ${n} » : le mode de retour doit être un mode existant sans durée.`,
+      fallback_invalid: (n) => `« ${n} » : le mode de repli doit être un autre mode existant.`,
       schedule_mode_timed: (m) => `« ${m} » est appliqué par un horaire : il ne peut pas avoir de durée, et un mode avec une durée ne peut pas être programmé.`,
       schedule_invalid: (k) => `L'horaire « ${k} » est illisible.`,
       schedule_min_after_max: (k) => `Horaire « ${k} » : l'heure min est après l'heure max.`,
@@ -1136,6 +1158,16 @@ const STYLE = `
   table.assign .rowh { padding: var(--fp-s1) 0; min-width: 180px; }
   table.assign .fselect { width: 100%; min-width: 120px; }
   table.assign .fselect:disabled { opacity: .45; }
+  .toggles { display: flex; flex-wrap: wrap; gap: var(--fp-sh); margin: var(--fp-s1) 0 var(--fp-s2); }
+  .toggle { display: inline-flex; align-items: center; gap: var(--fp-sh); font: inherit; font-size: var(--f-12-5);
+            border: 1px solid var(--divider-color); border-radius: var(--fp-pill-r); background: transparent;
+            color: var(--secondary-text-color); padding: var(--fp-s0) var(--fp-s2); cursor: pointer; }
+  .toggle[aria-pressed="true"] { color: var(--primary-text-color); font-weight: 600;
+            border-color: color-mix(in srgb, var(--primary-color) 60%, transparent);
+            background: color-mix(in srgb, var(--primary-color) 12%, transparent); }
+  .toggle .mdot { width: 8px; height: 8px; border-radius: 50%; }
+  .grouped { border-top: 1px solid var(--divider-color); padding-top: var(--fp-s2); margin-top: var(--fp-s1); }
+  .grouped h4 { margin: 0; font-size: var(--f-13); }
 
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 `;
@@ -2100,7 +2132,7 @@ class CoverExtenderPanel extends HTMLElement {
         section: "mode", idx: -1,
         draft: { name: "", icon: "mdi:help-circle", color: "#FFFFFF",
                  lock: false, behavior: null, hidden: false, priority: false,
-                 duration: null, return_mode: null },
+                 duration: null, return_mode: null, spares: [], fallback: null },
       });
       this._render();
     });
@@ -2167,6 +2199,17 @@ class CoverExtenderPanel extends HTMLElement {
         c.append(icon("mdi:timer-outline"), document.createTextNode(T.timedChip(m.duration, m.return_mode)));
         chips.append(c);
       }
+      if (m.spares?.length) {
+        const c = el("span", "chip");
+        c.title = m.spares.join(", ");
+        c.append(icon("mdi:shield-outline"), document.createTextNode(T.sparesChip(m.spares.length)));
+        chips.append(c);
+      }
+      if (m.fallback) {
+        const c = el("span", "chip");
+        c.append(icon("mdi:arrow-u-left-top"), document.createTextNode(T.fallbackChip(m.fallback)));
+        chips.append(c);
+      }
       if (m.priority) {
         const c = el("span", "chip prio");
         c.append(icon("mdi:alert-decagram-outline"), document.createTextNode(T.priority));
@@ -2220,6 +2263,35 @@ class CoverExtenderPanel extends HTMLElement {
     if (draft.behavior) host.append(el("p", "hint", T.behaviorHint));
     host.append(this._boolRow(T.lockField, draft.lock, (v) => { draft.lock = v; }, T.lockHint));
     host.append(this._boolRow(T.priorityField, draft.priority, (v) => { draft.priority = v; }, T.priorityHint));
+    // Grouped requests: which modes this one leaves alone, and its fallback.
+    const others = this._cfg.modes.filter((m) => m.name !== (creating ? draft.name : this._cfg.modes[idx].name));
+    const grouped = el("div", "grouped");
+    grouped.append(el("h4", "", T.groupedTitle), el("p", "hint", T.groupedHint));
+    const sparesRow = el("div", "field vertical");
+    sparesRow.append(el("span", "flabel", T.sparesField), el("small", "fhint", T.sparesHint));
+    const toggles = el("div", "toggles");
+    draft.spares = [...(draft.spares || [])];
+    for (const m of others) {
+      const b = el("button", "toggle");
+      b.type = "button";
+      const dot = el("span", "mdot");
+      dot.style.background = m.color || "#888888";
+      b.append(dot, document.createTextNode(m.name));
+      const sync = () => b.setAttribute("aria-pressed", String(draft.spares.includes(m.name)));
+      sync();
+      b.addEventListener("click", () => {
+        draft.spares = draft.spares.includes(m.name)
+          ? draft.spares.filter((n) => n !== m.name) : [...draft.spares, m.name];
+        sync();
+      });
+      toggles.append(b);
+    }
+    sparesRow.append(toggles);
+    grouped.append(sparesRow);
+    grouped.append(this._selectRow(T.fallbackField, draft.fallback ?? null,
+      [[null, T.fallbackNone], ...others.map((m) => [m.name, m.name])],
+      (v) => { draft.fallback = v; }));
+    grouped.append(el("p", "hint", T.fallbackHint));
     // A mode other modes return to cannot take a duration (the server refuses
     // it too): say so before the user tries, rather than after the save.
     const returners = creating ? [] : this._cfg.modes
@@ -2242,6 +2314,7 @@ class CoverExtenderPanel extends HTMLElement {
       host.append(el("p", "hint", T.returnHint));
     }
     host.append(this._boolRow(T.hiddenField, draft.hidden, (v) => { draft.hidden = v; }, T.hiddenHint));
+    host.append(grouped);
     wrap.append(host);
 
     const actions = el("div", "actions card");

@@ -343,6 +343,17 @@ def _validate_modes(items: list[dict[str, Any]]) -> str | None:
     names = {it.get("name") for it in items}
     timed = {it.get("name") for it in items if it.get("duration")}
     for item in items:
+        # The modes this one does not replace in a grouped request, and the
+        # one it falls back to on covers it is not linked to.
+        own = item.get("name")
+        item["spares"] = list(dict.fromkeys(
+            m for m in (item.get("spares") or []) if m in names and m != own
+        ))
+        fallback = item.get("fallback") or None
+        if fallback is not None and (fallback not in names or fallback == own):
+            return f"fallback_invalid:{own}"
+        item["fallback"] = fallback
+    for item in items:
         target = item.get("return_mode") or None
         if not item.get("duration"):
             item["return_mode"] = None
@@ -871,6 +882,14 @@ async def ws_config_save(
         for it in items:
             if it.get("return_mode") == pair[0]:
                 it["return_mode"] = pair[1]
+            if it.get("fallback") == pair[0]:
+                it["fallback"] = pair[1]
+            it["spares"] = [pair[1] if m == pair[0] else m for m in (it.get("spares") or [])]
+    elif section == "mode":
+        # A deleted mode simply leaves the others' spared lists.
+        gone = set(_name_diff(old_items, items)[0])
+        for it in items:
+            it["spares"] = [m for m in (it.get("spares") or []) if m not in gone]
 
     if section == "cover":
         error = _validate_covers(hass, items)

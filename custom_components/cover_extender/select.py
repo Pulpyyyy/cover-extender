@@ -50,7 +50,7 @@ async def async_setup_entry(
         if cfg.get(CONF_MODES)
     ]
     hass.data[DOMAIN][DATA_SELECT_COVER_IDS] = {e._cover_entity_id for e in cover_entities}
-    entities = [CoverModesGlobalSelect(modes_list)] + cover_entities
+    entities = [CoverModesGlobalSelect(modes_list, coordinator)] + cover_entities
     _LOGGER.info("cover_extender: created %d select entities", len(entities))
     async_add_entities(entities)
 
@@ -219,7 +219,8 @@ class CoverModesGlobalSelect(SelectEntity, RestoreEntity):
     Options and icon/color are updated dynamically on every reload.
     """
 
-    def __init__(self, modes_list: dict) -> None:
+    def __init__(self, modes_list: dict, coordinator=None) -> None:
+        self._coordinator = coordinator
         self._attr_unique_id = GLOBAL_SELECT_UNIQUE_ID
         self.entity_id = GLOBAL_SELECT_ENTITY_ID
         self._attr_device_info = hub_device_info()
@@ -276,6 +277,13 @@ class CoverModesGlobalSelect(SelectEntity, RestoreEntity):
         }
 
     async def async_select_option(self, option: str) -> None:
-        """Change the selected option."""
+        """Apply *option* to every cover, as a grouped request.
+
+        Covers in a mode that *option* spares keep it (a running timed mode
+        takes it as its new base mode); covers it is not linked to take its
+        fallback mode, if any. Restoring the state at startup applies nothing.
+        """
         self._attr_current_option = option
         self.async_write_ha_state()
+        if self._coordinator is not None:
+            await self._coordinator.async_apply_everywhere(option)

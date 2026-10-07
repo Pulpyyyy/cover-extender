@@ -24,7 +24,7 @@
     },
     "apply_mode": {
       "name": "Appliquer un mode",
-      "description": "Déplace les volets à la position définie pour le mode donné. Retourne les listes des volets appliqués (applied) et ignorés (skipped) comme variable de réponse.",
+      "description": "Applique un mode aux volets donnés, comme une demande groupée : les volets dans un mode qu'il laisse tranquille gardent le leur, ceux auxquels il n'est pas lié prennent son mode de repli. Renvoie les volets appliqués et ignorés, et la raison pour chacun, dans une variable de réponse.",
       "fields": {
         "mode": {
           "name": "Mode",
