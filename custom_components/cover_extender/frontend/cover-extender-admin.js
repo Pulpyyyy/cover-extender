@@ -3551,7 +3551,11 @@ class CoverExtenderPanel extends HTMLElement {
     };
     const ends = sel.attributes?.mode_ends_at;
     if (ends) {
-      const at = new Date(ends).toLocaleTimeString(LANG, { hour: "2-digit", minute: "2-digit" });
+      // In the house's time zone, like the schedules (computed by the server):
+      // a browser in another zone would otherwise show another hour.
+      const at = new Date(ends).toLocaleTimeString(LANG, {
+        hour: "2-digit", minute: "2-digit", timeZone: this._hass.config?.time_zone || undefined,
+      });
       chip("timer", "mdi:timer-outline", T.statusTimer(sel.attributes.return_mode, at));
     }
     if (st[ids.lock]?.state === "on") {

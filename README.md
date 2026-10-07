@@ -594,10 +594,22 @@ triggers:
 
 ### Applying a mode
 
+A choice made on one cover's own selector starts at the second step: only grouped requests go through the first one (see [who replaces whom](#who-replaces-whom)).
+
 ```
                      ┌────────────────────────┐
                      │        APPLY MODE      │
                      └────────────────────────┘
+                                  │
+                                  ▼
+        ┌─────────────────────────────────────────────────┐
+        │ Grouped request (global selector, schedule,     │
+        │ apply_mode) without force?                      │
+        │ - the cover is in a mode this one leaves alone: │
+        │   skipped (in a timed mode: taken at its end)   │
+        │ - the mode is not linked to the cover: its      │
+        │   fallback mode instead, else skipped           │
+        └─────────────────────────────────────────────────┘
                                   │
                                   ▼
                   ┌─────────────────────────────────┐
