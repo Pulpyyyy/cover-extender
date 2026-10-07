@@ -43,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The entities show under their cover.** Each helper is attached to its cover's device, so it appears on that device's page and under the integration, instead of nowhere. It is linked with `Entity.device_entry`, which does not add Cover Extender to a device another integration owns. A cover without a device has its helpers on the Cover Extender hub device, named after the cover. `select.cx_modes` lives on the hub device too.
 
 ### Fixed
+- Panel: the mode chip on the cover cards wears the mode's colour (icon, tint and edge), as on the mode tiles and in the matrix; it was a faint tint only.
 - Panel: the template field of the cover editor is labelled "Template" ("Gabarit"), capitalized like the other fields.
 - **Actions keep working with Home Assistant 2026.10** (also released alone as 3.1.3). The targeted actions passed `hass` to `async_extract_entity_ids`, which Home Assistant removes in Core 2026.10.
 - **The entities have a name.** They declared a translation key with no translation behind it, so Home Assistant showed their raw entity id. Names are now fixed English (`CX mode`, `CX lock`, `CX auto shade`, `CX auto solar gain`, `CX sun facing`, `CX auto shade status`, `CX solar gain status`, `Modes`), never translated, so logs, screenshots and forum reports read the same in every language. The leading `CX` keeps Home Assistant's "rename the entity ids with the device" suggestion on the cx scheme.

@@ -3530,9 +3530,16 @@ class CoverExtenderPanel extends HTMLElement {
     if (!sel) return null;
     const line = el("div", "status");
     const mode = this._cfg.modes.find((m) => m.name === sel.state);
+    // The mode's colour as on its tile and in the matrix: on the icon, the
+    // tint and the edge. The name keeps the text colour, so a mode set to
+    // #FFFFFF stays readable on a light theme.
+    const tint = mode?.color || "#888888";
     const pill = el("span", "smode");
-    pill.style.background = `color-mix(in srgb, ${mode?.color || "#888888"} 16%, transparent)`;
-    pill.append(icon(mode?.icon || "mdi:help-circle"), document.createTextNode(sel.state));
+    pill.style.background = `color-mix(in srgb, ${tint} 18%, transparent)`;
+    pill.style.border = `1px solid color-mix(in srgb, ${tint} 45%, transparent)`;
+    const glyph = icon(mode?.icon || "mdi:help-circle");
+    glyph.style.color = tint;
+    pill.append(glyph, document.createTextNode(sel.state));
     line.append(pill);
     const pos = st[c.entity_id]?.attributes?.current_position;
     if (pos != null) line.append(el("span", "spos", `${pos} %`));
