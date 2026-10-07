@@ -242,9 +242,9 @@ This walk-through sets up one cover with two modes, *Day* (open) and *Night* (cl
 A mode says *what the cover should be doing right now*. Each mode has a name, icon and color, and optionally:
 
 - **Lock the covers**: while the mode is on, the cover is [locked](#lock-and-memory).
-- **Behavior**: *None* (each cover gets its own position from the matrix), *Shading* (the position is computed from the sun, see [autonomous shading](#autonomous-shading)) or *Solar gain* (see [solar gain](#solar-gain)).
+- **Cover positions**: *Fixed* (each cover gets its own position from the matrix), *Shading* (the position is computed from the sun, see [autonomous shading](#autonomous-shading)) or *Solar gain* (see [solar gain](#solar-gain)).
 - **Priority mode**: the mode passes the [inhibitions](#exclusions) (never the safety exclusions). Typically an *Alarm* mode that must close every cover, guest room included.
-- **Timed mode**: the mode only lasts a while (1 minute to 24 hours), see [timed modes](#timed-modes).
+- **Limited duration**: the mode only lasts a while (1 minute to 24 hours); it is a [timed mode](#timed-modes).
 - **Hide from the selector**: the mode stays usable by automations but does not show in the global selector.
 
 A mode only applies to the covers it is linked to (a cell in the matrix). For each linked cover, the matrix sets what happens when the mode turns on:
@@ -306,7 +306,7 @@ A mode with a duration is a parenthesis over the cover's **base mode**, the last
 | Guest's time is up | Day | Day |
 | The evening automation applies *Night* | Night | **Night** |
 
-- **When the time is up**, the cover goes back to its base mode, or to a fixed mode set in the mode's editor (*Manual: 1 h, then Day*). The fixed mode can only be a mode without a duration, so every countdown ends on a mode that starts no other.
+- **When the time is up**, the cover goes back to its base mode ("go back to the previous mode" in the mode editor), or to a fixed mode set in that editor (*Manual: 1 h, then Day*). The fixed mode can only be a mode without a duration, so every countdown ends on a mode that starts no other.
 - **A mode without a duration chosen meanwhile** applies at once, ends the countdown and becomes the base mode.
 - **Choosing the running timed mode again** restarts its countdown.
 - [`cover_extender.end_timed_mode`](#cover_extenderend_timed_mode) ends it now.
@@ -315,10 +315,10 @@ The cover's `select.<cover>_cx_mode` shows when the countdown ends and which mod
 
 ### Exclusions
 
-The cover editor has two lists of entities that hold the cover back while one of them is `on`:
+The cover editor has two lists of entities that hold the cover back while one of them is `on`, side by side under **What holds the cover back**:
 
-- **Safety exclusions**: a window or door contact (`binary_sensor`), a rain sensor. Nothing moves, **not even a priority mode**.
-- **Inhibitions**: an `input_boolean` "guest in the room", "children asleep", or a template sensor such as "Wednesday morning". Cover Extender leaves the cover alone, **except for a priority request**: a mode with **Priority mode** ticked, or [`apply_mode`](#cover_extenderapply_mode) with `force: true`.
+- **Safety exclusions** ("Safety: nothing moves"): a window or door contact (`binary_sensor`), a rain sensor. Nothing moves, **not even a priority mode**.
+- **Inhibitions** ("Pause: Cover Extender keeps off"): an `input_boolean` "guest in the room", "children asleep", or a template sensor such as "Wednesday morning". Cover Extender leaves the cover alone, **except for a priority request**: a mode with **Priority mode** ticked, or [`apply_mode`](#cover_extenderapply_mode) with `force: true`.
 
 While one of them holds the cover:
 
@@ -399,10 +399,10 @@ The temperature entity, threshold and weather entity are shared by all covers (*
 
 ### Who replaces whom
 
-A grouped request (the global selector, a [schedule](#schedules), or the [`apply_mode`](#cover_extenderapply_mode) action) applies one mode to many covers at once. Two settings of each mode shape it, under **Grouped requests** in the mode editor:
+A grouped request (the global selector, a [schedule](#schedules), or the [`apply_mode`](#cover_extenderapply_mode) action) applies one mode to many covers at once. Two settings of each mode shape it, under **Applied to several covers** in the mode editor:
 
-- **Does not replace**: the modes it leaves alone. A cover already in one of them keeps it. A cover in a [timed mode](#timed-modes) keeps it too, and takes the requested mode when the time is up.
-- **Fallback mode**, in the mode editor: applied instead, to the covers the requested mode is not linked to.
+- **Leave alone the covers already in**: the modes it leaves alone. A cover already in one of them keeps it. A cover in a [timed mode](#timed-modes) keeps it too, and takes the requested mode when the time is up.
+- **Covers this mode is not linked to in the matrix**: a *fallback mode* applied instead, to the covers the requested mode is not linked to (or *Do nothing*).
 
 For example:
 
@@ -426,9 +426,9 @@ All configuration lives in the panel at `/cover-extender`. Every value is checke
 |---|---|
 | **Covers** | The covers: entity, facade, template, [safety exclusions and inhibitions](#exclusions), geometry, shading and solar-gain settings. Each card shows what the cover is doing right now: its mode and position, then whatever holds it back (a [timed mode](#timed-modes) with its end time, the lock with the remembered position, an exclusion or an inhibition that is on). |
 | **Matrix** | Modes × covers: link modes and set every per-cover position from one grid. |
-| **Modes** | Icon, color, lock, behavior, priority, fallback, [duration](#timed-modes) and what happens at its end, visibility. Drag the tiles to reorder: the order drives the mode selectors. Under **Grouped requests**: the modes it does not replace, and its fallback (see [who replaces whom](#who-replaces-whom)). |
+| **Modes** | Icon, color, lock, behavior, priority, fallback, [duration](#timed-modes) and what happens at its end, visibility. Drag the tiles to reorder: the order drives the mode selectors. Under **Applied to several covers**: the modes it leaves alone, and its fallback (see [who replaces whom](#who-replaces-whom)). |
 | **Schedules** | The [morning opening and evening closing](#schedules): the curve of each over the year, and each cover's morning and evening mode. |
-| **Settings** | Facades, templates, general settings, and the list of the entities the configuration produced. |
+| **Settings** | On the left the house: facades (way they face, set on a compass), templates, and the list of the entities the configuration produced. On the right the general settings: solar gain (temperature, threshold, weather and what counts as fine weather), pause between two covers, extra entities for each cover. |
 
 ### The matrix
 

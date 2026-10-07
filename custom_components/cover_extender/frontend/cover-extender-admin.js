@@ -177,30 +177,19 @@ const WORDS = {
     hidden: "hidden",
     facades: "Facades",
     templates: "Templates",
-    globalSettings: "General settings",
-    tempEntity: "Temperature entity",
-    threshold: "Threshold entity",
-    weather: "Weather entity",
-    interval: "Interval between commands",
-    facadesSub: "The azimuth is the way the facade faces: 0° = north, 90° = east.",
-    templatesSub: "Base values inherited by the covers; each one may depart from them.",
-    globalSub: "Entities and settings shared by the whole integration.",
+    interval: "Pause between two covers",
+    facadesSub: "The way the walls face, shared by their covers.",
+    templatesSub: "The covers' starting values; each one may depart from them.",
     addFacade: "Add a facade",
     addTemplate: "Add a template",
-    newFacade: "New facade",
-    newTemplate: "New template",
     backToFacades: "All facades",
     backToTemplates: "All templates",
     templateTitle: "Template",
     azimuth: "Azimuth",
-    goodConditions: "Good weather conditions",
-    goodConditionsHint: "Weather states that allow solar gain.",
-    intervalHint: "Delay between two commands sent to the covers, in milliseconds.",
-    display: "Display",
-    showSunFacing: "“Sun facing” sensor",
-    showAutoShade: "“Automatic shading” sensor",
-    showSolarGain: "“Solar gain” sensor",
-    tplNoOverrideNote: "A template is the reference: its values have no override to show.",
+    intervalHint: "Gives the gateway room when several covers move together.",
+    showSunFacing: "Sun facing",
+    showAutoShade: "Automatic shading",
+    showSolarGain: "Solar gain",
     weatherStates: {
       "clear-night": "Clear, night", cloudy: "Cloudy", exceptional: "Exceptional",
       fog: "Fog", hail: "Hail", lightning: "Lightning",
@@ -214,15 +203,12 @@ const WORDS = {
     dragHint: "Drag a tile to reorder — the order drives the mode selector's list.",
     backToModes: "All modes",
     newMode: "New mode",
-    mode: "Mode",
     name: "Name",
     icon: "Icon",
     color: "Color",
-    behavior: "Behavior",
-    behaviorNone: "None — fixed position per cover",
-    behaviorHint: "Positions are computed; the matrix can still override them cover by cover (fixed or entity).",
+    behaviorHint: "The matrix can still force a position or an entity on any cover.",
     lockField: "Lock the covers",
-    lockHint: "Commands sent through Cover Extender are memorized instead of moving the cover while the mode is on.",
+    lockHint: "The covers stop moving; the positions asked for are remembered.",
     hiddenField: "Hide from the selector",
     hiddenHint: "The mode stays available to automations.",
     entitiesSec: "Generated entities",
@@ -233,44 +219,41 @@ const WORDS = {
     },
     entityTotal: (n) => `${n} entit${n > 1 ? "ies" : "y"} in total`,
     delete: "Delete",
-    inUseTitle: (n) => `Used by ${n} cover(s) — unlink it in the matrix first.`,
-    inUseItemTitle: (n) => `Used by ${n} cover(s) — reassign them first.`,
-    newCover: "New cover",
+    inUseTitle: (n) => `Used by ${n} cover(s): unlink it in the matrix first.`,
+    inUseItemTitle: (n) => `Used by ${n} cover(s): move them first.`,
     backToCovers: "All covers",
     entity: "Cover entity",
     picture: "Picture",
     exclusion: "Safety exclusions",
-    exclusionHint: "While one of these entities is on, nothing moves, not even a priority mode. What was asked meanwhile is applied once they turn off. E.g. an open window, a rain sensor.",
     inhibition: "Inhibitions",
-    inhibitionHint: "While one of these entities is on, Cover Extender leaves the cover alone, except for a priority mode. What was asked meanwhile is applied once they turn off. E.g. a guest, children, a template sensor for “Wednesday morning”.",
     priorityField: "Priority mode",
-    priorityHint: "Passes the inhibitions, never the safety exclusions. Same as the apply_mode action with force: true.",
+    priorityHint: "Goes through the pauses (guests, children…), never the safety stops (open window, rain).",
     priority: "priority",
-    durationField: "Timed mode",
-    durationHint: "When the time is up, the cover leaves this mode on its own. Choosing a mode without a duration before that ends it at once.",
+    durationField: "Limited duration",
+    durationHint: "The cover leaves this mode on its own when the time is up.",
     durationLabel: "Duration",
     returnField: "When the time is up",
-    returnBase: "Back to the base mode",
-    returnHint: "The base mode is the last mode without a duration the cover was in. Only modes without a duration can be chosen here.",
+    returnBase: "go back to the previous mode",
+    returnHint: "The previous mode is the last mode without a duration the cover was in. Only modes without a duration can be chosen here. Choosing a mode without a duration before the end stops the countdown.",
     timedChip: (n, r) => (r ? `${n} min, then ${r}` : `${n} min`),
     statusTimer: (m, t) => `back to ${m} at ${t}`,
     statusLocked: (p) => (p == null ? "locked" : `locked, ${p} % remembered`),
     entitiesShow: "Show the entities",
-    groupedTitle: "Grouped requests",
-    groupedHint: "When this mode is applied to several covers at once (the global selector, a schedule, the apply_mode action). A choice made on one cover's own selector always applies, and so does force: true.",
-    sparesField: "Does not replace",
-    sparesHint: "Covers already in one of these modes keep it. A cover in a timed mode keeps it too, and takes this mode when the time is up.",
-    sparesNone: "Replaces every mode.",
+    groupedTitle: "Applied to several covers",
+    groupedHint: "Global selector, schedules, automations. A choice made on one cover's own selector always applies.",
+    groupedInfo: "The apply_mode action with force: true goes through as well.",
+    sparesField: "Leave alone the covers already in:",
+    sparesHint: "A cover in a timed mode is left alone too, and takes this mode when its time is up.",
+    sparesNone: "None: this mode replaces every other one.",
+    sparesCount: (n) => `${n} mode${n > 1 ? "s" : ""} left alone, the others are replaced.`,
     sparesChip: (n) => `leaves ${n} mode${n > 1 ? "s" : ""} alone`,
     fallbackChip: (m) => `fallback: ${m}`,
-    fallbackField: "Fallback mode",
-    fallbackHint: "Applied instead to the covers this mode is not linked to.",
-    fallbackNone: "None",
+    fallbackField: "Covers this mode is not linked to in the matrix:",
+    fallbackHint: "Or apply another mode to them instead (e.g. Away, then Automatic).",
+    fallbackNone: "Do nothing",
     usedAsReturn: (names) => `This mode is the one ${names.map((n) => `“${n}”`).join(", ")} returns to: it cannot have a duration while it is.`,
     noTemplateOpt: "No template",
     overrides: (n) => `${n} override${n > 1 ? "s" : ""}`,
-    tplNote: (n) => `Values inherited from the “${n}” template: only the overrides are stored.`,
-    noTplNote: "No template: every value belongs to this cover alone.",
     revertTitle: "Back to the template's value",
     sections: { geometry: "Geometry", detection: "Detection", shading: "Shading", solar_gain: "Solar gain" },
     fields: {
@@ -283,6 +266,106 @@ const WORDS = {
       solar_gain_position_solar: "Position in the sun", solar_gain_position_cold: "Position when cold",
       shade_enable: "Automatic shading enabled", solar_gain_enable: "Solar gain enabled",
     },
+    /* ---- editors, 4.0 layout ---- */
+    inSelector: "In the selector:",
+    colorPick: "Pick a color",
+    colorHex: "Hexadecimal color code",
+    behaviorTitle: "Cover positions",
+    behaviorCardSub: "How this mode sets the position of each cover.",
+    behaviorOpts: {
+      none: ["Fixed", "set in the matrix"],
+      auto_shade: ["Shading", "follows the sun"],
+      solar_gain: ["Solar gain", "lets the sun in"],
+    },
+    whileTitle: "While this mode is on",
+    whileSub: "As long as the cover is in this mode.",
+    timedFor: "For",
+    timedThen: "min, then",
+    advanced: "Advanced",
+    advSummary: (prio, hidden) => `${prio ? "priority" : "not priority"} · ${hidden ? "hidden" : "visible"}`,
+    nowLabel: "Now:",
+    picturePh: "/local/… (optional)",
+    blockTitle: "What holds the cover back",
+    blockSub: "What was asked meanwhile is applied once the entity turns off.",
+    safetyTitle: "Safety: nothing moves",
+    safetySub: "Even a priority mode waits.",
+    safetyEx: "E.g. an open window, a rain sensor.",
+    pauseTitle: "Pause: Cover Extender keeps off",
+    pauseSub: "A priority mode still goes through.",
+    pauseEx: "E.g. guests, children, a “Wednesday morning” template sensor.",
+    addEntity: "Add an entity",
+    removeEntity: "Remove",
+    calcTitle: "Position computation",
+    tplChip: (n) => `values of the ${n} template`,
+    noTplChip: "no template: every value is this cover's own",
+    openTemplate: "Open the template",
+    sectionTitles: {
+      geometry: "Window geometry", detection: "When the sun faces it",
+      shading: "Shading", solar_gain: "Solar gain",
+    },
+    sectionSubs: {
+      geometry: "To know how far the sun reaches into the room.",
+      detection: "The part of the sky from which the sun sees the window.",
+      shading: "The cover comes down just enough when the sun is in front.",
+      solar_gain: "Let the sun in when it is cool and fine. Temperature and weather: Settings tab.",
+    },
+    fieldHints: {
+      shade_distance: "How far direct light may reach, on the floor.",
+      shade_max_height: "Bottom of the cover when open (100 %).",
+      shade_min_height: "Bottom of the cover when closed: 0 for a French window.",
+      angle_left: "Towards the east for a south facade.",
+      angle_right: "Towards the west for a south facade.",
+      shade_degrees: "Shading: the sun is in front within ± this angle of the facade.",
+      shade_minimum_position: "Shading never closes further than this.",
+      shade_default_position: "When the sun is not in front of the window.",
+      shade_change_threshold: "Small moves are skipped, to spare the motor.",
+      shade_time_out: "Wait after any move of the cover, by hand included.",
+      solar_gain_position_solar: "Cool, fine weather, sun in front.",
+      solar_gain_position_cold: "Cool, but no sun on the window or bad weather.",
+    },
+    fromTemplate: (v) => `template: ${v}`,
+    elevationRange: "Sun height",
+    elevationHint: "Outside this range the cover goes to its default position.",
+    rangeTo: "to",
+    fig: {
+      outside: "outside", room: "room", max: "max height", min: "min height",
+      distance: "distance", left: "left", right: "right", view: "seen from inside",
+    },
+    tplName: "Template name",
+    usedBy: "Used by",
+    noCoverYet: "No cover yet",
+    tplIdentityNote: "Each cover starts from these values and may depart from them on its own page.",
+    facadeName: "Facade name",
+    facadeCovers: "Covers on this facade",
+    orientTitle: "Orientation",
+    orientSub: "Where the windows look, seen from inside.",
+    dragCompass: "or drag the arrow on the compass",
+    compassNote: "Blue marks the facade's wall; yellow is where the sun can face it.",
+    dirs: ["N", "NE", "E", "SE", "S", "SW", "W", "NW"],
+    houseTitle: "The house",
+    houseSub: "saved item by item",
+    globalTitle: "General settings",
+    globalNote: "one save, at the bottom",
+    addShort: "Add",
+    tplMeta: (h, d) => `height ${h} m · distance ${d} m`,
+    sgTitle: "Solar gain",
+    sgSub: "When is it cool and fine enough to let the sun in? Applies to every cover.",
+    sgTemp: "Temperature",
+    sgThreshold: "below the threshold",
+    sgWeather: "Weather",
+    sgGood: "Fine weather =",
+    sgNote: "Without a temperature the test is skipped; without weather it is always fine.",
+    sgTooWarm: (t, s) => `${t} ≥ ${s}: too warm, solar gain waits`,
+    sgCool: (t, s) => `${t} < ${s}: cool enough`,
+    cmdTitle: "Sending commands",
+    extraTitle: "Extra entities, for each cover",
+    extraSub: "For your dashboards and automations.",
+    showHints: {
+      sun_facing: "Binary sensor: does the sun face the cover?",
+      auto_shade: "Binary sensor: is shading enabled on this cover?",
+      solar_gain: "Binary sensor: is solar gain enabled on this cover?",
+    },
+    unsaved: "Changes not saved yet",
     errors: {
       name_required: () => "The name cannot be empty.",
       name_exists: (n) => `The name “${n}” is already taken.`,
@@ -431,30 +514,19 @@ const WORDS = {
     hidden: "masqué",
     facades: "Façades",
     templates: "Gabarits",
-    globalSettings: "Réglages globaux",
-    tempEntity: "Entité de température",
-    threshold: "Entité de seuil",
-    weather: "Entité météo",
-    interval: "Intervalle entre commandes",
-    facadesSub: "L'azimut est l'orientation de la façade : 0° = nord, 90° = est.",
-    templatesSub: "Valeurs de base héritées par les volets ; chacun peut s'en écarter.",
-    globalSub: "Entités et réglages communs à toute l'intégration.",
+    interval: "Pause entre deux volets",
+    facadesSub: "L'orientation des murs, partagée par leurs volets.",
+    templatesSub: "Les valeurs de départ des volets ; chacun peut s'en écarter.",
     addFacade: "Ajouter une façade",
     addTemplate: "Ajouter un gabarit",
-    newFacade: "Nouvelle façade",
-    newTemplate: "Nouveau gabarit",
     backToFacades: "Toutes les façades",
     backToTemplates: "Tous les gabarits",
     templateTitle: "Gabarit",
     azimuth: "Azimut",
-    goodConditions: "Bonnes conditions météo",
-    goodConditionsHint: "États du service météo qui autorisent l'apport solaire.",
-    intervalHint: "Délai entre deux commandes envoyées aux volets, en millisecondes.",
-    display: "Affichage",
-    showSunFacing: "Capteur « face au soleil »",
-    showAutoShade: "Capteur « ombrage automatique »",
-    showSolarGain: "Capteur « héliotropie »",
-    tplNoOverrideNote: "Un gabarit est la référence : ses valeurs n'ont pas d'écart à afficher.",
+    intervalHint: "Laisse respirer la passerelle quand plusieurs volets bougent ensemble.",
+    showSunFacing: "Face au soleil",
+    showAutoShade: "Ombrage automatique",
+    showSolarGain: "Héliotropie",
     weatherStates: {
       "clear-night": "Nuit claire", cloudy: "Nuageux", exceptional: "Exceptionnel",
       fog: "Brouillard", hail: "Grêle", lightning: "Orage",
@@ -468,15 +540,12 @@ const WORDS = {
     dragHint: "Glisser une tuile pour réordonner — l'ordre pilote la liste du sélecteur de mode.",
     backToModes: "Tous les modes",
     newMode: "Nouveau mode",
-    mode: "Mode",
     name: "Nom",
     icon: "Icône",
     color: "Couleur",
-    behavior: "Comportement",
-    behaviorNone: "Aucun — position fixe par volet",
-    behaviorHint: "Les positions sont calculées ; la matrice peut les surcharger volet par volet (fixe ou entité).",
+    behaviorHint: "La matrice peut toujours imposer une position ou une entité à un volet.",
     lockField: "Verrouiller les volets",
-    lockHint: "Les commandes passées par Cover Extender sont mémorisées au lieu de bouger le volet tant que le mode est actif.",
+    lockHint: "Les volets ne bougent plus ; les positions demandées sont gardées en mémoire.",
     hiddenField: "Masquer du sélecteur",
     hiddenHint: "Le mode reste utilisable par les automatisations.",
     entitiesSec: "Entités générées",
@@ -487,44 +556,41 @@ const WORDS = {
     },
     entityTotal: (n) => `${n} entité${n > 1 ? "s" : ""} au total`,
     delete: "Supprimer",
-    inUseTitle: (n) => `Utilisé par ${n} volet(s) — délier d'abord dans la matrice.`,
-    inUseItemTitle: (n) => `Utilisé par ${n} volet(s) — les réaffecter d'abord.`,
-    newCover: "Nouveau volet",
+    inUseTitle: (n) => `Utilisé par ${n} volet(s) : le délier d'abord dans la matrice.`,
+    inUseItemTitle: (n) => `Utilisé par ${n} volet(s) : les déplacer d'abord.`,
     backToCovers: "Tous les volets",
     entity: "Entité du volet",
     picture: "Image",
     exclusion: "Exclusions de sécurité",
-    exclusionHint: "Tant qu'une de ces entités est allumée, rien ne bouge, même un mode prioritaire. Ce qui a été demandé entre-temps s'applique quand elles retombent. Ex. : une fenêtre ouverte, un capteur de pluie.",
     inhibition: "Inhibitions",
-    inhibitionHint: "Tant qu'une de ces entités est allumée, Cover Extender ne touche pas au volet, sauf pour un mode prioritaire. Ce qui a été demandé entre-temps s'applique quand elles retombent. Ex. : un invité, les enfants, un capteur template « mercredi matin ».",
     priorityField: "Mode prioritaire",
-    priorityHint: "Passe outre les inhibitions, jamais les exclusions de sécurité. Comme l'action apply_mode avec force: true.",
+    priorityHint: "Passe outre les pauses (invités, enfants…), jamais les sécurités (fenêtre ouverte, pluie).",
     priority: "prioritaire",
-    durationField: "Mode minuté",
-    durationHint: "À la fin du délai, le volet quitte ce mode tout seul. Choisir un mode sans durée avant y met fin tout de suite.",
+    durationField: "Durée limitée",
+    durationHint: "Le volet quitte ce mode tout seul à la fin du délai.",
     durationLabel: "Durée",
     returnField: "À la fin du délai",
-    returnBase: "Revenir au mode de base",
-    returnHint: "Le mode de base est le dernier mode sans durée dans lequel était le volet. Seuls les modes sans durée peuvent être choisis ici.",
+    returnBase: "revenir au mode précédent",
+    returnHint: "Le mode précédent est le dernier mode sans durée dans lequel était le volet. Seuls les modes sans durée peuvent être choisis ici. Choisir un mode sans durée avant la fin arrête le décompte.",
     timedChip: (n, r) => (r ? `${n} min, puis ${r}` : `${n} min`),
     statusTimer: (m, t) => `retour à ${m} à ${t}`,
     statusLocked: (p) => (p == null ? "verrouillé" : `verrouillé, ${p} % mémorisé`),
     entitiesShow: "Voir les entités",
-    groupedTitle: "Demandes groupées",
-    groupedHint: "Quand ce mode est appliqué à plusieurs volets d'un coup (le sélecteur global, un horaire, l'action apply_mode). Un choix fait sur le sélecteur d'un volet s'applique toujours, tout comme force: true.",
-    sparesField: "Ne remplace pas",
-    sparesHint: "Les volets déjà dans l'un de ces modes le gardent. Un volet en mode minuté le garde aussi, et prend ce mode à la fin du délai.",
-    sparesNone: "Remplace tous les modes.",
+    groupedTitle: "Lancé pour plusieurs volets",
+    groupedHint: "Sélecteur global, horaires, automatisations. Un choix fait sur le sélecteur d'un volet passe toujours.",
+    groupedInfo: "L'action apply_mode avec force: true passe aussi.",
+    sparesField: "Ne pas déranger les volets déjà en mode :",
+    sparesHint: "Un volet en mode minuté n'est pas dérangé non plus, et prend ce mode à la fin de son délai.",
+    sparesNone: "Aucun : ce mode remplace tous les autres.",
+    sparesCount: (n) => `${n} mode${n > 1 ? "s" : ""} protégé${n > 1 ? "s" : ""}, les autres sont remplacés.`,
     sparesChip: (n) => `laisse ${n} mode${n > 1 ? "s" : ""}`,
     fallbackChip: (m) => `repli : ${m}`,
-    fallbackField: "Mode de repli",
-    fallbackHint: "Appliqué à la place aux volets auxquels ce mode n'est pas lié.",
-    fallbackNone: "Aucun",
+    fallbackField: "Volets qui n'ont pas ce mode dans la matrice :",
+    fallbackHint: "Ou leur appliquer un autre mode à la place (ex. Absence, puis Automatique).",
+    fallbackNone: "Ne rien faire",
     usedAsReturn: (names) => `Ce mode est le mode de retour de ${names.map((n) => `« ${n} »`).join(", ")} : il ne peut pas avoir de durée tant qu'il l'est.`,
     noTemplateOpt: "Aucun gabarit",
     overrides: (n) => `${n} écart${n > 1 ? "s" : ""}`,
-    tplNote: (n) => `Valeurs héritées du gabarit « ${n} » : seuls les écarts sont enregistrés.`,
-    noTplNote: "Sans gabarit : toutes les valeurs sont propres à ce volet.",
     revertTitle: "Revenir à la valeur du gabarit",
     sections: { geometry: "Géométrie", detection: "Détection", shading: "Ombrage", solar_gain: "Héliotropie" },
     fields: {
@@ -537,6 +603,106 @@ const WORDS = {
       solar_gain_position_solar: "Position au soleil", solar_gain_position_cold: "Position au froid",
       shade_enable: "Ombrage automatique activé", solar_gain_enable: "Héliotropie activée",
     },
+    /* ---- éditeurs, présentation 4.0 ---- */
+    inSelector: "Dans le sélecteur :",
+    colorPick: "Choisir une couleur",
+    colorHex: "Code hexadécimal de la couleur",
+    behaviorTitle: "Position des volets",
+    behaviorCardSub: "Comment ce mode choisit la position de chaque volet.",
+    behaviorOpts: {
+      none: ["Fixe", "réglée dans la matrice"],
+      auto_shade: ["Ombrage", "suit le soleil"],
+      solar_gain: ["Héliotropie", "laisse entrer le soleil"],
+    },
+    whileTitle: "Pendant ce mode",
+    whileSub: "Tant que le volet est dans ce mode.",
+    timedFor: "Pendant",
+    timedThen: "min, puis",
+    advanced: "Avancé",
+    advSummary: (prio, hidden) => `${prio ? "prioritaire" : "non prioritaire"} · ${hidden ? "masqué" : "visible"}`,
+    nowLabel: "Maintenant :",
+    picturePh: "/local/… (facultatif)",
+    blockTitle: "Ce qui bloque le volet",
+    blockSub: "Ce qui a été demandé pendant le blocage s'applique quand l'entité retombe.",
+    safetyTitle: "Sécurité : rien ne bouge",
+    safetySub: "Même un mode prioritaire attend.",
+    safetyEx: "Ex. : fenêtre ouverte, capteur de pluie.",
+    pauseTitle: "Pause : Cover Extender n'y touche pas",
+    pauseSub: "Un mode prioritaire passe quand même.",
+    pauseEx: "Ex. : invités, enfants, un capteur template « mercredi matin ».",
+    addEntity: "Ajouter une entité",
+    removeEntity: "Retirer",
+    calcTitle: "Calcul de la position",
+    tplChip: (n) => `valeurs du gabarit ${n}`,
+    noTplChip: "sans gabarit : toutes les valeurs sont propres au volet",
+    openTemplate: "Ouvrir le gabarit",
+    sectionTitles: {
+      geometry: "Géométrie de la fenêtre", detection: "Quand le soleil fait face",
+      shading: "Ombrage", solar_gain: "Héliotropie",
+    },
+    sectionSubs: {
+      geometry: "Pour savoir jusqu'où le soleil entre dans la pièce.",
+      detection: "La part du ciel d'où le soleil « voit » la fenêtre.",
+      shading: "Le volet descend juste ce qu'il faut quand le soleil est devant.",
+      solar_gain: "Laisser entrer le soleil quand il fait frais et beau. Température et météo : onglet Réglages.",
+    },
+    fieldHints: {
+      shade_distance: "Jusqu'où la lumière directe peut entrer, au sol.",
+      shade_max_height: "Bas du volet ouvert à 100 %.",
+      shade_min_height: "Bas du volet fermé : 0 pour une porte-fenêtre.",
+      angle_left: "Vers l'est pour une façade sud.",
+      angle_right: "Vers l'ouest pour une façade sud.",
+      shade_degrees: "Ombrage : le soleil est devant à ± cet angle de la façade.",
+      shade_minimum_position: "L'ombrage ne ferme jamais plus que ça.",
+      shade_default_position: "Quand le soleil n'est pas devant la fenêtre.",
+      shade_change_threshold: "Les petits mouvements sont ignorés, pour ménager le moteur.",
+      shade_time_out: "Attente après tout mouvement du volet, manuel compris.",
+      solar_gain_position_solar: "Frais, beau temps, soleil devant.",
+      solar_gain_position_cold: "Frais, mais pas de soleil sur la fenêtre ou mauvais temps.",
+    },
+    fromTemplate: (v) => `gabarit : ${v}`,
+    elevationRange: "Hauteur du soleil",
+    elevationHint: "En dehors, le volet va à sa position par défaut.",
+    rangeTo: "à",
+    fig: {
+      outside: "dehors", room: "pièce", max: "haut. maxi", min: "haut. mini",
+      distance: "distance", left: "gauche", right: "droite", view: "vu de l'intérieur",
+    },
+    tplName: "Nom du gabarit",
+    usedBy: "Utilisé par",
+    noCoverYet: "Aucun volet pour l'instant",
+    tplIdentityNote: "Chaque volet part de ces valeurs et peut s'en écarter dans sa propre fiche.",
+    facadeName: "Nom de la façade",
+    facadeCovers: "Volets sur cette façade",
+    orientTitle: "Orientation",
+    orientSub: "Vers où regardent les fenêtres, vu de l'intérieur.",
+    dragCompass: "ou glisser la flèche sur la boussole",
+    compassNote: "Le bleu marque le mur de la façade ; le jaune, d'où le soleil peut lui faire face.",
+    dirs: ["N", "NE", "E", "SE", "S", "SO", "O", "NO"],
+    houseTitle: "La maison",
+    houseSub: "enregistré élément par élément",
+    globalTitle: "Réglages globaux",
+    globalNote: "un seul enregistrement, en bas",
+    addShort: "Ajouter",
+    tplMeta: (h, d) => `hauteur ${h} m · distance ${d} m`,
+    sgTitle: "Héliotropie",
+    sgSub: "Quand fait-il assez frais et beau pour laisser entrer le soleil ? Vaut pour tous les volets.",
+    sgTemp: "Température",
+    sgThreshold: "sous le seuil",
+    sgWeather: "Météo",
+    sgGood: "Beau temps =",
+    sgNote: "Sans température, le test est ignoré ; sans météo, il fait toujours beau.",
+    sgTooWarm: (t, s) => `${t} ≥ ${s} : trop chaud, l'héliotropie attend`,
+    sgCool: (t, s) => `${t} < ${s} : assez frais`,
+    cmdTitle: "Envoi des commandes",
+    extraTitle: "Entités en plus, pour chaque volet",
+    extraSub: "Pour vos tableaux de bord et automatisations.",
+    showHints: {
+      sun_facing: "Capteur binaire : le soleil fait-il face au volet ?",
+      auto_shade: "Capteur binaire : l'ombrage est-il activé sur ce volet ?",
+      solar_gain: "Capteur binaire : l'héliotropie est-elle activée sur ce volet ?",
+    },
+    unsaved: "Modifications non enregistrées",
     errors: {
       name_required: () => "Le nom ne peut pas être vide.",
       name_exists: (n) => `Le nom « ${n} » existe déjà.`,
@@ -581,6 +747,16 @@ const SECTION_ICONS = {
   shading: "mdi:weather-sunny", solar_gain: "mdi:thermometer",
 };
 
+/* The weather states as the "fine weather" chips draw them. */
+const WEATHER_ICONS = {
+  "clear-night": "mdi:weather-night", cloudy: "mdi:weather-cloudy",
+  exceptional: "mdi:alert-circle-outline", fog: "mdi:weather-fog", hail: "mdi:weather-hail",
+  lightning: "mdi:weather-lightning", "lightning-rainy": "mdi:weather-lightning-rainy",
+  partlycloudy: "mdi:weather-partly-cloudy", pouring: "mdi:weather-pouring",
+  rainy: "mdi:weather-rainy", snowy: "mdi:weather-snowy", "snowy-rainy": "mdi:weather-snowy-rainy",
+  sunny: "mdi:weather-sunny", windy: "mdi:weather-windy", "windy-variant": "mdi:weather-windy-variant",
+};
+
 /** "fr-CA" has no table of its own; its base language has one, and that is the answer. */
 function pickLanguage(want) {
   const asked = String(want || "en");
@@ -593,12 +769,12 @@ function mergeWords(base, over) {
   const out = { ...base };
   for (const [key, value] of Object.entries(over || {})) {
     const under = out[key];
-    // Plain objects merge; strings and functions replace. `typeof fn` is
-    // "function", never "object", so a translated function is never walked into.
-    out[key] =
-      value && typeof value === "object" && under && typeof under === "object"
-        ? mergeWords(under, value)
-        : value;
+    // Plain objects merge; strings, functions and arrays replace. `typeof fn`
+    // is "function", never "object", so a translated function is never walked
+    // into; an array is an "object", and merging one would turn it into a
+    // keyed object that no longer destructures or maps.
+    const plain = (v) => v && typeof v === "object" && !Array.isArray(v);
+    out[key] = plain(value) && plain(under) ? mergeWords(under, value) : value;
   }
   return out;
 }
@@ -693,20 +869,7 @@ function behaviorBadge(behavior) {
   return plate;
 }
 
-/* ---------- colour + error helpers ---------- */
-function hexToRgb(hex) {
-  const h = String(hex || "#FFFFFF").replace("#", "");
-  if (h.length !== 6) return [255, 255, 255];
-  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
-}
-
-function rgbToHex(rgb) {
-  if (!Array.isArray(rgb) || rgb.length < 3) return "#FFFFFF";
-  return `#${rgb.slice(0, 3)
-    .map((n) => Math.max(0, Math.min(255, Number(n) | 0)).toString(16).padStart(2, "0"))
-    .join("")}`.toUpperCase();
-}
-
+/* ---------- error helper ---------- */
 /** Turn a server error code ("in_use:Ombre:3:cover.a") into a sentence. */
 function wsError(err) {
   const raw = String(err?.message || err?.code || "");
@@ -1168,6 +1331,261 @@ const STYLE = `
   .toggle .mdot { width: 8px; height: 8px; border-radius: 50%; }
   .grouped { border-top: 1px solid var(--divider-color); padding-top: var(--fp-s2); margin-top: var(--fp-s1); }
   .grouped h4 { margin: 0; font-size: var(--f-13); }
+
+  /* ---------- editors, 4.0 layout ----------
+     One anatomy for every editor: an identity strip (plate + the fields that
+     name the item), then cards that each answer one question, in two columns
+     on a wide screen and one on a phone. */
+  .ed-ident { display: grid; grid-template-columns: auto minmax(220px, 1.4fr) minmax(160px, .8fr) minmax(160px, .8fr);
+              gap: var(--fp-s3) var(--fp-s4); align-items: end; }
+  .ed-ident.three { grid-template-columns: auto minmax(220px, 1fr) minmax(220px, 1fr); }
+  .ed-ident .line2 { grid-column: 2 / -1; display: flex; align-items: center; gap: var(--fp-s3); flex-wrap: wrap; }
+  .ed-ident .line2 .status { margin: 0 0 0 auto; }
+  .ed-ident ha-selector { margin: 0; }
+  .ed-plate { width: 64px; height: 64px; border-radius: 16px; flex: none; align-self: start; overflow: hidden;
+              display: flex; align-items: center; justify-content: center;
+              background: var(--secondary-background-color); color: var(--secondary-text-color);
+              border: 1px solid var(--divider-color); }
+  .ed-plate ha-icon { --mdc-icon-size: 34px; width: 34px; height: 34px; }
+  .ed-plate img { width: 100%; height: 100%; object-fit: cover; }
+  .ed-lbl { display: block; font-size: var(--f-12); font-weight: 500; color: var(--secondary-text-color);
+            margin-bottom: var(--fp-sh); }
+  .ed-input, .ed-select { width: 100%; height: 44px; font: inherit; font-size: var(--f-14); padding: 0 var(--fp-s3);
+              border-radius: var(--fp-field-r); border: 1px solid var(--divider-color);
+              background: var(--secondary-background-color); color: var(--primary-text-color); }
+  .ed-input.big { font-size: var(--f-17); font-weight: 600; }
+  .ed-input.small { height: 36px; font-size: var(--f-13); width: 260px; max-width: 100%; }
+  .ed-select.inline { width: auto; min-width: 200px; height: 40px; }
+  .ed-preview { grid-column: 2 / -1; display: flex; align-items: center; gap: var(--fp-s2);
+                font-size: var(--f-12); color: var(--secondary-text-color); }
+  .mpill { display: inline-flex; align-items: center; gap: var(--fp-sh); padding: 3px 10px; border-radius: var(--fp-pill-r);
+           font-size: var(--f-12-5); font-weight: 600; }
+  .mpill ha-icon { --mdc-icon-size: 14px; width: 14px; height: 14px; }
+  .colorpick { display: flex; align-items: center; gap: var(--fp-s2); height: 44px; }
+  .colorpick input[type=color] { width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%;
+                                 background: none; cursor: pointer; flex: none; }
+  .colorpick input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+  .colorpick input[type=color]::-webkit-color-swatch { border: 2px solid var(--divider-color); border-radius: 50%; }
+  .colorpick input[type=color]::-moz-color-swatch { border: 2px solid var(--divider-color); border-radius: 50%; }
+  .colorpick .ed-input { width: 120px; font-family: ui-monospace, monospace; text-transform: uppercase; }
+  .colorpick .ed-input[aria-invalid="true"] { border-color: var(--fp-warn); }
+
+  .ed-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--fp-s4); align-items: start;
+             margin-top: var(--fp-s4); }
+  .ed-stack { display: grid; gap: var(--fp-s4); align-content: start; }
+  .ed-card > h3 { display: flex; align-items: center; gap: var(--fp-s2); margin: 0 0 var(--fp-s0);
+                  font-size: var(--f-14-5, var(--f-14)); font-weight: 600; }
+  .ed-card > h3 > ha-icon { --mdc-icon-size: 18px; width: 18px; height: 18px; color: var(--secondary-text-color); }
+  .ed-card > h3 .end { margin-left: auto; }
+  .ed-sub { margin: 0 0 var(--fp-s3); font-size: var(--f-12-5); color: var(--secondary-text-color); line-height: 1.4; }
+  .ed-note { display: flex; gap: var(--fp-sh); margin: var(--fp-s2) 0 0; font-size: var(--f-12);
+             color: var(--secondary-text-color); line-height: 1.4; }
+  .ed-note ha-icon, .info { --mdc-icon-size: 15px; width: 15px; height: 15px; flex: none; color: var(--secondary-text-color); }
+  .ed-q { display: flex; align-items: center; gap: var(--fp-sh); margin: var(--fp-s1) 0 var(--fp-s2);
+          font-size: var(--f-13-5, var(--f-13)); font-weight: 500; }
+  .ed-sep { border-top: 1px solid var(--divider-color); margin: var(--fp-s3) 0; }
+  .ed-head { display: flex; align-items: center; gap: var(--fp-s2); flex-wrap: wrap; margin: var(--fp-s5) var(--fp-s0) var(--fp-s3); }
+  .ed-head h2 { margin: 0; font-size: var(--f-16); font-weight: 600; }
+  .ed-head .spacer { flex: 1; }
+  .ed-head .note-txt { font-size: var(--f-12-5); color: var(--secondary-text-color); }
+  .linkbtn { display: inline-flex; align-items: center; gap: var(--fp-s1); border: 0; background: none; padding: 0;
+             font: inherit; font-size: var(--f-12-5); font-weight: 500; color: var(--primary-color); cursor: pointer; }
+  .linkbtn ha-icon { --mdc-icon-size: 15px; width: 15px; height: 15px; }
+
+  /* An option row: icon tile, label + one line, a switch at the end. */
+  .opt { display: flex; align-items: center; gap: var(--fp-s3); padding: var(--fp-s3) 0;
+         border-top: 1px solid var(--divider-color); }
+  .opt:first-of-type { border-top: 0; padding-top: var(--fp-s1); }
+  .opt .txt { flex: 1; min-width: 0; }
+  .opt .t { font-size: var(--f-13-5, var(--f-13)); font-weight: 500; }
+  .opt .h { font-size: var(--f-12); color: var(--secondary-text-color); margin-top: var(--fp-s0); line-height: 1.35; }
+  .tile { width: 32px; height: 32px; border-radius: var(--fp-ctl-r); flex: none; display: flex; align-items: center;
+          justify-content: center; background: var(--secondary-background-color); color: var(--secondary-text-color); }
+  .tile ha-icon { --mdc-icon-size: 18px; width: 18px; height: 18px; }
+  .tile.on { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 14%, transparent); }
+  .tsw { position: relative; width: 36px; height: 20px; flex: none; border: 0; padding: 0; border-radius: 10px;
+         background: color-mix(in srgb, var(--secondary-text-color) 45%, transparent); cursor: pointer; }
+  .tsw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+                background: var(--card-background-color); transition: left .15s; }
+  .tsw[aria-checked="true"] { background: var(--primary-color); }
+  .tsw[aria-checked="true"]::after { left: 18px; background: #fff; }
+  .tsw:focus-visible { outline: var(--fp-focus); outline-offset: var(--fp-focus-off); }
+  .opt-more { margin: calc(var(--fp-s1) * -1) 0 var(--fp-s2) 44px; padding: var(--fp-s2) var(--fp-s3);
+              border-radius: var(--fp-ctl-r); background: var(--secondary-background-color);
+              display: flex; align-items: center; gap: var(--fp-s2); flex-wrap: wrap; font-size: var(--f-13); }
+  .opt-more input { width: 72px; height: 32px; text-align: right; font: inherit; font-size: var(--f-13);
+                    border-radius: var(--fp-field-r); border: 1px solid var(--divider-color);
+                    background: var(--card-background-color); color: var(--primary-text-color); padding: 0 var(--fp-s2); }
+  .opt-more select { height: 32px; font: inherit; font-size: var(--f-13); border-radius: var(--fp-field-r);
+                     border: 1px solid var(--divider-color); background: var(--card-background-color);
+                     color: var(--primary-text-color); padding: 0 var(--fp-s2); }
+
+  /* The mode's three behaviours, side by side. */
+  .bseg { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--fp-s1); padding: var(--fp-s1);
+          background: var(--secondary-background-color); border-radius: 10px; }
+  .bseg button { display: flex; flex-direction: column; align-items: center; gap: var(--fp-s1); padding: 10px 6px;
+                 border: 0; border-radius: 7px; background: transparent; font: inherit; font-size: var(--f-13);
+                 font-weight: 500; color: var(--secondary-text-color); cursor: pointer; text-align: center; }
+  .bseg button ha-icon { --mdc-icon-size: 22px; width: 22px; height: 22px; }
+  .bseg button small { font-size: var(--f-11); font-weight: 400; }
+  .bseg button[aria-pressed="true"] { background: var(--card-background-color); color: var(--primary-text-color);
+                 font-weight: 600; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bc) 60%, transparent); }
+  .bseg button[aria-pressed="true"] ha-icon { color: var(--bc); }
+  .toggle ha-icon { --mdc-icon-size: 14px; width: 14px; height: 14px; color: var(--primary-color); }
+  .toggle[aria-pressed="true"] .mdot { display: none; }
+  .toggle:not([aria-pressed="true"]) ha-icon.check { display: none; }
+  .toggle.wx ha-icon { color: inherit; }
+  .toggle.wx[aria-pressed="true"] ha-icon { color: var(--primary-color); }
+  details.adv > summary { display: flex; align-items: center; gap: var(--fp-s2); cursor: pointer; list-style: none; }
+  details.adv > summary::-webkit-details-marker { display: none; }
+  details.adv > summary h3 { margin: 0; flex: 1; font-size: var(--f-14); font-weight: 600; }
+  details.adv > summary > ha-icon { --mdc-icon-size: 18px; width: 18px; height: 18px; color: var(--secondary-text-color); }
+  details.adv[open] > summary .chev-d { transform: rotate(180deg); }
+  details.adv > .adv-body { margin-top: var(--fp-s2); }
+  .badge { font-size: var(--f-11-5); color: var(--secondary-text-color); border: 1px solid var(--divider-color);
+           border-radius: 12px; padding: var(--fp-s0) var(--fp-s2); }
+
+  /* Entities as chips, plus one picker to add another. */
+  .prot { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--fp-s5); }
+  .prot h4 { display: flex; align-items: center; gap: var(--fp-s2); margin: 0; font-size: var(--f-13-5, var(--f-13)); }
+  .prot h4 ha-icon { --mdc-icon-size: 18px; width: 18px; height: 18px; }
+  .prot .safety h4 ha-icon { color: var(--fp-bad); }
+  .prot .pause h4 ha-icon { color: var(--fp-warn); }
+  .prot .pbody { margin-left: 26px; }
+  .prot .pbody > p { margin: var(--fp-s0) 0 var(--fp-s2); font-size: var(--f-12); color: var(--secondary-text-color); }
+  .prot .ex { margin: var(--fp-s2) 0 0; font-size: var(--f-11-5); color: var(--secondary-text-color); }
+  .ents { display: flex; flex-wrap: wrap; gap: var(--fp-s2); margin-bottom: var(--fp-s2); }
+  .ents:empty { display: none; }
+  .ent { display: inline-flex; align-items: center; gap: var(--fp-s2); padding: var(--fp-sh) var(--fp-sh) var(--fp-sh) var(--fp-s3);
+         border-radius: var(--fp-ctl-r); background: var(--secondary-background-color); border: 1px solid var(--divider-color);
+         font-size: var(--f-13); min-width: 0; }
+  .ent .eid { display: block; font-size: var(--f-11); color: var(--secondary-text-color); font-family: ui-monospace, monospace; }
+  .ent .st { font-size: var(--f-11); font-weight: 600; padding: var(--fp-s0) var(--fp-sh); border-radius: 10px;
+             background: color-mix(in srgb, var(--secondary-text-color) 18%, transparent); color: var(--secondary-text-color); }
+  .ent .st.on { background: color-mix(in srgb, var(--fp-warn) 25%, transparent); color: var(--fp-warn); }
+  .ent button { border: 0; background: none; padding: 0; color: var(--secondary-text-color); cursor: pointer;
+                display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; border-radius: 50%; }
+  .ent button:hover { background: color-mix(in srgb, var(--secondary-text-color) 18%, transparent); }
+  .ent button ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; }
+  .chipline { display: flex; flex-wrap: wrap; gap: var(--fp-sh); }
+  .chipline .chip ha-icon { --mdc-icon-size: 13px; width: 13px; height: 13px; }
+
+  /* A number: box + unit on the right, one hint line, a short slider below. */
+  .numf { display: grid; grid-template-columns: 1fr auto; gap: var(--fp-s0) var(--fp-s3); align-items: center;
+          padding: 10px 0; border-top: 1px solid var(--divider-color); }
+  .numf.first, .numf:first-child { border-top: 0; }
+  .numf .t { display: flex; align-items: center; gap: var(--fp-sh); flex-wrap: wrap; font-size: var(--f-13-5, var(--f-13)); font-weight: 500; }
+  .numf .h { grid-column: 1; font-size: var(--f-12); color: var(--secondary-text-color); line-height: 1.35; }
+  .numf .val { grid-row: 1 / span 2; grid-column: 2; display: flex; align-items: center; gap: var(--fp-sh); }
+  .numf input[type=number] { width: 68px; height: 32px; text-align: right; font: inherit; font-size: var(--f-13-5, var(--f-13));
+          font-weight: 600; font-variant-numeric: tabular-nums; border-radius: var(--fp-field-r);
+          border: 1px solid var(--divider-color); background: var(--secondary-background-color);
+          color: var(--primary-text-color); padding: 0 var(--fp-sh); }
+  .numf .u { font-size: var(--f-12-5); color: var(--secondary-text-color); min-width: 24px; }
+  .numf .from { font-size: var(--f-11-5); font-weight: 400; color: var(--secondary-text-color); }
+  .numf input[type=range] { grid-column: 1 / -1; width: 100%; margin: var(--fp-sh) 0 0; accent-color: var(--primary-color); }
+  .numf.ovr { background: color-mix(in srgb, var(--fp-warn) 9%, transparent); border-radius: var(--fp-field-r);
+              margin: 0 calc(var(--fp-s2) * -1); padding-left: var(--fp-s2); padding-right: var(--fp-s2); }
+  .numf.ovr input[type=number] { border-color: color-mix(in srgb, var(--fp-warn) 60%, transparent); color: var(--fp-warn); }
+  .numf.ovr input[type=range] { accent-color: var(--fp-warn); }
+  .numf:not(.ovr) .from { display: none; }
+  /* Two thumbs on one track: the ranges overlap, only their thumbs catch the pointer. */
+  .dual { grid-column: 1 / -1; position: relative; height: 20px; margin-top: var(--fp-sh); }
+  .dual .track { position: absolute; left: 0; right: 0; top: 8px; height: 4px; border-radius: 2px;
+                 background: color-mix(in srgb, var(--secondary-text-color) 35%, transparent); }
+  .dual .track i { position: absolute; top: 0; bottom: 0; border-radius: 2px; background: var(--primary-color); }
+  .numf.ovr .dual .track i { background: var(--fp-warn); }
+  .dual input[type=range] { position: absolute; inset: 0; width: 100%; margin: 0; pointer-events: none;
+                            -webkit-appearance: none; appearance: none; background: transparent; }
+  .dual input[type=range]::-webkit-slider-runnable-track { background: transparent; }
+  .dual input[type=range]::-moz-range-track { background: transparent; }
+  .dual input[type=range]::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; appearance: none;
+         width: 16px; height: 16px; border-radius: 50%; border: 0; background: var(--primary-color); cursor: pointer; }
+  .dual input[type=range]::-moz-range-thumb { pointer-events: auto; width: 16px; height: 16px; border-radius: 50%;
+         border: 0; background: var(--primary-color); cursor: pointer; }
+  .numf.ovr .dual input[type=range]::-webkit-slider-thumb { background: var(--fp-warn); }
+  .numf.ovr .dual input[type=range]::-moz-range-thumb { background: var(--fp-warn); }
+  .numf.sep-top { border-top: 1px solid var(--divider-color); margin-top: var(--fp-s1); }
+  .sect.dim .sect-body { opacity: .5; }
+  .withfig { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: var(--fp-s4); align-items: start; }
+  .fig { background: var(--secondary-background-color); border-radius: 10px; padding: var(--fp-sh); }
+  .fig svg { display: block; width: 100%; height: auto; }
+  .fig text { font-size: 9px; font-family: inherit; }
+
+  /* Facade compass. */
+  .orient { display: grid; grid-template-columns: 240px 1fr; gap: 28px; align-items: center; }
+  .compass { width: 240px; height: 240px; touch-action: none; cursor: grab; user-select: none; }
+  .compass text { font-size: 13px; font-weight: 600; }
+  .azrow { display: flex; align-items: center; gap: var(--fp-s2); flex-wrap: wrap; font-size: var(--f-13);
+           color: var(--secondary-text-color); }
+  .azrow input { width: 84px; height: 40px; text-align: right; font: inherit; font-size: var(--f-17); font-weight: 600;
+                 border-radius: var(--fp-field-r); border: 1px solid var(--divider-color);
+                 background: var(--secondary-background-color); color: var(--primary-text-color); padding: 0 var(--fp-s2); }
+  .dirs { display: flex; flex-wrap: wrap; gap: var(--fp-sh); margin: var(--fp-s3) 0 var(--fp-s1); }
+  .dirs button { min-width: 44px; height: 32px; border-radius: var(--fp-ctl-r); border: 1px solid var(--divider-color);
+                 background: transparent; color: var(--secondary-text-color); font: inherit; font-size: var(--f-13);
+                 font-weight: 500; cursor: pointer; }
+  .dirs button[aria-pressed="true"] { color: var(--primary-text-color); font-weight: 600;
+                 border-color: color-mix(in srgb, var(--primary-color) 60%, transparent);
+                 background: color-mix(in srgb, var(--primary-color) 14%, transparent); }
+
+  /* Réglages: two columns, lists as rows. */
+  .set-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: var(--fp-s4); align-items: start; }
+  .colhead { display: flex; align-items: baseline; gap: var(--fp-s2); flex-wrap: wrap; margin: 0 var(--fp-s0) var(--fp-s1); }
+  .colhead h2 { margin: 0; font-size: var(--f-16); font-weight: 600; }
+  .colhead span { font-size: var(--f-12-5); color: var(--secondary-text-color); }
+  .ed-card > h3 .btn { margin-left: auto; height: 32px; padding: 0 var(--fp-s3); font-size: var(--f-12-5); }
+  .ed-card > h3 .btn ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; color: inherit; }
+  .lrow { display: flex; align-items: center; gap: var(--fp-s3); padding: 10px var(--fp-s1); width: 100%;
+          border: 0; border-top: 1px solid var(--divider-color); background: none; font: inherit; text-align: left;
+          color: var(--primary-text-color); cursor: pointer; border-radius: var(--fp-field-r); }
+  .lrow:first-child { border-top: 0; }
+  .lrow:hover { background: color-mix(in srgb, var(--primary-color) 6%, transparent); }
+  .lrow .nm { font-size: var(--f-14); font-weight: 500; }
+  .lrow .meta { font-size: var(--f-12); color: var(--secondary-text-color); }
+  .lrow .chev { margin-left: auto; color: var(--secondary-text-color); --mdc-icon-size: 20px; width: 20px; height: 20px; }
+  .round { width: 36px; height: 36px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center;
+           background: var(--secondary-background-color); border: 1px solid var(--divider-color); color: var(--secondary-text-color); }
+  .round ha-icon { --mdc-icon-size: 20px; width: 20px; height: 20px; }
+  .round.az { color: var(--primary-color); }
+  .sline { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: var(--fp-s3); align-items: center; padding: var(--fp-sh) 0; }
+  .sline > .k { font-size: var(--f-12-5); color: var(--secondary-text-color); }
+  .sline ha-selector { margin: 0; }
+  .sline.top { align-items: start; }
+  .sline.top > .k { padding-top: var(--fp-sh); }
+  .verdict { grid-column: 2; justify-self: start; }
+  .chip.ok { color: var(--fp-ok); border-color: color-mix(in srgb, var(--fp-ok) 45%, transparent); }
+  .stats.compact { gap: var(--fp-s3) var(--fp-s5); margin-top: var(--fp-s2); }
+  .stats.compact .stat-n { font-size: var(--f-20); }
+  .actions.savebar { position: sticky; bottom: var(--fp-s2); z-index: 3; margin-top: 0;
+                     border-color: color-mix(in srgb, var(--primary-color) 50%, transparent);
+                     box-shadow: 0 -6px 24px rgba(0,0,0,.35); }
+  .actions.savebar[hidden] { display: none; }
+  .actions .why { font-size: var(--f-12); color: var(--secondary-text-color); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary-color); flex: none; }
+
+  @media (max-width: 900px) {
+    .set-cols { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 720px) {
+    /* Five tabs are wider than a phone: they scroll instead of pushing the page. */
+    .tabs { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+    .tab { flex: none; }
+    /* The plate keeps the name beside it; everything else takes a full row. */
+    .ed-ident, .ed-ident.three { grid-template-columns: auto minmax(0, 1fr); }
+    .ed-ident > :not(.ed-plate):not(.wide) { grid-column: 1 / -1; }
+    .ed-ident > * { min-width: 0; }
+    .ed-ident .line2 .status { margin-left: 0; }
+    .ed-input.small { width: 100%; }
+    .ed-cols, .prot { grid-template-columns: minmax(0, 1fr); }
+    .withfig { grid-template-columns: minmax(0, 1fr); }
+    .fig { max-width: 220px; }
+    .orient { grid-template-columns: 1fr; justify-items: center; }
+    .sline { grid-template-columns: minmax(0, 1fr); gap: var(--fp-s1); }
+    .verdict { grid-column: 1; }
+    .opt-more { margin-left: 0; }
+    .actions .why { display: none; }
+  }
 
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 `;
@@ -1946,36 +2364,6 @@ class CoverExtenderPanel extends HTMLElement {
 
   /* ---------- form controls ---------- */
 
-  _textRow(label, value, onInput, opts = {}) {
-    const row = el("label", "field");
-    row.append(el("span", "flabel", label));
-    const input = document.createElement("input");
-    input.type = "text";
-    input.className = "ftext";
-    input.value = value ?? "";
-    if (opts.placeholder) input.placeholder = opts.placeholder;
-    input.addEventListener("input", () => onInput(input.value));
-    row.append(input);
-    return row;
-  }
-
-  _selectRow(label, value, options, onChange) {
-    const row = el("label", "field");
-    row.append(el("span", "flabel", label));
-    const sel = document.createElement("select");
-    sel.className = "fselect";
-    for (const [val, text] of options) {
-      const o = document.createElement("option");
-      o.value = val === null ? "" : String(val);
-      o.textContent = text;
-      if ((value ?? "") === (val ?? "")) o.selected = true;
-      sel.append(o);
-    }
-    sel.addEventListener("change", () => onChange(sel.value || null));
-    row.append(sel);
-    return row;
-  }
-
   _boolRow(label, value, onChange, hint) {
     const row = el("label", "field switch");
     const box = el("span", "flabel");
@@ -1990,128 +2378,438 @@ class CoverExtenderPanel extends HTMLElement {
     return row;
   }
 
-  /** A slider with no inheritance behind it (facade azimuth, and the like). */
-  _sliderRow(label, value, spec, onInput) {
-    const row = el("div", "field num");
-    const head = el("div", "fhead");
-    head.append(el("span", "flabel", label));
-    const fmt = (v) => `${v}${spec.unit ? ` ${spec.unit}` : ""}`;
-    const val = el("span", "fval", fmt(value));
-    head.append(val);
-    row.append(head);
+  /* ---------- editor building blocks ---------- */
 
-    const range = document.createElement("input");
-    range.type = "range";
-    range.min = String(spec.min);
-    range.max = String(spec.max);
-    range.step = String(spec.step || 1);
-    range.value = String(value);
-    range.addEventListener("input", () => {
-      const n = Number(range.value);
-      val.textContent = fmt(n);
-      onInput(n);
-    });
-    row.append(range);
-    return row;
+  /** A card that answers one question: icon, title, one line under it. */
+  _edCard(iconName, title, sub) {
+    const card = el("section", "card ed-card");
+    const h = el("h3");
+    h.append(icon(iconName), el("span", "", title));
+    card.append(h);
+    if (sub) card.append(el("p", "ed-sub", sub));
+    return card;
   }
 
-  /** A typed number, for values a slider would make imprecise (milliseconds). */
-  _numberRow(label, value, spec, onInput, hint) {
-    const row = el("label", "field");
-    const box = el("span", "flabel");
-    box.append(document.createTextNode(label));
-    if (hint) box.append(el("small", "fhint", hint));
-    row.append(box);
+  /** A label above its control. */
+  _labeled(label, control, cls = "") {
+    const box = el("div", cls);
+    box.append(el("span", "ed-lbl", label), control);
+    return box;
+  }
+
+  _edInput(value, onInput, cls = "", placeholder = "") {
     const input = document.createElement("input");
-    input.type = "number";
-    input.className = "ftext fnum";
-    input.min = String(spec.min);
-    input.max = String(spec.max);
-    input.step = String(spec.step || 1);
-    input.value = String(value);
-    input.addEventListener("input", () => {
-      // An empty box is a transient state while typing, not a zero.
-      if (input.value !== "") onInput(Number(input.value));
-    });
-    row.append(input);
-    if (spec.unit) row.append(el("span", "funit", spec.unit));
-    return row;
+    input.type = "text";
+    input.className = `ed-input ${cls}`.trim();
+    input.value = value ?? "";
+    if (placeholder) input.placeholder = placeholder;
+    input.addEventListener("input", () => onInput(input.value));
+    return input;
   }
 
-  /** A HA selector row (icon, colour, entity…), loaded lazily like the popover. */
-  _selectorRow(label, selector, value, onChange, hint) {
-    const row = el("div", "field vertical");
-    row.append(el("span", "flabel", label));
-    if (hint) row.append(el("small", "fhint", hint));
+  _edSelect(value, options, onChange, cls = "") {
+    const sel = document.createElement("select");
+    sel.className = `ed-select ${cls}`.trim();
+    for (const [val, text] of options) {
+      const o = document.createElement("option");
+      o.value = val === null ? "" : String(val);
+      o.textContent = text;
+      if ((value ?? "") === (val ?? "")) o.selected = true;
+      sel.append(o);
+    }
+    sel.addEventListener("change", () => onChange(sel.value || null));
+    return sel;
+  }
+
+  /** A bare HA selector (entity, icon…), without the row around it. */
+  _haSelector(selector, value, onChange, label) {
     const sel = document.createElement("ha-selector");
     sel.hass = this._hass;
     sel.selector = selector;
     sel.value = value ?? undefined;
+    if (label) sel.label = label;
     sel.addEventListener("value-changed", (e) => onChange(e.detail.value));
-    row.append(sel);
+    return sel;
+  }
+
+  /** A switch the keyboard and screen readers know as one. */
+  _switch(checked, onChange, label) {
+    const b = el("button", "tsw");
+    b.type = "button";
+    b.setAttribute("role", "switch");
+    b.setAttribute("aria-checked", String(!!checked));
+    if (label) b.setAttribute("aria-label", label);
+    b.addEventListener("click", () => {
+      const v = b.getAttribute("aria-checked") !== "true";
+      b.setAttribute("aria-checked", String(v));
+      onChange(v);
+    });
+    return b;
+  }
+
+  /** Icon tile, label, one line, switch. The tile lights up with the switch. */
+  _optRow(iconName, label, hint, value, onChange) {
+    const row = el("div", "opt");
+    const tile = el("span", `tile${value ? " on" : ""}`);
+    tile.append(icon(iconName));
+    const txt = el("div", "txt");
+    txt.append(el("div", "t", label));
+    if (hint) txt.append(el("div", "h", hint));
+    row.append(tile, txt, this._switch(value, (v) => {
+      tile.classList.toggle("on", v);
+      onChange(v);
+    }, label));
     return row;
   }
 
+  /** The (i) whose tooltip holds the detail a one-line hint leaves out. */
+  _info(text) {
+    const i = icon("mdi:information-outline", "info");
+    i.title = text;
+    i.setAttribute("role", "img");
+    i.setAttribute("aria-label", text);
+    return i;
+  }
+
+  _note(text) {
+    const p = el("p", "ed-note");
+    p.append(icon("mdi:information-outline"), el("span", "", text));
+    return p;
+  }
+
+  /** The delete button, and why it is off when it is: said, not hidden in a tooltip. */
+  _deleteButton(used, reason, onDelete) {
+    const out = [];
+    const del = el("button", "btn danger");
+    del.append(icon("mdi:delete-outline"), document.createTextNode(T.delete));
+    if (used) {
+      del.disabled = true;
+      del.title = reason;
+      out.push(del, el("span", "why", reason));
+    } else {
+      del.addEventListener("click", onDelete);
+      out.push(del);
+    }
+    return out;
+  }
+
+  /** Entities as chips with their live state, and one picker to add another. */
+  _entityChips(list, onChange) {
+    const box = el("div");
+    const chips = el("div", "ents");
+    const st = this._hass.states;
+    for (const eid of list) {
+      const chip = el("span", "ent");
+      const name = el("span");
+      name.append(document.createTextNode(st[eid]?.attributes?.friendly_name || eid), el("span", "eid", eid));
+      chip.append(name);
+      const s = st[eid];
+      if (s) {
+        const shown = this._hass.formatEntityState ? this._hass.formatEntityState(s) : s.state;
+        chip.append(el("span", `st${s.state === "on" ? " on" : ""}`, shown));
+      }
+      const rm = el("button");
+      rm.type = "button";
+      rm.title = T.removeEntity;
+      rm.setAttribute("aria-label", `${T.removeEntity} ${eid}`);
+      rm.append(icon("mdi:close"));
+      rm.addEventListener("click", () => onChange(list.filter((e) => e !== eid)));
+      chip.append(rm);
+      chips.append(chip);
+    }
+    box.append(chips, this._haSelector({ entity: {} }, undefined, (v) => {
+      if (v && !list.includes(v)) onChange([...list, v]);
+    }, T.addEntity));
+    return box;
+  }
+
   /**
-   * One behavior field. The value shown is always the EFFECTIVE one; the row is
-   * flagged when the cover overrides its template, and the flag doubles as the
-   * way back — clicking it drops the override instead of hunting for the
+   * One behavior number: a typed box and its unit, one hint line, a short
+   * slider. The value shown is always the EFFECTIVE one; the row turns amber
+   * when the cover departs from its template, says what the template holds,
+   * and the arrow beside it drops the override instead of hunting for the
    * template's number.
    */
-  _behaviorRow(name, spec, draft, baseline, rerender, hasTemplate) {
-    const overridden = Object.prototype.hasOwnProperty.call(draft, name);
-    const value = overridden ? draft[name] : baseline[name];
-
-    if (spec.type === "boolean") {
-      // Activation flags are cover-specific: no template value to fall back to.
-      return this._boolRow(T.fields[name] || name, value, (v) => { draft[name] = v; });
-    }
-
-    const row = el("div", "field num");
-    const head = el("div", "fhead");
-    head.append(el("span", "flabel", T.fields[name] || name));
+  _behaviorRow(name, spec, draft, baseline, hasTemplate, onValue) {
+    const has = (k) => Object.prototype.hasOwnProperty.call(draft, k);
+    const fmt = (v) => `${v}${spec.unit ? ` ${spec.unit}` : ""}`;
+    const round = (raw) => (spec.step && spec.step < 1 ? Math.round(raw * 10) / 10 : Math.round(raw));
+    const clamp = (n) => Math.min(spec.max, Math.max(spec.min, n));
+    const row = el("div", "numf");
+    const t = el("div", "t");
+    t.append(el("span", "", T.fields[name] || name));
 
     // Built once and merely hidden, never re-created: rebuilding the row on the
     // first slider move would tear the input out from under the pointer and
     // abort the drag. Without a template there is nothing to revert TO, so the
     // affordance stays out of the way entirely.
-    // Icon only: the amber row already announces the departure, so a label
-    // beside it would say the same thing twice. What is left for the control to
-    // carry is the action, and the tooltip names it.
-    const reset = el("button", "revert");
-    reset.type = "button";
-    reset.title = T.revertTitle;
-    reset.setAttribute("aria-label", T.revertTitle);
-    reset.append(icon("mdi:backup-restore"));
-    reset.addEventListener("click", () => { delete draft[name]; rerender(); });
-    head.append(reset);
+    let reset = null;
+    if (hasTemplate) {
+      reset = el("button", "revert");
+      reset.type = "button";
+      reset.title = T.revertTitle;
+      reset.setAttribute("aria-label", T.revertTitle);
+      reset.append(icon("mdi:backup-restore"));
+      t.append(el("span", "from", T.fromTemplate(fmt(baseline[name]))), reset);
+    }
+    row.append(t);
+    if (T.fieldHints?.[name]) row.append(el("div", "h", T.fieldHints[name]));
 
-    const fmt = (v) => `${v}${spec.unit ? ` ${spec.unit}` : ""}`;
-    const val = el("span", "fval", fmt(value));
-    head.append(val);
-    row.append(head);
-
-    const mark = (on) => {
-      row.classList.toggle("ovr", on && hasTemplate);
-      reset.hidden = !(on && hasTemplate);
-    };
-    mark(overridden);
+    const box = document.createElement("input");
+    box.type = "number";
+    box.min = String(spec.min);
+    box.max = String(spec.max);
+    box.step = String(spec.step || 1);
+    box.setAttribute("aria-label", T.fields[name] || name);
+    const val = el("div", "val");
+    val.append(box, el("span", "u", spec.unit || ""));
+    row.append(val);
 
     const range = document.createElement("input");
     range.type = "range";
     range.min = String(spec.min);
     range.max = String(spec.max);
     range.step = String(spec.step || 1);
-    range.value = String(value);
-    range.addEventListener("input", () => {
-      const raw = Number(range.value);
-      const n = spec.step && spec.step < 1 ? Math.round(raw * 10) / 10 : Math.round(raw);
-      draft[name] = n;
-      val.textContent = fmt(n);
-      mark(true);
-    });
+    range.tabIndex = -1;  // the box is the keyboard's way in; one stop per field
+    range.setAttribute("aria-hidden", "true");
     row.append(range);
+
+    const show = (v) => { box.value = String(v); range.value = String(v); };
+    const mark = (on) => {
+      row.classList.toggle("ovr", on && hasTemplate);
+      if (reset) reset.hidden = !(on && hasTemplate);
+    };
+    const set = (n, from) => {
+      draft[name] = n;
+      if (from !== box) box.value = String(n);
+      if (from !== range) range.value = String(n);
+      mark(true);
+      onValue?.();
+    };
+    show(has(name) ? draft[name] : baseline[name]);
+    mark(has(name));
+
+    range.addEventListener("input", () => set(round(Number(range.value)), range));
+    box.addEventListener("input", () => {
+      // An empty box is a transient state while typing, not a zero.
+      if (box.value === "" || !Number.isFinite(Number(box.value))) return;
+      set(clamp(round(Number(box.value))), box);
+    });
+    box.addEventListener("change", () => show(has(name) ? draft[name] : baseline[name]));
+    reset?.addEventListener("click", () => {
+      delete draft[name];
+      show(baseline[name]);
+      mark(false);
+      onValue?.();
+    });
     return row;
+  }
+
+  /** Minimum and maximum sun elevation: one range, two thumbs, two boxes. */
+  _elevationRow(lo, hi, specs, draft, baseline, hasTemplate) {
+    const has = (k) => Object.prototype.hasOwnProperty.call(draft, k);
+    const cur = (k) => (has(k) ? draft[k] : baseline[k]);
+    const spec = specs[lo];
+    const row = el("div", "numf");
+    const t = el("div", "t");
+    t.append(el("span", "", T.elevationRange));
+    let reset = null;
+    if (hasTemplate) {
+      reset = el("button", "revert");
+      reset.type = "button";
+      reset.title = T.revertTitle;
+      reset.setAttribute("aria-label", T.revertTitle);
+      reset.append(icon("mdi:backup-restore"));
+      t.append(el("span", "from", T.fromTemplate(`${baseline[lo]} ${T.rangeTo} ${baseline[hi]} ${spec.unit}`)), reset);
+    }
+    row.append(t, el("div", "h", T.elevationHint));
+
+    const mkBox = (k) => {
+      const b = document.createElement("input");
+      b.type = "number";
+      b.min = String(specs[k].min);
+      b.max = String(specs[k].max);
+      b.step = String(specs[k].step || 1);
+      b.setAttribute("aria-label", T.fields[k] || k);
+      return b;
+    };
+    const boxes = { [lo]: mkBox(lo), [hi]: mkBox(hi) };
+    const val = el("div", "val");
+    val.append(boxes[lo], el("span", "u", T.rangeTo), boxes[hi], el("span", "u", spec.unit || ""));
+    row.append(val);
+
+    const dual = el("div", "dual");
+    const track = el("div", "track");
+    const fill = el("i");
+    track.append(fill);
+    dual.append(track);
+    const ranges = {};
+    for (const k of [lo, hi]) {
+      const r = document.createElement("input");
+      r.type = "range";
+      r.min = String(specs[k].min);
+      r.max = String(specs[k].max);
+      r.step = String(specs[k].step || 1);
+      r.tabIndex = -1;
+      r.setAttribute("aria-hidden", "true");
+      ranges[k] = r;
+      dual.append(r);
+    }
+    row.append(dual);
+
+    const paint = () => {
+      for (const k of [lo, hi]) { boxes[k].value = String(cur(k)); ranges[k].value = String(cur(k)); }
+      const span = spec.max - spec.min || 1;
+      fill.style.left = `${((cur(lo) - spec.min) / span) * 100}%`;
+      fill.style.width = `${((cur(hi) - cur(lo)) / span) * 100}%`;
+    };
+    const mark = () => {
+      const on = has(lo) || has(hi);
+      row.classList.toggle("ovr", on && hasTemplate);
+      if (reset) reset.hidden = !(on && hasTemplate);
+    };
+    // The two thumbs never cross: each one stops at the other.
+    const set = (k, n) => {
+      draft[k] = k === lo ? Math.min(n, cur(hi)) : Math.max(n, cur(lo));
+      paint();
+      mark();
+    };
+    for (const k of [lo, hi]) {
+      ranges[k].addEventListener("input", () => set(k, Math.round(Number(ranges[k].value))));
+      boxes[k].addEventListener("input", () => {
+        if (boxes[k].value === "" || !Number.isFinite(Number(boxes[k].value))) return;
+        set(k, Math.min(specs[k].max, Math.max(specs[k].min, Math.round(Number(boxes[k].value)))));
+      });
+      boxes[k].addEventListener("change", paint);
+    }
+    reset?.addEventListener("click", () => { delete draft[lo]; delete draft[hi]; paint(); mark(); });
+    paint();
+    mark();
+    return row;
+  }
+
+  /** Side view of the window: what the three geometry numbers measure. */
+  _figGeometry() {
+    const F = T.fig;
+    const box = el("div", "fig");
+    box.innerHTML = `<svg viewBox="0 0 170 152" aria-hidden="true">
+      <line x1="0" y1="132" x2="170" y2="132" stroke="currentColor" stroke-opacity=".45" stroke-width="2"/>
+      <rect x="52" y="10" width="8" height="122" fill="currentColor" fill-opacity=".25"/>
+      <rect x="52" y="20" width="8" height="112" fill="var(--card-background-color)" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="2 2"/>
+      <rect x="52" y="20" width="8" height="52" fill="var(--primary-color)" opacity=".85"/>
+      <circle cx="14" cy="22" r="7" fill="var(--ce-b-shade)"/>
+      <line x1="14" y1="22" x2="56" y2="72" stroke="var(--ce-b-shade)" stroke-width="1.5"/>
+      <line x1="56" y1="72" x2="104" y2="132" stroke="var(--ce-b-shade)" stroke-width="1.5" stroke-dasharray="4 2"/>
+      <line x1="60" y1="141" x2="104" y2="141" stroke="var(--fp-warn)" stroke-width="1.5"/>
+      <text x="82" y="151" fill="var(--fp-warn)" text-anchor="middle"></text>
+      <line x1="64" y1="20" x2="74" y2="20" stroke="currentColor" stroke-opacity=".6"/>
+      <text x="77" y="23" fill="currentColor"></text>
+      <line x1="64" y1="131" x2="74" y2="126" stroke="currentColor" stroke-opacity=".6"/>
+      <text x="77" y="125" fill="currentColor"></text>
+      <text x="112" y="70" fill="currentColor" fill-opacity=".6"></text>
+      <text x="4" y="120" fill="currentColor" fill-opacity=".6"></text>
+    </svg>`;
+    // Words go in as text, never as markup.
+    const texts = box.querySelectorAll("text");
+    [F.distance, F.max, F.min, F.room, F.outside].forEach((w, i) => { texts[i].textContent = w; });
+    box.style.color = "var(--secondary-text-color)";
+    return box;
+  }
+
+  /** The window seen from inside: the wedge of sky the two angles open. */
+  _figDetection(draft, baseline) {
+    const F = T.fig;
+    const box = el("div", "fig");
+    box.style.color = "var(--secondary-text-color)";
+    box.innerHTML = `<svg viewBox="0 0 170 150" aria-hidden="true">
+      <path class="wedge" fill="var(--ce-b-shade)" fill-opacity=".16" stroke="var(--ce-b-shade)" stroke-dasharray="3 2"/>
+      <rect x="25" y="128" width="120" height="14" fill="currentColor" fill-opacity=".25"/>
+      <rect x="66" y="125" width="38" height="5" fill="var(--primary-color)"/>
+      <line x1="85" y1="122" x2="85" y2="92" stroke="var(--primary-text-color)" stroke-width="1.5"/>
+      <path d="M80 98 L85 89 L90 98" fill="none" stroke="var(--primary-text-color)" stroke-width="1.5"/>
+      <circle cx="122" cy="40" r="6" fill="var(--ce-b-shade)"/>
+      <text x="6" y="118" fill="var(--ce-b-shade)"></text>
+      <text x="164" y="118" fill="var(--ce-b-shade)" text-anchor="end"></text>
+      <text x="85" y="150" fill="currentColor" text-anchor="middle"></text>
+    </svg>`;
+    const texts = box.querySelectorAll("text");
+    const wedge = box.querySelector(".wedge");
+    const cur = (k) => (Object.prototype.hasOwnProperty.call(draft, k) ? draft[k] : baseline[k]);
+    const R = 110, cx = 85, cy = 125;
+    box.redraw = () => {
+      const l = (Number(cur("angle_left")) * Math.PI) / 180;
+      const r = (Number(cur("angle_right")) * Math.PI) / 180;
+      const p = (a, s) => `${(cx + s * R * Math.sin(a)).toFixed(1)} ${(cy - R * Math.cos(a)).toFixed(1)}`;
+      wedge.setAttribute("d", `M${cx} ${cy} L${p(l, -1)} A${R} ${R} 0 0 1 ${p(r, 1)} Z`);
+      texts[0].textContent = `${F.left} ${cur("angle_left")}°`;
+      texts[1].textContent = `${F.right} ${cur("angle_right")}°`;
+    };
+    texts[2].textContent = F.view;
+    box.redraw();
+    return box;
+  }
+
+  /**
+   * The behavior sections as cards, two columns: the window and its shading on
+   * the left, the sun and solar gain on the right. A section's activation flag
+   * becomes the switch in its header, and dims the numbers it governs.
+   */
+  _behaviorGrid(sections, draft, baseline, hasTemplate) {
+    const specs = this._cfg.behavior?.fields || {};
+    const has = (k) => Object.prototype.hasOwnProperty.call(draft, k);
+    const cols = el("div", "ed-cols");
+    const left = el("div", "ed-stack");
+    const right = el("div", "ed-stack");
+    cols.append(left, right);
+    const side = { geometry: left, shading: left, detection: right, solar_gain: right };
+
+    for (const { key, fields } of sections) {
+      const card = this._edCard(SECTION_ICONS[key] || "mdi:tune",
+        T.sectionTitles[key] || T.sections[key] || key, T.sectionSubs[key]);
+      card.classList.add("sect");
+      const h3 = card.querySelector("h3");
+      const n = hasTemplate ? fields.filter((f) => specs[f]?.type !== "boolean" && has(f)).length : 0;
+      if (n) h3.append(el("span", "mini ovr", T.overrides(n)));
+
+      // Activation flags are cover-specific: no template value to fall back to.
+      const flag = fields.find((f) => specs[f]?.type === "boolean");
+      if (flag) {
+        const on = !!(has(flag) ? draft[flag] : baseline[flag]);
+        card.classList.toggle("dim", !on);
+        const sw = this._switch(on, (v) => { draft[flag] = v; card.classList.toggle("dim", !v); }, T.fields[flag]);
+        sw.classList.add("end");
+        h3.append(sw);
+      }
+
+      const fig = key === "geometry" ? this._figGeometry()
+        : key === "detection" ? this._figDetection(draft, baseline) : null;
+      const beside = key === "geometry" ? null : ["angle_left", "angle_right"];
+      const nums = fields.filter((f) => specs[f] && specs[f].type !== "boolean");
+      const merge = nums.includes("shade_min_elevation") && nums.includes("shade_max_elevation");
+      const body = el("div", "sect-body");
+      const next = fig ? el("div") : body;
+      const after = el("div");
+      for (const f of nums) {
+        if (merge && f === "shade_max_elevation") continue;
+        const row = merge && f === "shade_min_elevation"
+          ? this._elevationRow("shade_min_elevation", "shade_max_elevation", specs, draft, baseline, hasTemplate)
+          : this._behaviorRow(f, specs[f], draft, baseline, hasTemplate,
+            key === "detection" && fig ? () => fig.redraw() : null);
+        (fig && beside && !beside.includes(f) ? after : next).append(row);
+      }
+      if (fig) {
+        const wf = el("div", "withfig");
+        wf.append(fig, next);
+        body.append(wf);
+        if (after.childElementCount) {
+          after.firstChild.classList.add("sep-top");
+          body.append(after);
+        }
+      }
+      card.append(body);
+      (side[key] || (left.childElementCount <= right.childElementCount ? left : right)).append(card);
+    }
+    return cols;
   }
 
   /* ---------- MODES (editable) ---------- */
@@ -2242,96 +2940,214 @@ class CoverExtenderPanel extends HTMLElement {
     const creating = idx < 0;
     const rerender = () => { this._render(); };
 
-    const bar = el("div", "toolbar");
-    const back = el("button", "btn ghost");
-    back.append(icon("mdi:arrow-left"), document.createTextNode(T.backToModes));
-    back.addEventListener("click", () => { if (this._leaveEditor()) this._render(); });
-    bar.append(back);
-    wrap.append(bar);
+    wrap.append(this._backBar(T.backToModes));
 
-    const host = el("div", "card");
-    host.append(el("h3", "sec", creating ? T.newMode : draft.name || T.mode));
+    /* identity: the plate and the selector chip are live previews */
+    const idCard = el("section", "card");
+    const grid = el("div", "ed-ident");
+    const plate = el("div", "ed-plate");
+    const plateIcon = icon(draft.icon || "mdi:help-circle");
+    plate.append(plateIcon);
+    const pill = el("span", "mpill");
+    const pillIcon = icon(draft.icon || "mdi:help-circle");
+    const pillName = el("span");
+    pill.append(pillIcon, pillName);
+    const paint = () => {
+      const c = draft.color || "#888888";
+      plate.style.color = c;
+      plate.style.background = `color-mix(in srgb, ${c} 16%, transparent)`;
+      plate.style.borderColor = `color-mix(in srgb, ${c} 40%, transparent)`;
+      // The label keeps the text colour: a mode set to #FFFFFF would make its
+      // own name vanish on a light theme. The tint and the icon carry the hue.
+      pill.style.background = `color-mix(in srgb, ${c} 16%, transparent)`;
+      pillIcon.style.color = c;
+      plateIcon.setAttribute("icon", draft.icon || "mdi:help-circle");
+      pillIcon.setAttribute("icon", draft.icon || "mdi:help-circle");
+      pillName.textContent = draft.name || T.newMode;
+    };
 
-    host.append(this._textRow(T.name, draft.name, (v) => { draft.name = v; }));
-    host.append(this._selectorRow(T.icon, { icon: {} }, draft.icon,
-      (v) => { draft.icon = v || "mdi:help-circle"; }));
-    host.append(this._selectorRow(T.color, { color_rgb: {} }, hexToRgb(draft.color),
-      (v) => { draft.color = rgbToHex(v); }));
-    host.append(this._selectRow(T.behavior, draft.behavior, [
-      [null, T.behaviorNone], ["auto_shade", T.shading], ["solar_gain", T.solarGain],
-    ], (v) => { draft.behavior = v; rerender(); }));
-    if (draft.behavior) host.append(el("p", "hint", T.behaviorHint));
-    host.append(this._boolRow(T.lockField, draft.lock, (v) => { draft.lock = v; }, T.lockHint));
-    host.append(this._boolRow(T.priorityField, draft.priority, (v) => { draft.priority = v; }, T.priorityHint));
-    // Grouped requests: which modes this one leaves alone, and its fallback.
+    // The colour wheel and its hex code, kept in step both ways.
+    const color = el("div", "colorpick");
+    const wheel = document.createElement("input");
+    wheel.type = "color";
+    wheel.value = (draft.color || "#FFFFFF").toLowerCase();
+    wheel.title = T.colorPick;
+    wheel.setAttribute("aria-label", T.colorPick);
+    const hex = this._edInput((draft.color || "#FFFFFF").toUpperCase(), (v) => {
+      const want = (v.trim().startsWith("#") ? v.trim() : `#${v.trim()}`).toUpperCase();
+      const ok = /^#[0-9A-F]{6}$/.test(want);
+      hex.setAttribute("aria-invalid", String(!ok));
+      if (!ok) return;
+      draft.color = want;
+      wheel.value = want.toLowerCase();
+      paint();
+    });
+    hex.maxLength = 7;
+    hex.spellcheck = false;
+    hex.setAttribute("aria-label", T.colorHex);
+    wheel.addEventListener("input", () => {
+      draft.color = wheel.value.toUpperCase();
+      hex.value = draft.color;
+      hex.setAttribute("aria-invalid", "false");
+      paint();
+    });
+    hex.addEventListener("change", () => { hex.value = (draft.color || "#FFFFFF").toUpperCase(); hex.setAttribute("aria-invalid", "false"); });
+    color.append(wheel, hex);
+
+    const preview = el("div", "ed-preview");
+    preview.append(el("span", "", T.inSelector), pill);
+    grid.append(plate,
+      this._labeled(T.name, this._edInput(draft.name, (v) => { draft.name = v; paint(); }, "big"), "wide"),
+      this._labeled(T.icon, this._haSelector({ icon: {} }, draft.icon, (v) => {
+        draft.icon = v || "mdi:help-circle";
+        paint();
+      })),
+      this._labeled(T.color, color),
+      preview);
+    idCard.append(grid);
+    wrap.append(idCard);
+    paint();
+
+    const cols = el("div", "ed-cols");
+    const left = el("div", "ed-stack");
+    const right = el("div", "ed-stack");
+    cols.append(left, right);
+
+    /* how this mode places the covers */
+    const beh = this._edCard("mdi:tune-variant", T.behaviorTitle, T.behaviorCardSub);
+    const seg = el("div", "bseg");
+    seg.setAttribute("role", "group");
+    seg.setAttribute("aria-label", T.behaviorTitle);
+    const segBtns = [];
+    for (const key of ["none", "auto_shade", "solar_gain"]) {
+      const value = key === "none" ? null : key;
+      const b = el("button");
+      b.type = "button";
+      b.style.setProperty("--bc", BEHAVIORS[key].color);
+      const [title, sub] = T.behaviorOpts[key];
+      b.append(icon(BEHAVIORS[key].icon), el("span", "", title), el("small", "", sub));
+      b.setAttribute("aria-pressed", String((draft.behavior ?? null) === value));
+      b.addEventListener("click", () => {
+        draft.behavior = value;
+        for (const [other, v] of segBtns) other.setAttribute("aria-pressed", String(v === value));
+      });
+      segBtns.push([b, value]);
+      seg.append(b);
+    }
+    beh.append(seg, this._note(T.behaviorHint));
+    left.append(beh);
+
+    /* while the mode is on */
+    const during = this._edCard("mdi:play-circle-outline", T.whileTitle, T.whileSub);
+    during.append(this._optRow("mdi:lock-outline", T.lockField, T.lockHint, draft.lock,
+      (v) => { draft.lock = v; }));
+    // A mode other modes return to cannot take a duration (the server refuses
+    // it too): say so before the user tries, rather than after the save.
+    const returners = creating ? [] : this._cfg.modes
+      .filter((m) => m.duration && m.return_mode === this._cfg.modes[idx].name)
+      .map((m) => m.name);
+    during.append(this._optRow("mdi:timer-outline", T.durationField,
+      returners.length ? T.usedAsReturn(returners) : T.durationHint, !!draft.duration, (v) => {
+        draft.duration = v ? (draft.duration || 60) : null;
+        if (!v) draft.return_mode = null;
+        rerender();
+      }));
+    if (draft.duration) {
+      const more = el("div", "opt-more");
+      const mins = document.createElement("input");
+      mins.type = "number";
+      mins.min = "1";
+      mins.max = "1440";
+      mins.step = "1";
+      mins.value = String(draft.duration);
+      mins.setAttribute("aria-label", T.durationLabel);
+      mins.addEventListener("input", () => {
+        // An empty box is a transient state while typing, not a zero.
+        if (mins.value !== "") draft.duration = Number(mins.value);
+      });
+      // Only modes without a duration: every countdown must end on a mode
+      // that starts no other (the server refuses anything else too).
+      const targets = this._cfg.modes.filter((m) => !m.duration && m.name !== draft.name);
+      const ret = this._edSelect(draft.return_mode,
+        [[null, T.returnBase], ...targets.map((m) => [m.name, m.name])],
+        (v) => { draft.return_mode = v; });
+      ret.className = "";
+      ret.setAttribute("aria-label", T.returnField);
+      more.append(el("span", "", T.timedFor), mins, el("span", "", T.timedThen), ret, this._info(T.returnHint));
+      during.append(more);
+    }
+    left.append(during);
+
+    /* grouped requests: which modes this one leaves alone, and its fallback */
     const others = this._cfg.modes.filter((m) => m.name !== (creating ? draft.name : this._cfg.modes[idx].name));
-    const grouped = el("div", "grouped");
-    grouped.append(el("h4", "", T.groupedTitle), el("p", "hint", T.groupedHint));
-    const sparesRow = el("div", "field vertical");
-    sparesRow.append(el("span", "flabel", T.sparesField), el("small", "fhint", T.sparesHint));
+    const grouped = this._edCard("mdi:home-group", T.groupedTitle, T.groupedHint);
+    grouped.querySelector("h3").append(this._info(T.groupedInfo));
+    const q = el("div", "ed-q");
+    q.append(el("span", "", T.sparesField), this._info(T.sparesHint));
     const toggles = el("div", "toggles");
+    const count = el("p", "ed-note");
     draft.spares = [...(draft.spares || [])];
+    const recount = () => {
+      count.textContent = draft.spares.length ? T.sparesCount(draft.spares.length) : T.sparesNone;
+    };
     for (const m of others) {
       const b = el("button", "toggle");
       b.type = "button";
       const dot = el("span", "mdot");
       dot.style.background = m.color || "#888888";
-      b.append(dot, document.createTextNode(m.name));
+      b.append(dot, icon("mdi:check", "check"), document.createTextNode(m.name));
       const sync = () => b.setAttribute("aria-pressed", String(draft.spares.includes(m.name)));
       sync();
       b.addEventListener("click", () => {
         draft.spares = draft.spares.includes(m.name)
           ? draft.spares.filter((n) => n !== m.name) : [...draft.spares, m.name];
         sync();
+        recount();
       });
       toggles.append(b);
     }
-    sparesRow.append(toggles);
-    grouped.append(sparesRow);
-    grouped.append(this._selectRow(T.fallbackField, draft.fallback ?? null,
+    recount();
+    grouped.append(q, toggles, count, el("div", "ed-sep"));
+    const fq = el("div", "ed-q");
+    fq.append(el("span", "", T.fallbackField));
+    const fallback = this._edSelect(draft.fallback ?? null,
       [[null, T.fallbackNone], ...others.map((m) => [m.name, m.name])],
-      (v) => { draft.fallback = v; }));
-    grouped.append(el("p", "hint", T.fallbackHint));
-    // A mode other modes return to cannot take a duration (the server refuses
-    // it too): say so before the user tries, rather than after the save.
-    const returners = creating ? [] : this._cfg.modes
-      .filter((m) => m.duration && m.return_mode === this._cfg.modes[idx].name)
-      .map((m) => m.name);
-    host.append(this._boolRow(T.durationField, !!draft.duration, (v) => {
-      draft.duration = v ? (draft.duration || 60) : null;
-      if (!v) draft.return_mode = null;
-      rerender();
-    }, returners.length ? T.usedAsReturn(returners) : T.durationHint));
-    if (draft.duration) {
-      host.append(this._numberRow(T.durationLabel, draft.duration,
-        { min: 1, max: 1440, step: 1, unit: "min" }, (v) => { draft.duration = v; }));
-      // Only modes without a duration: every countdown must end on a mode
-      // that starts no other (the server refuses anything else too).
-      const targets = this._cfg.modes.filter((m) => !m.duration && m.name !== draft.name);
-      host.append(this._selectRow(T.returnField, draft.return_mode,
-        [[null, T.returnBase], ...targets.map((m) => [m.name, m.name])],
-        (v) => { draft.return_mode = v; }));
-      host.append(el("p", "hint", T.returnHint));
-    }
-    host.append(this._boolRow(T.hiddenField, draft.hidden, (v) => { draft.hidden = v; }, T.hiddenHint));
-    host.append(grouped);
-    wrap.append(host);
+      (v) => { draft.fallback = v; }, "inline");
+    fallback.setAttribute("aria-label", T.fallbackField);
+    const fbRow = el("div", "toolbar");
+    fbRow.style.margin = "0";
+    fbRow.append(fq, el("span", "spacer"), fallback);
+    grouped.append(fbRow, this._note(T.fallbackHint));
+    right.append(grouped);
+
+    /* rarely touched: open on its own only when something in it is on */
+    const advCard = el("section", "card ed-card");
+    const adv = document.createElement("details");
+    adv.className = "adv";
+    adv.open = this._advOpen ?? !!(draft.priority || draft.hidden);
+    adv.addEventListener("toggle", () => { this._advOpen = adv.open; });
+    const sum = document.createElement("summary");
+    const badge = el("span", "badge");
+    const resum = () => { badge.textContent = T.advSummary(!!draft.priority, !!draft.hidden); };
+    resum();
+    sum.append(icon("mdi:cog-outline"), el("h3", "", T.advanced), badge, icon("mdi:chevron-down", "chev-d"));
+    const advBody = el("div", "adv-body");
+    advBody.append(
+      this._optRow("mdi:alert-decagram-outline", T.priorityField, T.priorityHint, draft.priority,
+        (v) => { draft.priority = v; resum(); }),
+      this._optRow("mdi:eye-off-outline", T.hiddenField, T.hiddenHint, draft.hidden,
+        (v) => { draft.hidden = v; resum(); }));
+    adv.append(sum, advBody);
+    advCard.append(adv);
+    right.append(advCard);
+    wrap.append(cols);
 
     const actions = el("div", "actions card");
     if (!creating) {
-      const used = usage[draft.name] || 0;
-      const del = el("button", "btn danger");
-      del.append(icon("mdi:delete-outline"), document.createTextNode(T.delete));
-      if (used) {
-        del.disabled = true;
-        del.title = T.inUseTitle(used);
-      } else {
-        del.addEventListener("click", () => {
-          const items = this._cfg.modes.filter((_, i) => i !== idx).map((m) => ({ ...m }));
-          this._saveSection("mode", items);
-        });
-      }
-      actions.append(del);
+      actions.append(...this._deleteButton(usage[draft.name] || 0, T.inUseTitle(usage[draft.name] || 0), () => {
+        const items = this._cfg.modes.filter((_, i) => i !== idx).map((m) => ({ ...m }));
+        this._saveSection("mode", items);
+      }));
     }
     actions.append(el("span", "spacer"));
     const cancel = el("button", "btn ghost", T.cancel);
@@ -2497,62 +3313,90 @@ class CoverExtenderPanel extends HTMLElement {
     const creating = idx < 0;
     const rerender = () => { this._render(); };
 
-    const bar = el("div", "toolbar");
-    const back = el("button", "btn ghost");
-    back.append(icon("mdi:arrow-left"), document.createTextNode(T.backToCovers));
-    back.addEventListener("click", () => { if (this._leaveEditor()) this._render(); });
-    bar.append(back);
-    wrap.append(bar);
+    wrap.append(this._backBar(T.backToCovers));
 
     const tpl = this._templateOf(draft);
     const baseline = this._baseline(draft);
 
-    /* identity */
-    const idCard = el("div", "card");
-    idCard.append(el("h3", "sec", creating ? T.newCover : this._coverName(draft)));
-    idCard.append(this._selectorRow(T.entity, { entity: { domain: ["cover"] } },
-      draft.entity_id || undefined, (v) => { draft.entity_id = v || ""; }));
-    idCard.append(this._textRow(T.picture, draft.entity_picture,
-      (v) => { draft.entity_picture = v || undefined; }, { placeholder: "/local/…" }));
-    idCard.append(this._selectRow(T.facade, draft.facade,
-      this._cfg.facades.map((f) => [f.name, f.name]), (v) => { draft.facade = v; }));
-    idCard.append(this._selectRow(T.templateTitle, draft.template,
-      [[null, T.noTemplateOpt], ...this._cfg.templates.map((t) => [t.name, t.name])],
-      (v) => { draft.template = v; rerender(); }));
-    idCard.append(this._selectorRow(T.exclusion, { entity: { multiple: true } },
-      draft.exclusion?.length ? draft.exclusion : undefined,
-      (v) => { draft.exclusion = v || []; }, T.exclusionHint));
-    idCard.append(this._selectorRow(T.inhibition, { entity: { multiple: true } },
-      draft.inhibition?.length ? draft.inhibition : undefined,
-      (v) => { draft.inhibition = v || []; }, T.inhibitionHint));
+    /* identity: which cover, on which wall, from which template */
+    const idCard = el("section", "card");
+    const grid = el("div", "ed-ident");
+    const plate = el("div", "ed-plate");
+    plate.append(draft.entity_picture ? this._coverPic(draft) : icon("mdi:window-shutter"));
+    const line2 = el("div", "line2");
+    const picLabel = el("span", "ed-lbl", T.picture);
+    picLabel.style.margin = "0";
+    line2.append(picLabel, this._edInput(draft.entity_picture,
+      (v) => { draft.entity_picture = v || undefined; }, "small", T.picturePh));
+    // The live state is read off the SAVED cover: its helper entities are the
+    // ones that exist, whatever the draft now points at.
+    const status = creating ? null : this._statusLine(this._cfg.covers[idx]);
+    if (status) {
+      status.prepend(el("span", "spos", T.nowLabel));
+      line2.append(status);
+    }
+    grid.append(plate,
+      this._labeled(T.entity, this._haSelector({ entity: { domain: ["cover"] } },
+        draft.entity_id || undefined, (v) => { draft.entity_id = v || ""; }), "wide"),
+      this._labeled(T.facade, this._edSelect(draft.facade,
+        this._cfg.facades.map((f) => [f.name, `${f.name} · ${Number(f.azimuth ?? 180)}°`]),
+        (v) => { draft.facade = v; })),
+      this._labeled(T.templateTitle, this._edSelect(draft.template,
+        [[null, T.noTemplateOpt], ...this._cfg.templates.map((t) => [t.name, t.name])],
+        (v) => { draft.template = v; rerender(); })),
+      line2);
+    idCard.append(grid);
     wrap.append(idCard);
 
-    /* behavior, section by section */
+    /* what holds it back: safety stops and pauses, side by side */
+    const prot = this._edCard("mdi:shield-half-full", T.blockTitle, T.blockSub);
+    prot.style.marginTop = "var(--fp-s4)";
+    const both = el("div", "prot");
+    const block = (cls, ico, title, sub, ex, key) => {
+      const b = el("div", cls);
+      const h = el("h4");
+      h.append(icon(ico), el("span", "", title));
+      const body = el("div", "pbody");
+      body.append(el("p", "", sub),
+        this._entityChips(draft[key] || [], (list) => { draft[key] = list; rerender(); }),
+        el("p", "ex", ex));
+      b.append(h, body);
+      return b;
+    };
+    both.append(
+      block("safety", "mdi:shield-alert-outline", T.safetyTitle, T.safetySub, T.safetyEx, "exclusion"),
+      block("pause", "mdi:pause-circle-outline", T.pauseTitle, T.pauseSub, T.pauseEx, "inhibition"));
+    prot.append(both);
+    wrap.append(prot);
+
+    /* how the position is computed, section by section */
     const schema = this._cfg.behavior;
     if (schema) {
-      const note = el("p", "note");
-      note.textContent = tpl ? T.tplNote(tpl.name) : T.noTplNote;
-      wrap.append(note);
-
-      for (const { key, fields } of schema.sections) {
-        const det = document.createElement("details");
-        det.className = "sect";
-        if (this._openSections?.has(key)) det.open = true;
-        det.addEventListener("toggle", () => {
-          this._openSections = this._openSections || new Set();
-          if (det.open) this._openSections.add(key); else this._openSections.delete(key);
-        });
-        const sum = document.createElement("summary");
-        sum.append(icon(SECTION_ICONS[key] || "mdi:tune"), document.createTextNode(T.sections[key] || key));
-        const n = tpl ? fields.filter((f) => schema.fields[f].type !== "boolean"
-          && Object.prototype.hasOwnProperty.call(draft, f)).length : 0;
-        if (n) sum.append(el("span", "mini ovr", T.overrides(n)));
-        det.append(sum);
-        for (const name of fields) {
-          det.append(this._behaviorRow(name, schema.fields[name], draft, baseline, rerender, !!tpl));
-        }
-        wrap.append(det);
+      const head = el("div", "ed-head");
+      head.append(el("h2", "", T.calcTitle));
+      const from = el("span", "chip");
+      from.append(icon("mdi:ruler-square"), document.createTextNode(tpl ? T.tplChip(tpl.name) : T.noTplChip));
+      head.append(from);
+      const n = this._overrideCount(draft);
+      if (n) {
+        const o = el("span", "chip ovr");
+        o.append(icon("mdi:pencil-outline"), document.createTextNode(T.overrides(n)));
+        head.append(o);
       }
+      if (tpl) {
+        const go = el("button", "linkbtn");
+        go.type = "button";
+        go.append(icon("mdi:open-in-new"), document.createTextNode(T.openTemplate));
+        go.addEventListener("click", () => {
+          if (!this._leaveEditor()) return;
+          const i = this._cfg.templates.findIndex((t) => t.name === tpl.name);
+          this._tab = "reglages";
+          this._openEditor({ section: "template", idx: i, draft: { ...this._cfg.templates[i] } });
+          this._render();
+        });
+        head.append(el("span", "spacer"), go);
+      }
+      wrap.append(head, this._behaviorGrid(schema.sections, draft, baseline, !!tpl));
     }
 
     const actions = el("div", "actions card");
@@ -3096,18 +3940,31 @@ class CoverExtenderPanel extends HTMLElement {
   }
 
   /**
-   * Three things live here, and only two of them are lists: facades and
-   * templates get the tile grid every other tab uses, while the global settings
-   * are a single item — a grid of one would be a lie, so they are a plain form.
+   * Two columns, two ways of saving. On the left the house (facades,
+   * templates), where every item opens its own editor and saves on its own; on
+   * the right the general settings, a single item edited in place, whose save
+   * bar only shows up once something changed.
    */
   _renderSettings(wrap) {
     if (this._edit?.section === "facade") { this._facadeEditor(wrap); return; }
     if (this._edit?.section === "template") { this._templateEditor(wrap); return; }
 
-    this._renderFacadeList(wrap);
-    this._renderTemplateList(wrap);
-    this._renderGlobal(wrap);
-    this._renderEntities(wrap);
+    const cols = el("div", "set-cols");
+    const left = el("div", "ed-stack");
+    const right = el("div", "ed-stack");
+    const head = (title, sub) => {
+      const h = el("div", "colhead");
+      h.append(el("h2", "", title), el("span", "", sub));
+      return h;
+    };
+    left.append(head(T.houseTitle, T.houseSub));
+    this._renderFacadeList(left);
+    this._renderTemplateList(left);
+    this._renderEntities(left);
+    right.append(head(T.globalTitle, T.globalNote));
+    this._renderGlobal(right);
+    cols.append(left, right);
+    wrap.append(cols);
   }
 
   _entityCounts() {
@@ -3130,14 +3987,8 @@ class CoverExtenderPanel extends HTMLElement {
     const counts = this._entityCounts();
     if (!counts.length) return;
 
-    const head = el("div", "toolbar section-head");
-    const title = el("span");
-    title.append(el("h3", "sec", T.entitiesSec), el("p", "secsub", T.entitiesSub));
-    head.append(title);
-    wrap.append(head);
-
-    const card = el("div", "card");
-    const grid = el("div", "stats");
+    const card = this._edCard("mdi:format-list-bulleted-type", T.entitiesSec, T.entitiesSub);
+    const grid = el("div", "stats compact");
     for (const [kind, count] of counts) {
       const cell = el("div", "stat");
       const top = el("div", "stat-top");
@@ -3169,42 +4020,55 @@ class CoverExtenderPanel extends HTMLElement {
     wrap.append(card);
   }
 
+  /** A list card with an Add button in its header. */
+  _listCard(iconName, title, sub, addTitle, onAdd) {
+    const card = this._edCard(iconName, title, sub);
+    const add = el("button", "btn");
+    add.type = "button";
+    add.title = addTitle;
+    add.append(icon("mdi:plus"), document.createTextNode(T.addShort));
+    add.addEventListener("click", onAdd);
+    card.querySelector("h3").append(add);
+    const list = el("div");
+    card.append(list);
+    return [card, list];
+  }
+
+  /** One row of a list: a round badge, a name, a line of facts, a chevron. */
+  _listRow(badge, name, meta, open) {
+    const row = el("button", "lrow");
+    row.type = "button";
+    const names = el("span");
+    names.append(el("div", "nm", name), el("div", "meta", meta));
+    row.append(badge, names, icon("mdi:chevron-right", "chev"));
+    row.addEventListener("click", open);
+    return row;
+  }
+
   _renderFacadeList(wrap) {
     const used = this._refCount("facade");
-    const head = el("div", "toolbar");
-    const title = el("span");
-    title.append(el("h3", "sec", T.facades), el("p", "secsub", T.facadesSub));
-    const add = el("button", "btn primary");
-    add.append(icon("mdi:plus"), document.createTextNode(T.addFacade));
-    add.addEventListener("click", () => {
+    const [card, list] = this._listCard("mdi:compass-outline", T.facades, T.facadesSub, T.addFacade, () => {
       this._openEditor({ section: "facade", idx: -1, draft: { name: "", azimuth: 180 } });
       this._render();
     });
-    head.append(title, el("span", "spacer"), add);
-    wrap.append(head);
-
-    const grid = el("div", "grid");
     this._cfg.facades.forEach((f, i) => {
-      const card = this._tile("mdi:compass-outline", f.name, `${Number(f.azimuth ?? 180)}°`, () => {
+      const az = Number(f.azimuth ?? 180);
+      // The arrow points where the windows look, north up like a map.
+      const badge = el("span", "round az");
+      const arrow = icon("mdi:arrow-up");
+      arrow.style.transform = `rotate(${az}deg)`;
+      badge.append(arrow);
+      list.append(this._listRow(badge, f.name, `${az}° · ${T.covers(used[f.name] || 0)}`, () => {
         this._openEditor({ section: "facade", idx: i, draft: { ...f } });
         this._render();
-      });
-      const chips = el("div", "chips");
-      chips.append(el("span", "chip", T.covers(used[f.name] || 0)));
-      card.append(chips);
-      grid.append(card);
+      }));
     });
-    wrap.append(grid);
+    wrap.append(card);
   }
 
   _renderTemplateList(wrap) {
     const used = this._refCount("template");
-    const head = el("div", "toolbar section-head");
-    const title = el("span");
-    title.append(el("h3", "sec", T.templates), el("p", "secsub", T.templatesSub));
-    const add = el("button", "btn primary");
-    add.append(icon("mdi:plus"), document.createTextNode(T.addTemplate));
-    add.addEventListener("click", () => {
+    const [card, list] = this._listCard("mdi:ruler-square", T.templates, T.templatesSub, T.addTemplate, () => {
       const draft = { name: "" };
       for (const [name, spec] of Object.entries(this._cfg.behavior?.fields || {})) {
         if (spec.type !== "boolean") draft[name] = spec.default;
@@ -3212,55 +4076,132 @@ class CoverExtenderPanel extends HTMLElement {
       this._openEditor({ section: "template", idx: -1, draft });
       this._render();
     });
-    head.append(title, el("span", "spacer"), add);
-    wrap.append(head);
-
-    const grid = el("div", "grid");
     this._cfg.templates.forEach((t, i) => {
-      const sub = `H ${t.shade_max_height ?? "?"} m · D ${t.shade_distance ?? "?"} m`;
-      const card = this._tile("mdi:ruler-square", t.name, sub, () => {
+      const badge = el("span", "round");
+      badge.append(icon("mdi:ruler-square"));
+      const meta = `${T.tplMeta(t.shade_max_height ?? "?", t.shade_distance ?? "?")} · ${T.covers(used[t.name] || 0)}`;
+      list.append(this._listRow(badge, t.name, meta, () => {
         this._openEditor({ section: "template", idx: i, draft: { ...t } });
         this._render();
-      });
-      const chips = el("div", "chips");
-      chips.append(el("span", "chip", T.covers(used[t.name] || 0)));
-      card.append(chips);
-      grid.append(card);
+      }));
     });
-    wrap.append(grid);
+    wrap.append(card);
   }
 
-  /** The tile shell shared by facades and templates. */
-  _tile(iconName, name, meta, open) {
-    const card = el("div", "card clickable");
-    card.tabIndex = 0;
-    card.addEventListener("click", open);
-    card.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
-    });
-    const head = el("div", "c-head");
-    const pic = el("span", "pic");
-    pic.append(icon(iconName));
-    const names = el("span");
-    names.append(el("span", "nm", name), el("br"), el("span", "meta", meta));
-    head.append(pic, names, el("span", "spacer"), icon("mdi:chevron-right", "chev"));
-    card.append(head);
-    return card;
+  /** Who uses a facade or a template, as chips: the reason it cannot be deleted. */
+  _usersChips(key, name) {
+    const users = name ? this._cfg.covers.filter((c) => c[key] === name) : [];
+    if (!users.length) return el("span", "ed-sub", T.noCoverYet);
+    const line = el("div", "chipline");
+    for (const c of users) {
+      const chip = el("span", "chip");
+      chip.append(icon("mdi:window-shutter"), document.createTextNode(this._coverName(c)));
+      line.append(chip);
+    }
+    return line;
   }
 
   _facadeEditor(wrap) {
     const { idx, draft } = this._edit;
     const creating = idx < 0;
-    const used = this._refCount("facade")[draft.name] || 0;
+    const saved = creating ? null : this._cfg.facades[idx].name;
+    const used = saved ? this._refCount("facade")[saved] || 0 : 0;
 
     wrap.append(this._backBar(T.backToFacades));
 
-    const card = el("div", "card");
-    card.append(el("h3", "sec", creating ? T.newFacade : draft.name || T.facade));
-    card.append(this._textRow(T.name, draft.name, (v) => { draft.name = v; }));
-    card.append(this._sliderRow(T.azimuth, Number(draft.azimuth ?? 180),
-      { min: 0, max: 360, step: 1, unit: "°" }, (v) => { draft.azimuth = v; }));
-    card.append(el("p", "hint", T.facadesSub));
+    const idCard = el("section", "card");
+    const grid = el("div", "ed-ident three");
+    const plate = el("div", "ed-plate");
+    plate.append(icon("mdi:compass-outline"));
+    grid.append(plate,
+      this._labeled(T.facadeName, this._edInput(draft.name, (v) => { draft.name = v; }, "big"), "wide"),
+      this._labeled(T.facadeCovers, this._usersChips("facade", saved)));
+    idCard.append(grid);
+    wrap.append(idCard);
+
+    /* the compass: drawn facing north, turned by the azimuth */
+    const card = this._edCard("mdi:compass-rose", T.orientTitle, T.orientSub);
+    card.style.marginTop = "var(--fp-s4)";
+    const orient = el("div", "orient");
+    const dial = el("div");
+    dial.innerHTML = `<svg class="compass" viewBox="0 0 240 240" role="img">
+      <circle cx="120" cy="120" r="104" fill="var(--secondary-background-color)" stroke="var(--divider-color)"/>
+      <g stroke="var(--divider-color)"><line x1="120" y1="16" x2="120" y2="28"/><line x1="120" y1="212" x2="120" y2="224"/>
+        <line x1="16" y1="120" x2="28" y2="120"/><line x1="212" y1="120" x2="224" y2="120"/></g>
+      <text x="120" y="46" text-anchor="middle" fill="var(--primary-text-color)"></text>
+      <text x="200" y="125" text-anchor="middle" fill="var(--secondary-text-color)"></text>
+      <text x="120" y="206" text-anchor="middle" fill="var(--secondary-text-color)"></text>
+      <text x="40" y="125" text-anchor="middle" fill="var(--secondary-text-color)"></text>
+      <g class="rot">
+        <path d="M120 120 L34.3 112.5 A86 86 0 0 1 205.7 112.5 Z" fill="var(--ce-b-shade)" fill-opacity=".12"/>
+        <rect x="92" y="92" width="56" height="56" rx="4" fill="var(--card-background-color)" stroke="var(--secondary-text-color)" stroke-opacity=".6"/>
+        <rect x="92" y="90" width="56" height="5" fill="var(--primary-color)"/>
+        <line x1="120" y1="88" x2="120" y2="64" stroke="var(--primary-color)" stroke-width="3"/>
+        <path d="M112 68 L120 56 L128 68 Z" fill="var(--primary-color)"/>
+      </g>
+      <circle cx="120" cy="120" r="3" fill="var(--secondary-text-color)"/>
+    </svg>`;
+    const svg = dial.querySelector("svg");
+    svg.setAttribute("aria-label", T.azimuth);
+    const letters = svg.querySelectorAll("text");
+    [0, 2, 4, 6].forEach((d, i) => { letters[i].textContent = T.dirs[d]; });
+    const rot = svg.querySelector(".rot");
+
+    const side = el("div");
+    const azRow = el("div", "azrow");
+    const box = document.createElement("input");
+    box.type = "number";
+    box.min = "0";
+    box.max = "360";
+    box.step = "1";
+    box.setAttribute("aria-label", T.azimuth);
+    azRow.append(box, el("span", "", "°"), el("span", "", T.dragCompass));
+    const dirs = el("div", "dirs");
+    const dirBtns = T.dirs.map((label, i) => {
+      const b = el("button", "", label);
+      b.type = "button";
+      b.addEventListener("click", () => set(i * 45));
+      dirs.append(b);
+      return b;
+    });
+    side.append(el("span", "ed-lbl", T.azimuth), azRow, dirs, this._note(T.compassNote));
+
+    const set = (deg, from) => {
+      const az = ((Math.round(deg) % 360) + 360) % 360;
+      draft.azimuth = az;
+      rot.setAttribute("transform", `rotate(${az} 120 120)`);
+      if (from !== box) box.value = String(az);
+      dirBtns.forEach((b, i) => b.setAttribute("aria-pressed", String(az === i * 45)));
+    };
+    box.addEventListener("input", () => {
+      if (box.value === "" || !Number.isFinite(Number(box.value))) return;
+      set(Math.min(360, Math.max(0, Number(box.value))), box);
+    });
+    box.addEventListener("change", () => { box.value = String(draft.azimuth); });
+    // Drag anywhere on the dial: the arrow follows the pointer.
+    const fromPointer = (e) => {
+      const r = svg.getBoundingClientRect();
+      const dx = e.clientX - (r.left + r.width / 2);
+      const dy = e.clientY - (r.top + r.height / 2);
+      set((Math.atan2(dx, -dy) * 180) / Math.PI);
+    };
+    svg.addEventListener("pointerdown", (e) => {
+      svg.setPointerCapture(e.pointerId);
+      fromPointer(e);
+      const move = (ev) => fromPointer(ev);
+      const up = () => {
+        svg.removeEventListener("pointermove", move);
+        svg.removeEventListener("pointerup", up);
+        svg.removeEventListener("pointercancel", up);
+      };
+      svg.addEventListener("pointermove", move);
+      svg.addEventListener("pointerup", up);
+      svg.addEventListener("pointercancel", up);
+    });
+    set(Number(draft.azimuth ?? 180));
+
+    orient.append(dial, side);
+    card.append(orient);
     wrap.append(card);
 
     wrap.append(this._itemActions("facade", "facades", idx, draft, creating, used));
@@ -3269,38 +4210,28 @@ class CoverExtenderPanel extends HTMLElement {
   _templateEditor(wrap) {
     const { idx, draft } = this._edit;
     const creating = idx < 0;
-    const used = this._refCount("template")[draft.name] || 0;
+    const saved = creating ? null : this._cfg.templates[idx].name;
+    const used = saved ? this._refCount("template")[saved] || 0 : 0;
     const schema = this._cfg.behavior;
 
     wrap.append(this._backBar(T.backToTemplates));
 
-    const card = el("div", "card");
-    card.append(el("h3", "sec", creating ? T.newTemplate : draft.name || T.templateTitle));
-    card.append(this._textRow(T.name, draft.name, (v) => { draft.name = v; }));
-    wrap.append(card);
+    const idCard = el("section", "card");
+    const grid = el("div", "ed-ident three");
+    const plate = el("div", "ed-plate");
+    plate.append(icon("mdi:ruler-square"));
+    grid.append(plate,
+      this._labeled(T.tplName, this._edInput(draft.name, (v) => { draft.name = v; }, "big"), "wide"),
+      this._labeled(T.usedBy, this._usersChips("template", saved)));
+    idCard.append(grid, this._note(T.tplIdentityNote));
+    wrap.append(idCard);
 
     if (schema) {
-      wrap.append(el("p", "note", T.tplNoOverrideNote));
-      // Same rows as a cover, minus the amber: passing no template means
-      // _behaviorRow finds nothing to revert to and keeps the affordance hidden.
-      for (const { key, fields } of (schema.template_sections || schema.sections)) {
-        const det = document.createElement("details");
-        det.className = "sect";
-        if (this._openSections?.has(key)) det.open = true;
-        det.addEventListener("toggle", () => {
-          this._openSections = this._openSections || new Set();
-          if (det.open) this._openSections.add(key); else this._openSections.delete(key);
-        });
-        const sum = document.createElement("summary");
-        sum.append(icon(SECTION_ICONS[key] || "mdi:tune"),
-          document.createTextNode(T.sections[key] || key));
-        det.append(sum);
-        for (const name of fields) {
-          det.append(this._behaviorRow(name, schema.fields[name], draft, {},
-            () => this._render(), false));
-        }
-        wrap.append(det);
-      }
+      const head = el("div", "ed-head");
+      head.append(el("h2", "", T.calcTitle));
+      // Same cards as a cover, minus the amber and the switches: passing no
+      // template means _behaviorRow finds nothing to revert to.
+      wrap.append(head, this._behaviorGrid(schema.template_sections || schema.sections, draft, {}, false));
     }
 
     wrap.append(this._itemActions("template", "templates", idx, draft, creating, used));
@@ -3319,17 +4250,9 @@ class CoverExtenderPanel extends HTMLElement {
   _itemActions(section, key, idx, draft, creating, used) {
     const actions = el("div", "actions card");
     if (!creating) {
-      const del = el("button", "btn danger");
-      del.append(icon("mdi:delete-outline"), document.createTextNode(T.delete));
-      if (used) {
-        del.disabled = true;
-        del.title = T.inUseItemTitle(used);
-      } else {
-        del.addEventListener("click", () => {
-          this._saveSection(section, this._cfg[key].filter((_, i) => i !== idx).map((it) => ({ ...it })));
-        });
-      }
-      actions.append(del);
+      actions.append(...this._deleteButton(used, T.inUseItemTitle(used), () => {
+        this._saveSection(section, this._cfg[key].filter((_, i) => i !== idx).map((it) => ({ ...it })));
+      }));
     }
     actions.append(el("span", "spacer"));
     const cancel = el("button", "btn ghost", T.cancel);
@@ -3344,8 +4267,25 @@ class CoverExtenderPanel extends HTMLElement {
     return actions;
   }
 
+  /** "21.4 °C ≥ 18": where the temperature stands against the threshold right now. */
+  _solarGainVerdict(draft) {
+    const st = this._hass.states;
+    const temp = st[draft.sg_temperature_entity];
+    const t = parseFloat(temp?.state);
+    const raw = draft.sg_temperature_threshold;
+    const s = st[raw] ? parseFloat(st[raw].state) : parseFloat(raw);
+    if (!Number.isFinite(t) || !Number.isFinite(s)) return null;
+    const unit = temp.attributes?.unit_of_measurement;
+    const shown = `${t}${unit ? ` ${unit}` : ""}`;
+    const warm = t >= s;
+    const chip = el("span", `chip verdict ${warm ? "inhib" : "ok"}`);
+    chip.append(icon(warm ? "mdi:pause" : "mdi:check"),
+      document.createTextNode(warm ? T.sgTooWarm(shown, s) : T.sgCool(shown, s)));
+    return chip;
+  }
+
   /**
-   * Global settings. A single item, so it is edited in place: the draft lives on
+   * General settings. A single item, so it is edited in place: the draft lives on
    * the instance, not in _edit, and survives the re-renders a selector triggers.
    */
   _renderGlobal(wrap) {
@@ -3356,55 +4296,90 @@ class CoverExtenderPanel extends HTMLElement {
     const conditions = this._cfg.weather_conditions || [];
     const interval = this._cfg.defaults?.command_interval ?? 150;
 
-    const head = el("div", "toolbar section-head");
-    const title = el("span");
-    title.append(el("h3", "sec", T.globalSettings), el("p", "secsub", T.globalSub));
-    head.append(title);
-    wrap.append(head);
-
-    const card = el("div", "card");
-    card.append(this._numberRow(T.interval, draft.command_interval ?? interval,
-      { min: 0, max: 5000, step: 10, unit: "ms" },
-      (v) => { draft.command_interval = v; }, T.intervalHint));
-    card.append(this._selectorRow(T.tempEntity,
-      { entity: { domain: "sensor", device_class: "temperature" } },
-      draft.sg_temperature_entity || undefined,
-      (v) => { draft.sg_temperature_entity = v || undefined; }));
-    card.append(this._selectorRow(T.threshold,
-      { entity: { domain: ["input_number", "number"] } },
-      draft.sg_temperature_threshold || undefined,
-      (v) => { draft.sg_temperature_threshold = v || undefined; }));
-    card.append(this._selectorRow(T.weather, { entity: { domain: "weather" } },
-      draft.sg_weather_entity || undefined,
-      (v) => { draft.sg_weather_entity = v || undefined; }));
-    card.append(this._selectorRow(T.goodConditions, {
-      select: {
-        multiple: true, mode: "dropdown", sort: false,
-        options: conditions.map((c) => ({ value: c, label: T.weatherStates[c] || c })),
-      },
-    }, draft.sg_good_conditions ?? ["sunny", "partlycloudy"],
-      (v) => { draft.sg_good_conditions = v || []; }));
-    card.append(el("p", "hint", T.goodConditionsHint));
-    wrap.append(card);
-
-    const disp = el("div", "card");
-    disp.append(el("h3", "sec", T.display));
-    disp.append(this._boolRow(T.showSunFacing, draft.show_sun_facing ?? true,
-      (v) => { draft.show_sun_facing = v; }));
-    disp.append(this._boolRow(T.showAutoShade, draft.show_auto_shade ?? true,
-      (v) => { draft.show_auto_shade = v; }));
-    disp.append(this._boolRow(T.showSolarGain, draft.show_solar_gain ?? false,
-      (v) => { draft.show_solar_gain = v; }));
-    wrap.append(disp);
-
-    const actions = el("div", "actions card");
-    actions.append(el("span", "spacer"));
+    // The save bar appears with the first change and leaves with the last undo.
+    const bar = el("div", "actions card savebar");
     const cancel = el("button", "btn ghost", T.cancel);
     cancel.addEventListener("click", () => { if (this._leaveEditor()) this._render(); });
     const save = el("button", "btn primary", T.save);
     save.addEventListener("click", () => { this._saveSection("global", { ...draft }); });
-    actions.append(cancel, save);
-    wrap.append(actions);
+    bar.append(el("span", "dot"), el("span", "why", T.unsaved), el("span", "spacer"), cancel, save);
+    const touch = () => { bar.hidden = JSON.stringify(draft) === this._globalClean; };
+
+    /* solar gain: when is it cool and fine enough */
+    const sg = this._edCard("mdi:thermometer", T.sgTitle, T.sgSub);
+    const line = (label, control, cls = "") => {
+      const r = el("div", `sline ${cls}`.trim());
+      r.append(el("span", "k", label), control);
+      return r;
+    };
+    sg.append(line(T.sgTemp, this._haSelector(
+      { entity: { domain: "sensor", device_class: "temperature" } },
+      draft.sg_temperature_entity || undefined,
+      (v) => { draft.sg_temperature_entity = v || undefined; touch(); })));
+    sg.append(line(T.sgThreshold, this._haSelector(
+      { entity: { domain: ["input_number", "number"] } },
+      draft.sg_temperature_threshold || undefined,
+      (v) => { draft.sg_temperature_threshold = v || undefined; touch(); })));
+    const verdict = this._solarGainVerdict(draft);
+    if (verdict) {
+      const r = el("div", "sline");
+      r.append(el("span"), verdict);
+      sg.append(r);
+    }
+    sg.append(line(T.sgWeather, this._haSelector({ entity: { domain: "weather" } },
+      draft.sg_weather_entity || undefined,
+      (v) => { draft.sg_weather_entity = v || undefined; touch(); })));
+    const wx = el("div", "toggles");
+    wx.style.margin = "0";
+    const good = () => draft.sg_good_conditions ?? ["sunny", "partlycloudy"];
+    for (const c of conditions) {
+      const b = el("button", "toggle wx");
+      b.type = "button";
+      b.append(icon(WEATHER_ICONS[c] || "mdi:weather-cloudy"), document.createTextNode(T.weatherStates[c] || c));
+      const sync = () => b.setAttribute("aria-pressed", String(good().includes(c)));
+      sync();
+      b.addEventListener("click", () => {
+        const now = good();
+        draft.sg_good_conditions = now.includes(c) ? now.filter((x) => x !== c) : [...now, c];
+        sync();
+        touch();
+      });
+      wx.append(b);
+    }
+    sg.append(line(T.sgGood, wx, "top"), this._note(T.sgNote));
+
+    /* sending commands */
+    const cmd = this._edCard("mdi:send-clock-outline", T.cmdTitle);
+    const row = el("div", "numf");
+    row.append(el("div", "t", T.interval), el("div", "h", T.intervalHint));
+    const ms = document.createElement("input");
+    ms.type = "number";
+    ms.min = "0";
+    ms.max = "5000";
+    ms.step = "10";
+    ms.value = String(draft.command_interval ?? interval);
+    ms.setAttribute("aria-label", T.interval);
+    ms.addEventListener("input", () => {
+      // An empty box is a transient state while typing, not a zero.
+      if (ms.value !== "") { draft.command_interval = Number(ms.value); touch(); }
+    });
+    const val = el("div", "val");
+    val.append(ms, el("span", "u", "ms"));
+    row.append(val);
+    cmd.append(row);
+
+    /* the optional per-cover entities */
+    const extra = this._edCard("mdi:plus-box-multiple-outline", T.extraTitle, T.extraSub);
+    extra.append(
+      this._optRow("mdi:sun-angle-outline", T.showSunFacing, T.showHints.sun_facing,
+        draft.show_sun_facing ?? true, (v) => { draft.show_sun_facing = v; touch(); }),
+      this._optRow("mdi:weather-sunny", T.showAutoShade, T.showHints.auto_shade,
+        draft.show_auto_shade ?? true, (v) => { draft.show_auto_shade = v; touch(); }),
+      this._optRow("mdi:thermometer", T.showSolarGain, T.showHints.solar_gain,
+        draft.show_solar_gain ?? false, (v) => { draft.show_solar_gain = v; touch(); }));
+
+    wrap.append(sg, cmd, extra, bar);
+    touch();
   }
 }
 

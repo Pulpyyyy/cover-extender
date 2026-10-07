@@ -223,9 +223,9 @@ Ce parcours configure un volet avec deux modes, *Jour* (ouvert) et *Nuit* (ferm�
 Un mode dit *ce que le volet doit faire en ce moment*. Chaque mode a un nom, une icône et une couleur, et en option :
 
 - **Verrouiller les volets** : tant que le mode est actif, le volet est [verrouillé](#verrou-et-mémoire).
-- **Comportement** : *Aucun* (chaque volet reçoit sa position depuis la matrice), *Ombrage* (la position est calculée d'après le soleil) ou *Héliotropie*.
+- **Position des volets** : *Fixe* (chaque volet reçoit sa position depuis la matrice), *Ombrage* (la position est calculée d'après le soleil) ou *Héliotropie*.
 - **Mode prioritaire** : le mode passe outre les [inhibitions](#exclusions) (jamais les exclusions de sécurité). Typiquement un mode *Alarme* qui doit fermer tous les volets, chambre d'amis comprise.
-- **Mode minuté** : le mode ne dure qu'un temps (de 1 minute à 24 heures), voir [les modes minutés](#modes-minutés).
+- **Durée limitée** : le mode ne dure qu'un temps (de 1 minute à 24 heures), c'est un [mode minuté](#modes-minutés).
 - **Masquer du sélecteur** : le mode reste utilisable par les automatisations mais n'apparaît pas dans le sélecteur global.
 
 Un mode ne s'applique qu'aux volets auxquels il est lié (une cellule de la matrice). Pour chaque volet lié, la matrice règle ce qui se passe quand le mode s'active :
@@ -287,7 +287,7 @@ Un mode avec une durée est une parenthèse par-dessus le **mode de base** du vo
 | Fin du délai d'Invité | Jour | Jour |
 | L'automatisation du soir applique *Nuit* | Nuit | **Nuit** |
 
-- **À la fin du délai**, le volet revient à son mode de base, ou à un mode fixe réglé dans l'éditeur du mode (*Manuel : 1 h, puis Jour*). Le mode fixe ne peut être qu'un mode sans durée : chaque compte à rebours se termine donc sur un mode qui n'en relance aucun.
+- **À la fin du délai**, le volet revient à son mode de base (« revenir au mode précédent » dans l'éditeur du mode), ou à un mode fixe réglé dans cet éditeur (*Manuel : 1 h, puis Jour*). Le mode fixe ne peut être qu'un mode sans durée : chaque compte à rebours se termine donc sur un mode qui n'en relance aucun.
 - **Un mode sans durée choisi entre-temps** s'applique tout de suite, met fin au compte à rebours et devient le mode de base.
 - **Re-choisir le mode minuté en cours** relance son compte à rebours.
 - L'action `cover_extender.end_timed_mode` y met fin tout de suite.
@@ -296,10 +296,10 @@ Le `select.<volet>_cx_mode` du volet indique quand le compte à rebours se termi
 
 ### Exclusions
 
-L'éditeur du volet a deux listes d'entités qui retiennent le volet tant que l'une d'elles est à `on` :
+L'éditeur du volet a deux listes d'entités qui retiennent le volet tant que l'une d'elles est à `on`, côte à côte sous **Ce qui bloque le volet** :
 
-- **Exclusions de sécurité** : un contact de fenêtre ou de porte (`binary_sensor`), un capteur de pluie. Rien ne bouge, **même pas un mode prioritaire**.
-- **Inhibitions** : un `input_boolean` « invité dans la chambre », « enfants couchés », ou un capteur template comme « mercredi matin ». Cover Extender ne touche pas au volet, **sauf pour une demande prioritaire** : un mode avec **Mode prioritaire** coché, ou l'action `cover_extender.apply_mode` avec `force: true`.
+- **Exclusions de sécurité** (« Sécurité : rien ne bouge ») : un contact de fenêtre ou de porte (`binary_sensor`), un capteur de pluie. Rien ne bouge, **même pas un mode prioritaire**.
+- **Inhibitions** (« Pause : Cover Extender n'y touche pas ») : un `input_boolean` « invité dans la chambre », « enfants couchés », ou un capteur template comme « mercredi matin ». Cover Extender ne touche pas au volet, **sauf pour une demande prioritaire** : un mode avec **Mode prioritaire** coché, ou l'action `cover_extender.apply_mode` avec `force: true`.
 
 Tant que l'une d'elles retient le volet :
 
@@ -377,10 +377,10 @@ L'entité de température, le seuil et l'entité météo sont communs à tous le
 
 ### Qui remplace qui
 
-Une demande groupée (le sélecteur global, un [horaire](#horaires) ou l'action `cover_extender.apply_mode`) applique un mode à plusieurs volets d'un coup. Deux réglages de chaque mode la façonnent, sous **Demandes groupées** dans l'éditeur du mode :
+Une demande groupée (le sélecteur global, un [horaire](#horaires) ou l'action `cover_extender.apply_mode`) applique un mode à plusieurs volets d'un coup. Deux réglages de chaque mode la façonnent, sous **Lancé pour plusieurs volets** dans l'éditeur du mode :
 
-- **Ne remplace pas** : les modes qu'il laisse tranquilles. Un volet déjà dans l'un d'eux le garde. Un volet en [mode minuté](#modes-minutés) le garde aussi, et prend le mode demandé à la fin du délai.
-- **Mode de repli**, dans l'éditeur de mode : appliqué à la place, aux volets auxquels le mode demandé n'est pas lié.
+- **Ne pas déranger les volets déjà en mode** : les modes qu'il laisse tranquilles. Un volet déjà dans l'un d'eux le garde. Un volet en [mode minuté](#modes-minutés) le garde aussi, et prend le mode demandé à la fin du délai.
+- **Volets qui n'ont pas ce mode dans la matrice** : un *mode de repli* appliqué à la place, aux volets auxquels le mode demandé n'est pas lié (ou *Ne rien faire*).
 
 Par exemple :
 
@@ -404,9 +404,9 @@ Toute la configuration se fait dans le panneau, à `/cover-extender`. Chaque val
 |---|---|
 | **Volets** | Les volets : entité, façade, gabarit, [exclusions de sécurité et inhibitions](#exclusions), géométrie, ombrage et héliotropie. Chaque carte montre ce que fait le volet en ce moment : son mode et sa position, puis ce qui le retient (un [mode minuté](#modes-minutés) et son heure de fin, le verrou et la position mémorisée, une exclusion ou une inhibition active). |
 | **Matrice** | Modes × volets : lier les modes et régler chaque position par volet depuis une seule grille. Une cellule vide lie le mode ; une cellule *auto* d'un mode d'ombrage ou d'héliotropie peut être remplacée par une position fixe pour ce seul volet. |
-| **Modes** | Icône, couleur, verrou, comportement, priorité, repli, [durée](#modes-minutés) et ce qui se passe à sa fin, visibilité. Faites glisser les tuiles pour les réordonner : l'ordre est celui des sélecteurs de mode. Sous **Demandes groupées** : les modes qu'il ne remplace pas, et son mode de repli (voir [qui remplace qui](#qui-remplace-qui)). |
+| **Modes** | Icône, couleur, verrou, comportement, priorité, repli, [durée](#modes-minutés) et ce qui se passe à sa fin, visibilité. Faites glisser les tuiles pour les réordonner : l'ordre est celui des sélecteurs de mode. Sous **Lancé pour plusieurs volets** : les modes qu'il ne dérange pas, et son mode de repli (voir [qui remplace qui](#qui-remplace-qui)). |
 | **Horaires** | L'[ouverture du matin et la fermeture du soir](#horaires) : la courbe de chacune sur l'année, et le mode du matin et du soir de chaque volet. |
-| **Réglages** | Façades, gabarits, réglages généraux, et la liste des entités que la configuration a créées. |
+| **Réglages** | À gauche la maison : façades (orientation réglée sur une boussole), gabarits, et la liste des entités que la configuration a créées. À droite les réglages globaux : héliotropie (température, seuil, météo et ce qui compte comme beau temps), pause entre deux volets, entités en plus pour chaque volet. |
 
 ## Questions fréquentes
 
