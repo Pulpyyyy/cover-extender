@@ -187,8 +187,8 @@ Ou **Paramètres → Appareils et services → Ajouter une intégration**, puis 
 Ce parcours configure un volet avec deux modes, *Jour* (ouvert) et *Nuit* (fermé). Comptez cinq minutes.
 
 1. **Ouvrez le panneau.** Cliquez sur **Cover Extender** dans la barre latérale, ou sur le bouton de la page de l'intégration, ou allez sur `http://<votre-ha>:8123/cover-extender`.
-2. **Créez une façade.** Dans **Réglages → Façades**, cliquez sur **Ajouter une façade**. Nommez-la (par ex. *Sud*) et réglez son **azimut**, la direction vers laquelle regardent les fenêtres : 0° = nord, 90° = est, 180° = sud, 270° = ouest. Une application boussole posée à plat contre la fenêtre, en regardant dehors, donne la valeur.
-3. **Créez deux modes.** Dans **Modes**, cliquez deux fois sur **Ajouter un mode** : *Jour* et *Nuit*. Laissez **Comportement** sur *Aucun* pour les deux. Cochez **Verrouiller les volets** sur *Nuit* si vous voulez que les commandes passées par Cover Extender attendent le matin.
+2. **Créez une façade.** Dans **Réglages → Façades**, cliquez sur **Ajouter une façade**. Nommez-la (par ex. *Sud*) et réglez son **azimut**, la direction vers laquelle regardent les fenêtres : 0° = nord, 90° = est, 180° = sud, 270° = ouest. Une application boussole posée à plat contre la fenêtre, en regardant dehors, donne la valeur. Dans le panneau, tapez-la, choisissez l'une des huit directions, ou faites glisser la flèche sur la boussole.
+3. **Créez deux modes.** Dans **Modes**, cliquez deux fois sur **Ajouter un mode** : *Jour* et *Nuit*. Laissez **Position des volets** sur *Fixe* pour les deux. Activez **Verrouiller les volets** sur *Nuit* si vous voulez que les commandes passées par Cover Extender attendent le matin.
 4. **Ajoutez votre volet.** Dans **Volets**, cliquez sur **Ajouter un volet**, choisissez l'entité `cover.*` et la façade *Sud*, puis **Enregistrer**.
 5. **Réglez les positions.** Dans **Matrice**, cliquez sur la cellule vide *Jour* de votre volet : cela lie le mode. Choisissez **Fixe** et 100 %. Faites de même pour *Nuit* à 0 %, puis **Enregistrer**. Les positions suivent la convention de Home Assistant : **0 = fermé, 100 = ouvert**.
 6. **Essayez.** Une nouvelle entité `select.<votre_volet>_cx_mode` est apparue. Passez-la de *Jour* à *Nuit* : le volet se ferme.
@@ -299,7 +299,7 @@ Le `select.<volet>_cx_mode` du volet indique quand le compte à rebours se termi
 L'éditeur du volet a deux listes d'entités qui retiennent le volet tant que l'une d'elles est à `on`, côte à côte sous **Ce qui bloque le volet** :
 
 - **Exclusions de sécurité** (« Sécurité : rien ne bouge ») : un contact de fenêtre ou de porte (`binary_sensor`), un capteur de pluie. Rien ne bouge, **même pas un mode prioritaire**.
-- **Inhibitions** (« Pause : Cover Extender n'y touche pas ») : un `input_boolean` « invité dans la chambre », « enfants couchés », ou un capteur template comme « mercredi matin ». Cover Extender ne touche pas au volet, **sauf pour une demande prioritaire** : un mode avec **Mode prioritaire** coché, ou l'action `cover_extender.apply_mode` avec `force: true`.
+- **Inhibitions** (« Pause : Cover Extender n'y touche pas ») : un `input_boolean` « invité dans la chambre », « enfants couchés », ou un capteur template comme « mercredi matin ». Cover Extender ne touche pas au volet, **sauf pour une demande prioritaire** : un mode avec **Mode prioritaire** activé (sous *Avancé* dans l'éditeur du mode), ou l'action `cover_extender.apply_mode` avec `force: true`.
 
 Tant que l'une d'elles retient le volet :
 
@@ -341,7 +341,7 @@ L'ombrage empêche la lumière directe d'aller plus loin dans la pièce que ce q
 
 Il fonctionne quand :
 
-- **Ombrage automatique activé** est coché sur le volet (ou son gabarit), ce qui crée `switch.<volet>_cx_auto_shade` ;
+- l'interrupteur **Ombrage** est activé dans l'éditeur du volet (en tête de sa carte Ombrage), ce qui crée `switch.<volet>_cx_auto_shade` ;
 - cet interrupteur est allumé, ce que fait un mode au comportement *Ombrage* ;
 - aucune exclusion n'est active.
 
@@ -363,7 +363,7 @@ La position est recalculée à chaque mise à jour de `sun.sun` (toutes les quel
 
 L'héliotropie est une fonction de **temps froid** : laisser le soleil chauffer la pièce quand il le peut, garder la chaleur sinon.
 
-Elle fonctionne quand **Héliotropie activée** est cochée sur le volet (ce qui crée `switch.<volet>_cx_auto_solar_gain`), que cet interrupteur est allumé (un mode au comportement *Héliotropie* s'en charge) et qu'aucune exclusion n'est active. Alors :
+Elle fonctionne quand l'interrupteur **Héliotropie** est activé dans l'éditeur du volet (ce qui crée `switch.<volet>_cx_auto_solar_gain`), que cet interrupteur est allumé (un mode au comportement *Héliotropie* s'en charge) et qu'aucune exclusion n'est active. Alors :
 
 - si l'entité de température est au-dessus ou égale au seuil, **rien ne se passe** (le volet reste où il est) ;
 - sinon, si le soleil fait face au volet et que la météo est dans la liste des bonnes conditions, le volet va à la **Position au soleil** (100 % par défaut) ;
@@ -402,11 +402,27 @@ Toute la configuration se fait dans le panneau, à `/cover-extender`. Chaque val
 
 | Onglet | Ce qu'il règle |
 |---|---|
-| **Volets** | Les volets : entité, façade, gabarit, [exclusions de sécurité et inhibitions](#exclusions), géométrie, ombrage et héliotropie. Chaque carte montre ce que fait le volet en ce moment : son mode et sa position, puis ce qui le retient (un [mode minuté](#modes-minutés) et son heure de fin, le verrou et la position mémorisée, une exclusion ou une inhibition active). |
+| **Volets** | Les volets : entité, façade, gabarit, [exclusions de sécurité et inhibitions](#exclusions), géométrie, ombrage et héliotropie, chaque réglage avec une ligne d'explication et un schéma de la fenêtre. Sous un gabarit, chaque valeur dit si elle vient du gabarit ou si elle est propre au volet, avec un filtre *Écarts seulement*. Chaque carte montre ce que fait le volet en ce moment : son mode et sa position, puis ce qui le retient (un [mode minuté](#modes-minutés) et son heure de fin, le verrou et la position mémorisée, une exclusion ou une inhibition active). |
 | **Matrice** | Modes × volets : lier les modes et régler chaque position par volet depuis une seule grille. Une cellule vide lie le mode ; une cellule *auto* d'un mode d'ombrage ou d'héliotropie peut être remplacée par une position fixe pour ce seul volet. |
 | **Modes** | Icône, couleur, verrou, comportement, priorité, repli, [durée](#modes-minutés) et ce qui se passe à sa fin, visibilité. Faites glisser les tuiles pour les réordonner : l'ordre est celui des sélecteurs de mode. Sous **Lancé pour plusieurs volets** : les modes qu'il ne dérange pas, et son mode de repli (voir [qui remplace qui](#qui-remplace-qui)). |
 | **Horaires** | L'[ouverture du matin et la fermeture du soir](#horaires) : la courbe de chacune sur l'année, et le mode du matin et du soir de chaque volet. |
 | **Réglages** | À gauche la maison : façades (orientation réglée sur une boussole), gabarits, et la liste des entités que la configuration a créées. À droite les réglages globaux : héliotropie (température, seuil, météo et ce qui compte comme beau temps), pause entre deux volets, entités en plus pour chaque volet. |
+
+### En images
+
+L'éditeur de volet : ce qui bloque le volet, puis le calcul en quatre cartes. Sous son gabarit, *Distance* et *Position mini* sont propres à ce volet (ambre), le reste est hérité (pointillés). Les captures sont en anglais ; le panneau suit la langue de chaque administrateur.
+
+![Éditeur de volet](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-cover-editor.png)
+
+| L'éditeur de mode | L'onglet Horaires |
+|---|---|
+| ![Éditeur de mode](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-mode-editor.png) | ![Onglet Horaires](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-schedules.png) |
+
+| | |
+|---|---|
+| ![Onglet Volets](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-covers.png) | ![Onglet Modes](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-modes.png) |
+
+![Onglet Réglages](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-settings.png)
 
 ## Questions fréquentes
 
@@ -420,7 +436,7 @@ Toute la configuration se fait dans le panneau, à `/cover-extender`. Chaque val
 
 **Je ne trouve pas le panneau.** Ouvrez directement `http://<votre-ha>:8123/cover-extender`. Il faut un compte administrateur. Si l'entrée manque dans la barre latérale, elle est peut-être masquée : ouvrez votre **Profil** et modifiez les éléments de la barre latérale.
 
-**`switch.<volet>_cx_auto_shade` n'existe pas.** Cochez **Ombrage automatique activé** dans la section Ombrage du volet (ou de son gabarit). Pareil pour l'héliotropie.
+**`switch.<volet>_cx_auto_shade` n'existe pas.** Activez l'interrupteur **Ombrage** en tête de la carte Ombrage du volet : il appartient au volet, un gabarit n'en a pas. Pareil pour l'héliotropie.
 
 **En ombrage, le volet ferme trop / pas assez.** Augmentez la **Distance du volet** pour laisser entrer plus de soleil, montez la **Position mini** pour garder de la lumière. Après chaque changement, l'action `cover_extender.compute_shade_position` (dans **Outils de développement → Actions**) montre la nouvelle position sans bouger le volet.
 

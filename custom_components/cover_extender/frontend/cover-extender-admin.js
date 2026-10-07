@@ -167,7 +167,7 @@ const WORDS = {
     link: "Link",
     cancel: "Cancel",
     save: "Save",
-    saved: "Saved — configuration reloaded",
+    saved: "Saved: configuration reloaded",
     saveError: "Could not save",
     // The fallback for a code no table names: the punctuation around it is
     // the language's too — French puts a space before the colon.
@@ -181,6 +181,8 @@ const WORDS = {
     active: "on",
     // French agrees the adjective with the noun; English has one word for both.
     activeF: "on",
+    inactive: "off",
+    inactiveF: "off",
     lock: "lock",
     hidden: "hidden",
     facades: "Facades",
@@ -208,7 +210,7 @@ const WORDS = {
     },
     addMode: "Add a mode",
     addCover: "Add a cover",
-    dragHint: "Drag a tile to reorder — the order drives the mode selector's list.",
+    dragHint: "Drag a tile to reorder: the order drives the mode selector's list.",
     backToModes: "All modes",
     newMode: "New mode",
     name: "Name",
@@ -369,6 +371,8 @@ const WORDS = {
     sgSub: "When is it cool and fine enough to let the sun in? Applies to every cover.",
     sgTemp: "Temperature",
     sgThreshold: "below the threshold",
+    sgThrValue: "Value",
+    sgThrEntity: "Entity",
     sgWeather: "Weather",
     sgGood: "Fine weather =",
     sgNote: "Without a temperature the test is skipped; without weather it is always fine.",
@@ -524,7 +528,7 @@ const WORDS = {
     link: "Lier",
     cancel: "Annuler",
     save: "Enregistrer",
-    saved: "Enregistré — configuration rechargée",
+    saved: "Enregistré : configuration rechargée",
     saveError: "Échec de l'enregistrement",
     rawError: (raw) => `Échec de l'enregistrement : ${raw}`,
     discardConfirm: "Des modifications ne sont pas enregistrées. Les abandonner ?",
@@ -535,6 +539,8 @@ const WORDS = {
     solarGain: "Héliotropie",
     active: "actif",
     activeF: "active",
+    inactive: "inactif",
+    inactiveF: "inactive",
     lock: "verrou",
     hidden: "masqué",
     facades: "Façades",
@@ -562,7 +568,7 @@ const WORDS = {
     },
     addMode: "Ajouter un mode",
     addCover: "Ajouter un volet",
-    dragHint: "Glisser une tuile pour réordonner — l'ordre pilote la liste du sélecteur de mode.",
+    dragHint: "Glisser une tuile pour réordonner : l'ordre pilote la liste du sélecteur de mode.",
     backToModes: "Tous les modes",
     newMode: "Nouveau mode",
     name: "Nom",
@@ -723,6 +729,8 @@ const WORDS = {
     sgSub: "Quand fait-il assez frais et beau pour laisser entrer le soleil ? Vaut pour tous les volets.",
     sgTemp: "Température",
     sgThreshold: "sous le seuil",
+    sgThrValue: "Valeur",
+    sgThrEntity: "Entité",
     sgWeather: "Météo",
     sgGood: "Beau temps =",
     sgNote: "Sans température, le test est ignoré ; sans météo, il fait toujours beau.",
@@ -1588,13 +1596,25 @@ const STYLE = `
   .sline.top { align-items: start; }
   .sline.top > .k { padding-top: var(--fp-sh); }
   .verdict { grid-column: 2; justify-self: start; }
+  .thr { display: flex; align-items: center; gap: var(--fp-s3); flex-wrap: wrap; }
+  .seg.thr-seg { margin: 0; flex: none; }
+  .seg.thr-seg button { flex: none; padding: 0 var(--fp-s3); }
+  .thr-body { flex: 1 1 220px; display: flex; align-items: center; gap: var(--fp-sh); min-width: 0; }
+  .thr-body ha-selector { flex: 1; margin: 0; }
+  .thr-body input[type=number] { width: 84px; height: 40px; text-align: right; font: inherit; font-size: var(--f-14);
+         font-weight: 600; border-radius: var(--fp-field-r); border: 1px solid var(--divider-color);
+         background: var(--secondary-background-color); color: var(--primary-text-color); padding: 0 var(--fp-s2); }
+  .thr-body .u { font-size: var(--f-12-5); color: var(--secondary-text-color); }
   .chip.ok { color: var(--fp-ok); border-color: color-mix(in srgb, var(--fp-ok) 45%, transparent); }
   .stats.compact { gap: var(--fp-s3) var(--fp-s5); margin-top: var(--fp-s2); }
   .stats.compact .stat-n { font-size: var(--f-20); }
-  .actions.savebar { position: sticky; bottom: var(--fp-s2); z-index: 3; margin-top: 0;
-                     border-color: color-mix(in srgb, var(--primary-color) 50%, transparent);
-                     box-shadow: 0 -6px 24px rgba(0,0,0,.35); }
-  .actions.savebar[hidden] { display: none; }
+  .actions.savebar { position: sticky; bottom: var(--fp-s2); z-index: 3; margin-top: var(--fp-s4);
+                     padding: 10px var(--fp-s4); }
+  .actions.savebar.dirty { border-color: color-mix(in srgb, var(--primary-color) 50%, transparent);
+                           box-shadow: 0 -6px 24px rgba(0,0,0,.35); }
+  .actions .pending { display: inline-flex; align-items: center; gap: var(--fp-sh); font-size: var(--f-12-5);
+                      color: var(--primary-text-color); margin-right: var(--fp-s2); }
+  .actions .pending[hidden] { display: none; }
   .actions .why { font-size: var(--f-12); color: var(--secondary-text-color); }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary-color); flex: none; }
 
@@ -1718,7 +1738,7 @@ const STYLE = `
     table.assign td, table.assign th { padding-left: var(--fp-s1); padding-right: var(--fp-s1); }
     table.assign th { white-space: normal; }
     .sched-en { margin-left: 0; }
-    .actions .why { display: none; }
+    .actions .why, .actions .ptext { display: none; }
   }
 
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -1925,12 +1945,19 @@ class CoverExtenderPanel extends HTMLElement {
     const style = document.createElement("style");
     style.textContent = STYLE;
     this.shadowRoot.append(style, el("div", "wrap"));
+    // Capture runs BEFORE the control's own handler has touched the draft, so
+    // the save bar looks again once the event is over.
+    const sync = () => setTimeout(() => this._syncSaveBar?.(), 0);
+    for (const ev of ["input", "change", "click", "pointerup", "keyup", "value-changed"]) {
+      this.shadowRoot.addEventListener(ev, sync, true);
+    }
   }
 
   _render() {
     if (!this.shadowRoot.firstChild) this._renderShell();
     const wrap = this.shadowRoot.querySelector(".wrap");
     wrap.replaceChildren();
+    this._syncSaveBar = null;
     // The popover is mounted on the shadow root, so clearing .wrap does not
     // remove it — close it explicitly (also detaches its scroll listeners).
     this._closePopover();
@@ -1993,6 +2020,7 @@ class CoverExtenderPanel extends HTMLElement {
     else this._renderSettings(wrap);
 
     this._trackLiveNodes();
+    this._syncSaveBar?.();
   }
 
   /* ---------- unsaved-changes guard ---------- */
@@ -2611,6 +2639,35 @@ class CoverExtenderPanel extends HTMLElement {
       out.push(del);
     }
     return out;
+  }
+
+  /**
+   * The one save bar of every editor, stuck to the bottom of the screen:
+   * Delete on the left when the item has one, then what is pending, Cancel and
+   * Save on the right. Cancel and Save wake up with the first change and fall
+   * asleep again when the last one is undone: _syncSaveBar compares the drafts
+   * with their snapshots after every edit, wherever it came from.
+   */
+  _saveBar(onSave, del = null) {
+    const bar = el("div", "actions card savebar");
+    if (del) bar.append(...this._deleteButton(del.used || 0, del.reason || "", del.onDelete));
+    const pending = el("span", "pending");
+    pending.append(el("span", "dot"), el("span", "ptext", T.unsaved));
+    const cancel = el("button", "btn ghost", T.cancel);
+    cancel.type = "button";
+    cancel.addEventListener("click", () => { if (this._leaveEditor()) this._render(); });
+    const save = el("button", "btn primary", T.save);
+    save.type = "button";
+    save.addEventListener("click", onSave);
+    bar.append(el("span", "spacer"), pending, cancel, save);
+    this._syncSaveBar = () => {
+      const dirty = this._dirty();
+      save.disabled = !dirty;
+      cancel.disabled = !dirty;
+      pending.hidden = !dirty;
+      bar.classList.toggle("dirty", dirty);
+    };
+    return bar;
   }
 
   /** Entities as chips with their live state, and one picker to add another. */
@@ -3359,24 +3416,15 @@ class CoverExtenderPanel extends HTMLElement {
     right.append(advCard);
     wrap.append(cols);
 
-    const actions = el("div", "actions card");
-    if (!creating) {
-      actions.append(...this._deleteButton(usage[draft.name] || 0, T.inUseTitle(usage[draft.name] || 0), () => {
-        const items = this._cfg.modes.filter((_, i) => i !== idx).map((m) => ({ ...m }));
-        this._saveSection("mode", items);
-      }));
-    }
-    actions.append(el("span", "spacer"));
-    const cancel = el("button", "btn ghost", T.cancel);
-    cancel.addEventListener("click", () => { if (this._leaveEditor()) this._render(); });
-    const save = el("button", "btn primary", T.save);
-    save.addEventListener("click", () => {
+    const used = usage[draft.name] || 0;
+    wrap.append(this._saveBar(() => {
       const items = this._cfg.modes.map((m) => ({ ...m }));
       if (creating) items.push(draft); else items[idx] = draft;
       this._saveSection("mode", items);
-    });
-    actions.append(cancel, save);
-    wrap.append(actions);
+    }, creating ? null : {
+      used, reason: T.inUseTitle(used),
+      onDelete: () => this._saveSection("mode", this._cfg.modes.filter((_, i) => i !== idx).map((m) => ({ ...m }))),
+    }));
   }
 
   /* ---------- VOLETS (editable) ---------- */
@@ -3447,9 +3495,9 @@ class CoverExtenderPanel extends HTMLElement {
 
         const feats = el("div", "feats");
         const sh = el("span", c.shade_enable ? "on" : "");
-        sh.append(icon("mdi:weather-sunny"), document.createTextNode(` ${T.shading} ${c.shade_enable ? T.active : "—"}`));
+        sh.append(icon("mdi:weather-sunny"), document.createTextNode(` ${T.shading} ${c.shade_enable ? T.active : T.inactive}`));
         const sg = el("span", c.solar_gain_enable ? "on" : "");
-        sg.append(icon("mdi:thermometer"), document.createTextNode(` ${T.solarGain} ${c.solar_gain_enable ? T.activeF : "—"}`));
+        sg.append(icon("mdi:thermometer"), document.createTextNode(` ${T.solarGain} ${c.solar_gain_enable ? T.activeF : T.inactiveF}`));
         feats.append(sh, sg);
         card.append(feats);
         grid.append(card);
@@ -3650,28 +3698,14 @@ class CoverExtenderPanel extends HTMLElement {
       }
     }
 
-    const actions = el("div", "actions card");
-    if (!creating) {
-      const del = el("button", "btn danger");
-      del.append(icon("mdi:delete-outline"), document.createTextNode(T.delete));
-      del.addEventListener("click", () => {
-        const items = this._cfg.covers.filter((_, i) => i !== idx)
-          .map((c) => JSON.parse(JSON.stringify(c)));
-        this._saveSection("cover", items);
-      });
-      actions.append(del);
-    }
-    actions.append(el("span", "spacer"));
-    const cancel = el("button", "btn ghost", T.cancel);
-    cancel.addEventListener("click", () => { if (this._leaveEditor()) this._render(); });
-    const save = el("button", "btn primary", T.save);
-    save.addEventListener("click", () => {
+    wrap.append(this._saveBar(() => {
       const items = this._cfg.covers.map((c) => JSON.parse(JSON.stringify(c)));
       if (creating) items.push(draft); else items[idx] = draft;
       this._saveSection("cover", items);
-    });
-    actions.append(cancel, save);
-    wrap.append(actions);
+    }, creating ? null : {
+      onDelete: () => this._saveSection("cover", this._cfg.covers.filter((_, i) => i !== idx)
+        .map((c) => JSON.parse(JSON.stringify(c)))),
+    }));
   }
 
   /* ---------- HORAIRES ---------- */
@@ -3838,18 +3872,13 @@ class CoverExtenderPanel extends HTMLElement {
     body.append(stats);
     wrap.append(card);
 
-    /* ---- save bar: shows with the first change, leaves with the last undo ---- */
-    const bar = el("div", "actions card savebar");
-    const cancel = el("button", "btn ghost", T.cancel);
-    cancel.addEventListener("click", () => { if (this._leaveEditor()) this._render(); });
-    const save = el("button", "btn primary", T.save);
-    save.addEventListener("click", () => {
+    const bar = this._saveBar(() => {
       const house = {};
       for (const k of SCHED_KINDS) if (draft.enabled[k]) house[k] = schedToCfg(draft.s[k]);
       this._saveSection("schedule", { house, covers: draft.assign });
     });
-    bar.append(el("span", "dot"), el("span", "why", T.unsaved), el("span", "spacer"), cancel, save);
-    const touch = () => { bar.hidden = JSON.stringify(draft) === this._schedClean; };
+    // A drag moves the draft from pointermove: the bar is told directly.
+    const touch = () => this._syncSaveBar?.();
 
     /* ---- per-cover mode ---- */
     const tcard = el("div", "card blk");
@@ -4349,9 +4378,10 @@ class CoverExtenderPanel extends HTMLElement {
     this._renderTemplateList(left);
     this._renderEntities(left);
     right.append(head(T.globalTitle, T.globalNote));
-    this._renderGlobal(right);
+    // The save bar runs under both columns, the full width like on every page.
+    const bar = this._renderGlobal(right);
     cols.append(left, right);
-    wrap.append(cols);
+    wrap.append(cols, bar);
   }
 
   _entityCounts() {
@@ -4635,23 +4665,70 @@ class CoverExtenderPanel extends HTMLElement {
 
   /** Delete / cancel / save for a named item of *section*, stored in cfg[key]. */
   _itemActions(section, key, idx, draft, creating, used) {
-    const actions = el("div", "actions card");
-    if (!creating) {
-      actions.append(...this._deleteButton(used, T.inUseItemTitle(used), () => {
-        this._saveSection(section, this._cfg[key].filter((_, i) => i !== idx).map((it) => ({ ...it })));
-      }));
-    }
-    actions.append(el("span", "spacer"));
-    const cancel = el("button", "btn ghost", T.cancel);
-    cancel.addEventListener("click", () => { if (this._leaveEditor()) this._render(); });
-    const save = el("button", "btn primary", T.save);
-    save.addEventListener("click", () => {
+    return this._saveBar(() => {
       const items = this._cfg[key].map((it) => ({ ...it }));
       if (creating) items.push(draft); else items[idx] = draft;
       this._saveSection(section, items);
+    }, creating ? null : {
+      used, reason: T.inUseItemTitle(used),
+      onDelete: () => this._saveSection(section, this._cfg[key].filter((_, i) => i !== idx).map((it) => ({ ...it }))),
     });
-    actions.append(cancel, save);
-    return actions;
+  }
+
+  /**
+   * The solar-gain threshold: a number typed here, or an entity (an
+   * input_number) to change it from a dashboard. The server takes either; left
+   * empty, it uses 19. Each side remembers its value while the other is shown,
+   * so trying the other one and coming back loses nothing.
+   */
+  _thresholdControl(draft, touch) {
+    const raw = draft.sg_temperature_threshold;
+    const isEntity = typeof raw === "string" && raw.includes(".");
+    let lastEntity = isEntity ? raw : undefined;
+    let lastValue = isEntity || raw == null || raw === "" ? undefined : Number(raw);
+    const unit = this._hass.states[draft.sg_temperature_entity]?.attributes?.unit_of_measurement || "°C";
+    const box = el("div", "thr");
+    const seg = el("div", "seg thr-seg");
+    const byValue = el("button", "", T.sgThrValue);
+    const byEntity = el("button", "", T.sgThrEntity);
+    for (const b of [byValue, byEntity]) b.type = "button";
+    seg.append(byValue, byEntity);
+    const body = el("div", "thr-body");
+    box.append(seg, body);
+    const show = (entity) => {
+      byValue.classList.toggle("on", !entity);
+      byEntity.classList.toggle("on", entity);
+      byValue.setAttribute("aria-pressed", String(!entity));
+      byEntity.setAttribute("aria-pressed", String(entity));
+      if (entity) {
+        body.replaceChildren(this._haSelector({ entity: { domain: ["input_number", "number"] } }, lastEntity, (v) => {
+          lastEntity = v || undefined;
+          draft.sg_temperature_threshold = lastEntity;
+          touch();
+        }));
+        this._trackLiveNodes();
+        return;
+      }
+      const n = document.createElement("input");
+      n.type = "number";
+      n.step = "0.5";
+      n.min = "-30";
+      n.max = "50";
+      n.value = String(lastValue ?? 19);
+      n.setAttribute("aria-label", T.sgThreshold);
+      n.addEventListener("input", () => {
+        // An empty box is a transient state while typing, not a zero.
+        if (n.value === "" || !Number.isFinite(Number(n.value))) return;
+        lastValue = Number(n.value);
+        draft.sg_temperature_threshold = lastValue;
+        touch();
+      });
+      body.replaceChildren(n, el("span", "u", unit));
+    };
+    byValue.addEventListener("click", () => { draft.sg_temperature_threshold = lastValue; show(false); touch(); });
+    byEntity.addEventListener("click", () => { draft.sg_temperature_threshold = lastEntity; show(true); touch(); });
+    show(isEntity);
+    return box;
   }
 
   /** "21.4 °C ≥ 18": where the temperature stands against the threshold right now. */
@@ -4674,6 +4751,7 @@ class CoverExtenderPanel extends HTMLElement {
   /**
    * General settings. A single item, so it is edited in place: the draft lives on
    * the instance, not in _edit, and survives the re-renders a selector triggers.
+   * Returns its save bar, for the caller to place under the whole page.
    */
   _renderGlobal(wrap) {
     const draft = this._globalDraft || (this._globalDraft = { ...(this._cfg.global || {}) });
@@ -4683,14 +4761,8 @@ class CoverExtenderPanel extends HTMLElement {
     const conditions = this._cfg.weather_conditions || [];
     const interval = this._cfg.defaults?.command_interval ?? 150;
 
-    // The save bar appears with the first change and leaves with the last undo.
-    const bar = el("div", "actions card savebar");
-    const cancel = el("button", "btn ghost", T.cancel);
-    cancel.addEventListener("click", () => { if (this._leaveEditor()) this._render(); });
-    const save = el("button", "btn primary", T.save);
-    save.addEventListener("click", () => { this._saveSection("global", { ...draft }); });
-    bar.append(el("span", "dot"), el("span", "why", T.unsaved), el("span", "spacer"), cancel, save);
-    const touch = () => { bar.hidden = JSON.stringify(draft) === this._globalClean; };
+    const bar = this._saveBar(() => { this._saveSection("global", { ...draft }); });
+    const touch = () => this._syncSaveBar?.();
 
     /* solar gain: when is it cool and fine enough */
     const sg = this._edCard("mdi:thermometer", T.sgTitle, T.sgSub);
@@ -4703,10 +4775,7 @@ class CoverExtenderPanel extends HTMLElement {
       { entity: { domain: "sensor", device_class: "temperature" } },
       draft.sg_temperature_entity || undefined,
       (v) => { draft.sg_temperature_entity = v || undefined; touch(); })));
-    sg.append(line(T.sgThreshold, this._haSelector(
-      { entity: { domain: ["input_number", "number"] } },
-      draft.sg_temperature_threshold || undefined,
-      (v) => { draft.sg_temperature_threshold = v || undefined; touch(); })));
+    sg.append(line(T.sgThreshold, this._thresholdControl(draft, touch)));
     const verdict = this._solarGainVerdict(draft);
     if (verdict) {
       const r = el("div", "sline");
@@ -4765,8 +4834,8 @@ class CoverExtenderPanel extends HTMLElement {
       this._optRow("mdi:thermometer", T.showSolarGain, T.showHints.solar_gain,
         draft.show_solar_gain ?? false, (v) => { draft.show_solar_gain = v; touch(); }));
 
-    wrap.append(sg, cmd, extra, bar);
-    touch();
+    wrap.append(sg, cmd, extra);
+    return bar;
   }
 }
 

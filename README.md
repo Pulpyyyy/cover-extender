@@ -206,8 +206,8 @@ Or go to **Settings → Devices & services → Add integration** and search for 
 This walk-through sets up one cover with two modes, *Day* (open) and *Night* (closed). It takes about five minutes.
 
 1. **Open the panel.** Click **Cover Extender** in the sidebar, or the button on the integration page, or go to `http://<your-ha>:8123/cover-extender`.
-2. **Create a facade.** In **Settings → Facades**, click **Add a facade**. Name it (e.g. *South*) and set its **azimuth**, the direction the windows face: 0° = north, 90° = east, 180° = south, 270° = west. A compass app held flat against the window, looking out, gives you the value.
-3. **Create two modes.** In **Modes**, click **Add a mode** twice: *Day* and *Night*. Leave **Behavior** on *None* for both. Tick **Lock the covers** on *Night* if you want remote commands made through Cover Extender to wait until morning.
+2. **Create a facade.** In **Settings → Facades**, click **Add a facade**. Name it (e.g. *South*) and set its **azimuth**, the direction the windows face: 0° = north, 90° = east, 180° = south, 270° = west. A compass app held flat against the window, looking out, gives you the value. In the panel, type it, pick one of the eight directions, or drag the arrow on the compass.
+3. **Create two modes.** In **Modes**, click **Add a mode** twice: *Day* and *Night*. Leave **Cover positions** on *Fixed* for both. Switch on **Lock the covers** on *Night* if you want remote commands made through Cover Extender to wait until morning.
 4. **Add your cover.** In **Covers**, click **Add a cover**, pick the `cover.*` entity and the *South* facade, then **Save**.
 5. **Set the positions.** In **Matrix**, click the empty *Day* cell on your cover: it links the mode. Choose **Fixed** and 100 %. Do the same for *Night* at 0 %, then **Save**. Positions follow Home Assistant's convention: **0 = closed, 100 = open**.
 6. **Try it.** A new entity `select.<your_cover>_cx_mode` appeared. Change it from *Day* to *Night*: the cover closes.
@@ -318,7 +318,7 @@ The cover's `select.<cover>_cx_mode` shows when the countdown ends and which mod
 The cover editor has two lists of entities that hold the cover back while one of them is `on`, side by side under **What holds the cover back**:
 
 - **Safety exclusions** ("Safety: nothing moves"): a window or door contact (`binary_sensor`), a rain sensor. Nothing moves, **not even a priority mode**.
-- **Inhibitions** ("Pause: Cover Extender keeps off"): an `input_boolean` "guest in the room", "children asleep", or a template sensor such as "Wednesday morning". Cover Extender leaves the cover alone, **except for a priority request**: a mode with **Priority mode** ticked, or [`apply_mode`](#cover_extenderapply_mode) with `force: true`.
+- **Inhibitions** ("Pause: Cover Extender keeps off"): an `input_boolean` "guest in the room", "children asleep", or a template sensor such as "Wednesday morning". Cover Extender leaves the cover alone, **except for a priority request**: a mode with **Priority mode** switched on (under *Advanced* in the mode editor), or [`apply_mode`](#cover_extenderapply_mode) with `force: true`.
 
 While one of them holds the cover:
 
@@ -359,7 +359,7 @@ Shading keeps direct sunlight from reaching further into the room than you decid
 
 It runs when all of these hold:
 
-- **Automatic shading enabled** is ticked on the cover (or its template), which creates `switch.<cover>_cx_auto_shade`;
+- the **Shading** switch is on in the cover editor (in the header of its Shading card), which creates `switch.<cover>_cx_auto_shade`;
 - that switch is on, which a mode with the *Shading* behavior does for you;
 - no exclusion is active.
 
@@ -385,7 +385,7 @@ The height of the bottom edge is `distance / cos(γ) × tan(α)`, where α is th
 
 Solar gain is a **cold-weather** feature: let the sun heat the room when it can, keep the heat in when it cannot.
 
-It runs when **Solar gain enabled** is ticked on the cover (which creates `switch.<cover>_cx_auto_solar_gain`), that switch is on (a mode with the *Solar gain* behavior does it), and no exclusion is active. Then:
+It runs when the **Solar gain** switch is on in the cover editor (which creates `switch.<cover>_cx_auto_solar_gain`), that switch is on (a mode with the *Solar gain* behavior does it), and no exclusion is active. Then:
 
 - if the temperature entity is at or above the threshold, **nothing happens** (the cover stays where it is);
 - otherwise, if the sun [faces](#facades-and-orientation) the cover and the weather is in the good conditions list, the cover goes to **Position in the sun** (default 100 %);
@@ -424,7 +424,7 @@ All configuration lives in the panel at `/cover-extender`. Every value is checke
 
 | Tab | What it edits |
 |---|---|
-| **Covers** | The covers: entity, facade, template, [safety exclusions and inhibitions](#exclusions), geometry, shading and solar-gain settings. Each card shows what the cover is doing right now: its mode and position, then whatever holds it back (a [timed mode](#timed-modes) with its end time, the lock with the remembered position, an exclusion or an inhibition that is on). |
+| **Covers** | The covers: entity, facade, template, [safety exclusions and inhibitions](#exclusions), geometry, shading and solar-gain settings, each with a one-line hint and a sketch of the window. Under a template, each value says whether it comes from the template or belongs to the cover, with an *Overrides only* filter. Each card shows what the cover is doing right now: its mode and position, then whatever holds it back (a [timed mode](#timed-modes) with its end time, the lock with the remembered position, an exclusion or an inhibition that is on). |
 | **Matrix** | Modes × covers: link modes and set every per-cover position from one grid. |
 | **Modes** | Icon, color, lock, behavior, priority, fallback, [duration](#timed-modes) and what happens at its end, visibility. Drag the tiles to reorder: the order drives the mode selectors. Under **Applied to several covers**: the modes it leaves alone, and its fallback (see [who replaces whom](#who-replaces-whom)). |
 | **Schedules** | The [morning opening and evening closing](#schedules): the curve of each over the year, and each cover's morning and evening mode. |
@@ -437,6 +437,16 @@ Each cell is the position of one mode on one cover. Click a cell to edit it, or 
 On a *Shading* or *Solar gain* mode, cells show `auto`. The same popover can **override the computation for a single cover** with a Fixed or Entity position. Below, *Shade* computes everywhere except on *Office*, pinned at 30 %:
 
 ![Overriding an automatic mode for one cover](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/matrix-override.png)
+
+### The editors
+
+The cover editor: what holds the cover back, then the computation in four cards. Under its template, *Distance* and *Minimum position* are this cover's own (amber), the rest is inherited (dashed).
+
+![Cover editor](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-cover-editor.png)
+
+| The mode editor | The Schedules tab |
+|---|---|
+| ![Mode editor](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-mode-editor.png) | ![Schedules tab](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-schedules.png) |
 
 ### The other tabs
 
@@ -571,12 +581,12 @@ triggers:
 
 | Setting | Meaning |
 |---|---|
-| Interval between commands | Delay between two commands sent to the covers, default 150 ms. Every move goes through one queue, so that many covers switching at once do not saturate a radio bridge (Somfy RTS, Zigbee...). Switch toggles are not delayed. |
-| Temperature entity | Temperature compared with the threshold by solar gain. |
-| Threshold entity | Threshold (°) as a number or an `input_number`. Default 19. |
-| Weather entity | `weather.*` entity checked by solar gain. |
-| Good weather conditions | Weather states that allow solar gain. Default: sunny, partly cloudy. |
-| Display | Creates the optional binary sensors listed in [Entities](#entities). |
+| Pause between two covers | Delay between two commands sent to the covers, default 150 ms. Every move goes through one queue, so that many covers switching at once do not saturate a radio bridge (Somfy RTS, Zigbee...). Switch toggles are not delayed. |
+| Temperature | Temperature entity compared with the threshold by solar gain. |
+| Threshold | A value typed in the panel, or an `input_number` to change it from a dashboard. Default 19. |
+| Weather | `weather.*` entity checked by solar gain. |
+| Fine weather | Weather states that allow solar gain, ticked as chips. Default: sunny, partly cloudy. |
+| Extra entities, for each cover | Creates the optional binary sensors listed in [Entities](#entities). |
 
 ---
 
@@ -673,7 +683,7 @@ triggers:
 
 **I cannot find the panel.** Open `http://<your-ha>:8123/cover-extender` directly. The panel needs an administrator account. If the sidebar entry is missing, it may be hidden: open your **Profile** and change the sidebar items there.
 
-**`switch.<cover>_cx_auto_shade` does not exist.** Tick **Automatic shading enabled** in the cover's Shading section (or in its template). Same for solar gain.
+**`switch.<cover>_cx_auto_shade` does not exist.** Switch on **Shading** in the header of the cover's Shading card: the switch belongs to the cover, a template has none. Same for solar gain.
 
 **The cover closes too much / not enough in shading.** Increase **Distance from the cover** to let more sun in, raise **Minimum position** to keep some light. After each change, [`compute_shade_position`](#cover_extendercompute_shade_position) (in **Developer tools → Actions**) shows the new position without moving the cover.
 

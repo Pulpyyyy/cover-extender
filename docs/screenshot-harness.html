@@ -3,6 +3,15 @@
 <head>
 <meta charset="utf-8">
 <title>cover-extender harness</title>
+<!--
+  Renders the real panel (custom_components/.../cover-extender-admin.js) with a
+  fake hass and demo data, for the README screenshots. Serve the repository
+  root over HTTP (python -m http.server) and open
+  docs/screenshot-harness.html?tab=<tab>[&edit=<section>:<index>][&pop=override|auto][&theme=dark][&lang=fr]
+  tab: volets | matrice | modes | horaires | reglages
+  edit: cover:N | mode:N | facade:N | template:N opens that editor.
+  The title turns to "READY <page height>" once drawn, or "JSERROR: ..." on an error.
+-->
 <style>
   :root {
     --primary-color: #03a9f4;
@@ -42,17 +51,23 @@
     --app-header-background-color: #1d1e21;
     --app-header-text-color: #e4e4e6;
   }
-  html, body { margin: 0; padding: 0; height: 100%; }
+  html, body { margin: 0; padding: 0; }
   body {
     background: var(--primary-background-color);
     color: var(--primary-text-color);
     font-family: Roboto, "Segoe UI", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  #stage, cover-extender-panel { display: block; height: 100%; }
+  /* The panel scrolls inside 100vh in Home Assistant; here the page grows so a
+     screenshot can take the whole editor. */
+  #stage, cover-extender-panel { display: block; }
+  cover-extender-panel { height: auto !important; overflow: visible !important; }
 </style>
 </head>
-<body data-theme="light"><script>window.addEventListener('error', e => { if (document.title.startsWith('JSERROR')) return; document.title = 'JSERROR: ' + e.message + ' @ ' + (e.filename||'').split('/').pop() + ':' + e.lineno; });</script>
+<body data-theme="light"><script>
+  window.addEventListener('error', e => { if (document.title.startsWith('JSERROR')) return; document.title = 'JSERROR: ' + e.message + ' @ ' + (e.filename||'').split('/').pop() + ':' + e.lineno; });
+  window.addEventListener('unhandledrejection', e => { document.title = 'JSERROR: ' + (e.reason && e.reason.message || e.reason); });
+</script>
 <div id="stage"></div>
 <script>
   // ---- minimal Home Assistant element stubs (same trick as tyre_tracker) ----
@@ -86,10 +101,11 @@
   }
   customElements.define("ha-icon", HaIcon);
 
-  // ha-selector: a static look-alike - label above, value in a bordered box.
+  // ha-selector: a static look-alike. An entity shows its name and id, an icon
+  // its glyph, an empty picker its label.
   class HaSelector extends HTMLElement {
-    set hass(_) {}
-    set selector(_) {}
+    set hass(h) { this._h = h; this.#paint(); }
+    set selector(s) { this._s = s; this.#paint(); }
     set required(_) {}
     set disabled(_) {}
     set value(v) { this._v = v; this.#paint(); }
@@ -97,11 +113,24 @@
     connectedCallback() { this.#paint(); }
     #paint() {
       if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+      const v = this._v;
+      const st = this._h?.states?.[v];
+      let inner;
+      if (this._s?.icon && v) {
+        inner = `<ha-icon icon="${v}" style="--mdc-icon-size:22px;color:var(--secondary-text-color)"></ha-icon><span>${v}</span>`;
+      } else if (st) {
+        inner = `<span><span>${st.attributes.friendly_name}</span><span class="id">${v}</span></span>`;
+      } else if (Array.isArray(v)) {
+        inner = `<span>${v.join(", ")}</span>`;
+      } else {
+        inner = `<span class="ph">${v ?? this._l ?? ""}</span>`;
+      }
       this.shadowRoot.innerHTML =
-        "<style>:host{display:block}.b{border:1px solid var(--divider-color);border-radius:8px;" +
-        "padding:10px 12px;font-size:14px;background:var(--card-background-color);color:var(--primary-text-color)}" +
-        ".l{display:block;font-size:11px;color:var(--secondary-text-color);margin-bottom:2px}</style>" +
-        `<div class="b"><span class="l">${this._l ?? ""}</span>${this._v ?? "—"}</div>`;
+        "<style>:host{display:block}.b{display:flex;align-items:center;gap:10px;min-height:44px;box-sizing:border-box;" +
+        "border:1px solid var(--divider-color);border-radius:8px;padding:6px 12px;font-size:14px;" +
+        "background:var(--card-background-color);color:var(--primary-text-color)}" +
+        ".id{display:block;font-size:11px;color:var(--secondary-text-color)}.ph{color:var(--secondary-text-color)}</style>" +
+        `<div class="b">${inner}</div>`;
     }
   }
   customElements.define("ha-selector", HaSelector);
@@ -126,16 +155,22 @@
     night:  FR ? "Nuit" : "Night",
     shade:  FR ? "Ombre" : "Shade",
     helio:  FR ? "Héliotropie" : "Heliotropy",
+    nap:    FR ? "Sieste" : "Nap",
     away:   FR ? "Absent" : "Away",
     custom: FR ? "Perso" : "Custom",
   };
+  const mode = (name, icon, color, extra = {}) => ({
+    name, icon, color, lock: false, behavior: null, hidden: false, priority: false,
+    duration: null, return_mode: null, spares: [], fallback: null, ...extra,
+  });
   const modes = [
-    { name: M.day,    icon: "mdi:white-balance-sunny", color: "#FFB300", lock: false, behavior: null, hidden: false },
-    { name: M.night,  icon: "mdi:weather-night",       color: "#3F51B5", lock: false, behavior: null, hidden: false },
-    { name: M.shade,  icon: "mdi:blinds",              color: "#FF7043", lock: false, behavior: "auto_shade", hidden: false },
-    { name: M.helio,  icon: "mdi:sun-thermometer",     color: "#E91E63", lock: false, behavior: "solar_gain", hidden: false },
-    { name: M.away,   icon: "mdi:lock",                color: "#F44336", lock: true,  behavior: null, hidden: false },
-    { name: M.custom, icon: "mdi:tune-variant",        color: "#4CAF50", lock: false, behavior: null, hidden: true },
+    mode(M.day,    "mdi:white-balance-sunny", "#FFB300", { spares: [M.nap, M.away] }),
+    mode(M.night,  "mdi:weather-night",       "#3F51B5", { spares: [M.away] }),
+    mode(M.shade,  "mdi:blinds",              "#FF7043", { behavior: "auto_shade", spares: [M.nap, M.away] }),
+    mode(M.helio,  "mdi:sun-thermometer",     "#E91E63", { behavior: "solar_gain" }),
+    mode(M.nap,    "mdi:sleep",               "#8E7CC3", { duration: 90 }),
+    mode(M.away,   "mdi:home-export-outline", "#F44336", { lock: true, priority: true, fallback: M.night }),
+    mode(M.custom, "mdi:tune-variant",        "#4CAF50", { hidden: true }),
   ];
   const TPL = FR ? "Grande baie" : "Large bay";
   const templates = [{
@@ -155,12 +190,18 @@
   const cover = (id, facade, extra) => ({
     entity_id: "cover." + id,
     entity_registry_id: "reg_" + id,
-    facade, exclusion: [], modes: {}, ...extra,
+    facade, exclusion: [], inhibition: [], modes: {},
+    schedule: { morning: M.day, evening: M.night }, ...extra,
   });
   const covers = [
     cover("living_room", facades[0].name, {
       template: TPL, shade_enable: true, solar_gain_enable: true,
-      modes: { [M.day]: f(100), [M.night]: f(0), [M.shade]: A, [M.helio]: A, [M.away]: f(0) },
+      // Two values of its own on top of the template: the README shot of the
+      // cover editor shows them amber next to the inherited ones.
+      shade_distance: 1.5, shade_minimum_position: 25,
+      exclusion: ["binary_sensor.living_room_window"],
+      inhibition: ["input_boolean.guests"],
+      modes: { [M.day]: f(100), [M.night]: f(0), [M.shade]: A, [M.helio]: A, [M.nap]: f(20), [M.away]: f(0) },
     }),
     cover("dining_room", facades[0].name, {
       template: TPL, shade_enable: true, solar_gain_enable: true,
@@ -175,9 +216,10 @@
     cover("kitchen", facades[1].name, {
       shade_enable: true,
       modes: { [M.day]: f(100), [M.night]: f(0), [M.shade]: A, [M.custom]: ent("input_number.kitchen_pos") },
+      schedule: { morning: M.day, evening: null },
     }),
     cover("bedroom", facades[2].name, {
-      modes: { [M.day]: f(85), [M.night]: f(0), [M.away]: f(0) },
+      modes: { [M.day]: f(85), [M.night]: f(0), [M.nap]: f(0), [M.away]: f(0) },
     }),
     cover("bathroom", facades[3].name, {
       modes: { [M.day]: f(100), [M.night]: f(0) },
@@ -213,17 +255,29 @@
     fields: s.fields.filter((n) => n !== "shade_enable" && n !== "solar_gain_enable"),
   }));
 
+  const SCHEDULE_DEFAULTS = {
+    morning: { type: "curve", max: "08:30", min: "06:30", cross_spring: null, cross_autumn: null, not_before: "07:00", not_after: null },
+    evening: { type: "curve", max: "22:00", min: "17:30", cross_spring: null, cross_autumn: null, not_before: null, not_after: "22:30" },
+  };
+  const helpers = {};
+  for (const c of covers) {
+    const id = c.entity_id.split(".")[1];
+    helpers[c.entity_id] = { select: `select.${id}_cx_mode`, lock: `switch.${id}_cx_lock` };
+  }
+
   const PANEL_CFG = {
-    version: "3.1.0",
-    facades, modes, templates, covers,
+    version: "4.0.0b5",
+    facades, modes, templates, covers, helpers,
     global: {
       command_interval: 150,
       show_sun_facing: true, show_auto_shade: true, show_solar_gain: false,
-      sg_temperature_entity: "sensor.living_room_temperature",
+      sg_temperature_entity: "sensor.outdoor_temperature",
       sg_temperature_threshold: 19.5,
       sg_weather_entity: "weather.home",
       sg_good_conditions: ["sunny", "partlycloudy"],
     },
+    schedule: { morning: SCHEDULE_DEFAULTS.morning, evening: SCHEDULE_DEFAULTS.evening },
+    schedule_defaults: SCHEDULE_DEFAULTS,
     behavior: { sections: SECTIONS, template_sections: TEMPLATE_SECTIONS, fields: BEHAVIOR_FIELDS },
     weather_conditions: [
       "clear-night", "cloudy", "exceptional", "fog", "hail", "lightning",
@@ -233,36 +287,87 @@
     defaults: { command_interval: 150 },
   };
 
+  // The schedule preview, in schedule/preview's shape, for a house near Paris:
+  // the sun event without daylight saving (sunU), the clock offset of each day
+  // (off), and the curve built the way schedule.build_curve builds it, so the
+  // chart and its figures look like a real install's.
+  const hm = (t) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+  const preview = (kind, s) => {
+    const evening = kind === "evening";
+    const sunU = [], off = [];
+    for (let j = 1; j <= 365; j++) {
+      const w = Math.sin((2 * Math.PI * (j - 81)) / 365);
+      sunU.push(evening ? 1136 + 121 * w : 404 - 118 * w);
+      off.push(j >= 88 && j < 298 ? 60 : 0);
+    }
+    const sun = sunU.map((v, i) => Math.round((v + off[i]) * 10) / 10);
+    const jp = sunU.indexOf(Math.max(...sunU)) + 1, jt = sunU.indexOf(Math.min(...sunU)) + 1;
+    const fixed = s.type === "fixed";
+    const hi = hm(fixed ? s.time : s.max), lo = hm(fixed ? s.time : s.min);
+    const hiU = hi - off[jp - 1], loU = lo - off[jt - 1];
+    const span = sunU[jp - 1] - sunU[jt - 1];
+    const points = sunU.map((v, i) => {
+      let m = fixed ? hi : loU + (hiU - loU) * (1 - Math.cos(Math.PI * (v - sunU[jt - 1]) / span)) / 2 + off[i];
+      if (s.not_before) m = Math.max(m, hm(s.not_before));
+      if (s.not_after) m = Math.min(m, hm(s.not_after));
+      return Math.round(m * 10) / 10;
+    });
+    const now = new Date();
+    const today = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 864e5);
+    return {
+      error: null, ignored: {}, year: now.getFullYear(), today, points, sun,
+      max_day: jp, min_day: jt, rising_days: (jp - jt + 365) % 365, dst_gap: 60,
+    };
+  };
+
   // ---- hass fake ------------------------------------------------------------
   const NAMES = FR
     ? { living_room: "Volet Salon", dining_room: "Volet SAM", office: "Volet Bureau",
         kitchen: "Baie Cuisine", bedroom: "Volet Chambre", bathroom: "Volet SDB" }
     : { living_room: "Living room", dining_room: "Dining room", office: "Office",
         kitchen: "Kitchen bay", bedroom: "Bedroom", bathroom: "Bathroom" };
+  const NOW_MODE = { living_room: M.shade, dining_room: M.shade, office: M.day, kitchen: M.day, bedroom: M.nap, bathroom: M.day };
+  const NOW_POS = { living_room: 64, dining_room: 70, office: 100, kitchen: 100, bedroom: 0, bathroom: 100 };
   const states = {};
   const entities = {};
+  const reg = (eid) => { entities[eid] = { platform: "cover_extender" }; };
   for (const c of covers) {
     const id = c.entity_id.split(".")[1];
     states[c.entity_id] = {
       entity_id: c.entity_id, state: "open",
-      attributes: { friendly_name: NAMES[id] || id, current_position: 100 },
+      attributes: { friendly_name: NAMES[id] || id, current_position: NOW_POS[id] },
     };
-    entities["select.mode_" + id] = { platform: "cover_extender" };
-    entities["switch." + id + "_lock"] = { platform: "cover_extender" };
-    entities["switch." + id + "_auto_shade"] = { platform: "cover_extender" };
-    entities["switch." + id + "_auto_solar_gain"] = { platform: "cover_extender" };
-    entities["binary_sensor." + id + "_sun_facing"] = { platform: "cover_extender" };
-    entities["binary_sensor." + id + "_auto_shade"] = { platform: "cover_extender" };
+    states[`select.${id}_cx_mode`] = {
+      state: NOW_MODE[id],
+      attributes: NOW_MODE[id] === M.nap
+        ? { mode_ends_at: new Date(Date.now() + 47 * 60000).toISOString(), return_mode: M.day } : {},
+    };
+    states[`switch.${id}_cx_lock`] = { state: "off", attributes: {} };
+    reg(`select.${id}_cx_mode`);
+    reg(`switch.${id}_cx_lock`);
+    reg(`switch.${id}_cx_auto_shade`);
+    reg(`switch.${id}_cx_auto_solar_gain`);
+    reg(`binary_sensor.${id}_cx_sun_facing`);
+    reg(`binary_sensor.${id}_cx_auto_shade_status`);
   }
-  entities["select.cover_extender_modes"] = { platform: "cover_extender" };
+  for (const eid of ["select.cx_modes", "binary_sensor.cx_day", "sensor.cx_morning_opening", "sensor.cx_evening_closing"]) reg(eid);
+  Object.assign(states, {
+    "binary_sensor.living_room_window": { state: "off", attributes: { friendly_name: FR ? "Fenêtre salon" : "Living room window" } },
+    "input_boolean.guests": { state: "off", attributes: { friendly_name: FR ? "Invités" : "Guests" } },
+    "sensor.outdoor_temperature": { state: "17.2", attributes: { friendly_name: FR ? "Température extérieure" : "Outdoor temperature", unit_of_measurement: "°C" } },
+    "weather.home": { state: "sunny", attributes: { friendly_name: FR ? "Maison" : "Home" } },
+  });
 
   const hass = {
     language: LANG,
     locale: { language: LANG },
     states, entities,
     connection: {
-      sendMessagePromise: async (msg) =>
-        msg.type === "cover_extender/config/get" ? PANEL_CFG : { saved: true },
+      sendMessagePromise: async (msg) => {
+        if (msg.type === "cover_extender/config/get") return JSON.parse(JSON.stringify(PANEL_CFG));
+        if (msg.type === "cover_extender/schedule/preview") return preview(msg.kind, msg.settings);
+        return { saved: true };
+      },
     },
   };
 
@@ -280,18 +385,28 @@
     else if (tries > 0) setTimeout(() => until(probe, then, tries - 1), 50);
     else document.title = "JSERROR: harness probe timed out";
   };
+  const ready = () => setTimeout(() => {
+    if (!document.title.startsWith("JSERROR")) document.title = `READY ${document.documentElement.scrollHeight}`;
+  }, 1500);
 
+  const TABS = ["volets", "matrice", "modes", "horaires", "reglages"];
   const tab = params.get("tab") || "matrice";
-  until(() => panel.shadowRoot?.querySelector(".tabs"), () => {
-    if (tab !== "matrice") {
-      const idx = { volets: 0, matrice: 1, modes: 2, reglages: 3 }[tab] ?? 1;
-      panel.shadowRoot.querySelectorAll(".tabs .tab")[idx]?.click();
+  until(() => panel._state === "ready" && panel.shadowRoot?.querySelector(".tabs"), () => {
+    if (tab !== "matrice") panel.shadowRoot.querySelectorAll(".tabs .tab")[Math.max(0, TABS.indexOf(tab))]?.click();
+    // ?edit=cover:0 / mode:2 / facade:0 / template:0 : open that editor.
+    const edit = params.get("edit");
+    if (edit) {
+      const [section, n] = edit.split(":");
+      const idx = Number(n) || 0;
+      const list = { cover: covers, mode: modes, facade: facades, template: templates }[section];
+      panel._openEditor({ section, idx, draft: JSON.parse(JSON.stringify(list[idx])) });
+      panel._render();
     }
     // ?pop=override : open the matrix popover on the overridden Shade cell and
     // land on the "Fixed" segment - the README shot for the override feature.
     // ?pop=auto : open it on a computed Shade cell (default "Auto" choice).
     const pop = params.get("pop");
-    if (!pop) return;
+    if (!pop) { ready(); return; }
     const coverIdx = pop === "override" ? 2 : 0;   // office : living_room
     const modeIdx = 2;                             // the Shade column
     until(() => {
@@ -303,6 +418,7 @@
       cell.click();
       until(() => panel.shadowRoot.querySelector(".pop .seg"), (seg) => {
         if (pop === "override") seg.children[1]?.click(); // Fixed
+        ready();
       });
     });
   });
