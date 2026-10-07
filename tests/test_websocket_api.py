@@ -129,6 +129,22 @@ def test_facades_azimuth_and_key_stripping():
     assert item == {"name": "S", "azimuth": 158}  # rounded, junk dropped
 
 
+def test_facades_tilt_stored_only_off_the_vertical():
+    assert ws._validate_facades([{"name": "R", "azimuth": 0, "tilt": 95}]) == "tilt_invalid:R"
+    assert ws._validate_facades([{"name": "R", "azimuth": 0, "tilt": -1}]) == "tilt_invalid:R"
+    roof, wall, flat = {"name": "R", "azimuth": 0, "tilt": 29.6}, {"name": "W", "azimuth": 0, "tilt": 90},         {"name": "F", "azimuth": 180, "tilt": 0}
+    assert ws._validate_facades([roof, wall, flat]) is None
+    assert roof == {"name": "R", "azimuth": 0, "tilt": 30}
+    assert wall == {"name": "W", "azimuth": 0}           # a wall keeps the old shape
+    assert flat == {"name": "F", "azimuth": 180, "tilt": 0}
+
+
+def test_angles_and_heights_reach_180():
+    assert ws._coerce_behavior_number("angle_left", 200) == 180
+    assert ws._coerce_behavior_number("shade_max_elevation", 150) == 150
+    assert ws._BEHAVIOR_FIELDS_DEFAULTS["shade_max_elevation"] == 180
+
+
 # ── Templates ─────────────────────────────────────────────────────────────────
 
 def test_templates_pack_to_nested_storage_shape():
@@ -153,7 +169,35 @@ def test_template_flatten_pack_round_trip():
     for key in ws._ACTIVATION_FLAGS:
         flat.pop(key)
     flat["shade_distance"] = 0.9
+    flat["kind"] = "wall"
     assert ws._flatten_template(ws._pack_template(flat)) == flat
+    flat["kind"] = "roof"
+    assert ws._flatten_template(ws._pack_template(flat)) == flat
+
+
+def test_templates_kind_stored_only_off_the_wall():
+    items = [{"name": "Velux", "kind": "roof"}, {"name": "Bay", "kind": "wall"}, {"name": "Old"}]
+    assert ws._validate_templates(items) is None
+    assert items[0]["kind"] == "roof"
+    assert "kind" not in items[1] and "kind" not in items[2]   # a wall keeps the old shape
+    assert ws._validate_templates([{"name": "Z", "kind": "dome"}]) == "window_kind_invalid:Z"
+
+
+def test_template_and_facade_must_be_the_same_kind_of_window(hass):
+    sections = {
+        SECTION_FACADE: [{"name": "South", "azimuth": 180}, {"name": "Roof", "azimuth": 0, "tilt": 30}],
+        SECTION_TEMPLATE: [ws._pack_template({"name": "Velux", "kind": "roof"}), ws._pack_template({"name": "Bay"})],
+        SECTION_COVER: [{"entity_id": "cover.a", "facade": "Roof", "template": "Velux"},
+                        {"entity_id": "cover.b", "facade": "South", "template": "Bay"}],
+    }
+    _wire(hass, sections)
+    assert ws._kind_mismatch(hass, {}) is None
+    # The cover moved to a wall with its roof template...
+    moved = [dict(sections[SECTION_COVER][0], facade="South"), sections[SECTION_COVER][1]]
+    assert ws._kind_mismatch(hass, {SECTION_COVER: moved}) == "window_kind_mismatch:cover.a:Velux:South"
+    # ...the roof turned into a wall under it, or its template into a wall's.
+    assert ws._kind_mismatch(hass, {SECTION_FACADE: [{"name": "South", "azimuth": 180}, {"name": "Roof", "azimuth": 0}]})         == "window_kind_mismatch:cover.a:Velux:Roof"
+    assert ws._kind_mismatch(hass, {SECTION_TEMPLATE: [ws._pack_template({"name": "Velux"}), ws._pack_template({"name": "Bay"})]})         == "window_kind_mismatch:cover.a:Velux:Roof"
 
 
 # ── Global settings ───────────────────────────────────────────────────────────

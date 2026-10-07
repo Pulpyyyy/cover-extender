@@ -54,7 +54,12 @@ from homeassistant.loader import async_get_integration
 from .helpers import resolve_helper_entity
 from .schedule import DEFAULTS as SCHEDULE_DEFAULTS, KINDS as SCHEDULE_KINDS, validate_settings as validate_schedule
 
+from .shade import tilt_kind
 from .const import (
+    CONF_TILT,
+    CONF_WINDOW_KIND,
+    WALL_TILT,
+    WINDOW_KINDS,
     MODE_DURATION_MAX,
     MODE_DURATION_MIN,
     DEFAULT_COMMAND_INTERVAL_MS,
@@ -91,18 +96,22 @@ _SECTIONS: dict[str, str] = {
 # The behavior fields, in the form the panel renders them from:
 # name -> (default, min, max, step, unit). A unit of "" marks a boolean.
 _BEHAVIOR_FIELDS: dict[str, tuple[Any, float | None, float | None, float | None, str]] = {
-    "angle_left":                (85,    0, 90,  1,   "°"),
-    "angle_right":               (85,    0, 90,  1,   "°"),
+    # Up to 180° for a roof, which also sees the sky behind it; a wall gets
+    # nothing past 90° whatever the value (see shade.faces_glass).
+    "angle_left":                (85,    0, 180, 1,   "°"),
+    "angle_right":               (85,    0, 180, 1,   "°"),
     "shade_distance":            (0.4,   0, 3,   0.1, "m"),
     "shade_max_height":          (1.8,   0, 3,   0.1, "m"),
     "shade_min_height":          (0.0,   0, 3,   0.1, "m"),
-    "shade_degrees":             (90,    0, 180, 1,   "°"),
-    "shade_min_elevation":       (5,     0, 90,  1,   "°"),
-    "shade_max_elevation":       (90,    0, 90,  1,   "°"),
+    # Heights read from the horizon in front, over the zenith (90°) and on a
+    # roof down the other side (see shade.sun_height). 180 = no limit.
+    "shade_min_elevation":       (5,     0, 180, 1,   "°"),
+    "shade_max_elevation":       (180,   0, 180, 1,   "°"),
     "shade_minimum_position":    (15,    0, 100, 1,   "%"),
     "shade_default_position":    (100,   0, 100, 1,   "%"),
     "shade_change_threshold":    (5,     0, 50,  1,   "%"),
     "shade_time_out":            (2,     0, 60,  1,   "min"),
+    "shade_sun_position":        (30,    0, 100, 1,   "%"),
     "solar_gain_position_solar": (100,   0, 100, 1,   "%"),
     "solar_gain_position_cold":  (0,     0, 100, 1,   "%"),
     "shade_enable":              (False, None, None, None, ""),
@@ -113,8 +122,9 @@ _BEHAVIOR_FIELDS_DEFAULTS = {k: v[0] for k, v in _BEHAVIOR_FIELDS.items()}
 
 # Display order: the grouping the panel turns into collapsible sections.
 _COVER_SECTIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("geometry",   ("shade_distance", "shade_max_height", "shade_min_height")),
-    ("detection",  ("angle_left", "angle_right", "shade_degrees",
+    ("geometry",   ("shade_distance", "shade_max_height", "shade_min_height",
+                    "shade_sun_position")),
+    ("detection",  ("angle_left", "angle_right",
                     "shade_min_elevation", "shade_max_elevation")),
     ("shading",    ("shade_enable", "shade_minimum_position", "shade_default_position",
                     "shade_change_threshold", "shade_time_out")),
@@ -223,13 +233,13 @@ def _defaults_from_template(tpl: dict[str, Any]) -> dict[str, Any]:
         "shade_distance":            shade.get("distance",         0.4),
         "shade_max_height":          shade.get("max_height",       1.8),
         "shade_min_height":          shade.get("min_height",       0.0),
-        "shade_degrees":             shade.get("degrees",          90),
         "shade_min_elevation":       shade.get("min_elevation",    5),
-        "shade_max_elevation":       shade.get("max_elevation",    90),
+        "shade_max_elevation":       shade.get("max_elevation",    180),
         "shade_minimum_position":    shade.get("minimum_position", 15),
         "shade_default_position":    shade.get("default_position", 100),
         "shade_change_threshold":    shade.get("change_threshold", 5),
         "shade_time_out":            shade.get("time_out",         2),
+        "shade_sun_position":        shade.get("sun_position",     30),
         "solar_gain_position_solar": sg.get("position_solar",      100),
         "solar_gain_position_cold":  sg.get("position_cold",       0),
     }
@@ -241,7 +251,22 @@ def _flatten_template(tpl: dict[str, Any]) -> dict[str, Any]:
     The panel then renders a template with the very same behavior rows as a
     cover, and never has to know that templates nest their fields.
     """
-    return {"name": tpl.get("name"), **_defaults_from_template(tpl)}
+    return {"name": tpl.get("name"), CONF_WINDOW_KIND: _template_kind(tpl),
+            **_defaults_from_template(tpl)}
+
+
+def _template_kind(tpl: dict[str, Any] | None) -> str:
+    """The kind of window a template is for; one stored before kinds is a wall's."""
+    kind = (tpl or {}).get(CONF_WINDOW_KIND)
+    return kind if kind in WINDOW_KINDS else "wall"
+
+
+def _facade_kind(facade: dict[str, Any] | None) -> str:
+    """The kind of window a facade's slope makes."""
+    try:
+        return tilt_kind(float((facade or {}).get(CONF_TILT, WALL_TILT)))
+    except (TypeError, ValueError):
+        return "wall"
 
 
 def _pack_template(flat: dict[str, Any]) -> dict[str, Any]:
@@ -254,21 +279,24 @@ def _pack_template(flat: dict[str, Any]) -> dict[str, Any]:
     def num(key: str) -> Any:
         return flat.get(key, _BEHAVIOR_FIELDS_DEFAULTS[key])
 
+    # A wall's template keeps the shape every template had before kinds existed.
+    kind = {CONF_WINDOW_KIND: flat[CONF_WINDOW_KIND]} if flat.get(CONF_WINDOW_KIND, "wall") != "wall" else {}
     return {
         "name": flat.get("name"),
+        **kind,
         "angle_left": num("angle_left"),
         "angle_right": num("angle_right"),
         "shade": {
             "distance":         num("shade_distance"),
             "max_height":       num("shade_max_height"),
             "min_height":       num("shade_min_height"),
-            "degrees":          num("shade_degrees"),
             "min_elevation":    num("shade_min_elevation"),
             "max_elevation":    num("shade_max_elevation"),
             "minimum_position": num("shade_minimum_position"),
             "default_position": num("shade_default_position"),
             "change_threshold": num("shade_change_threshold"),
             "time_out":         num("shade_time_out"),
+            "sun_position":     num("shade_sun_position"),
         },
         "solar_gain": {
             "position_solar": num("solar_gain_position_solar"),
@@ -378,7 +406,7 @@ def _behavior_errors(label: Any, effective: dict[str, Any]) -> str | None:
     """
     if effective.get("shade_min_height", 0) > effective.get("shade_max_height", 3):
         return f"min_height_above_max:{label}"
-    if effective.get("shade_min_elevation", 0) > effective.get("shade_max_elevation", 90):
+    if effective.get("shade_min_elevation", 0) > effective.get("shade_max_elevation", 180):
         return f"min_elevation_above_max:{label}"
     return None
 
@@ -401,18 +429,29 @@ def _coerce_behavior_number(name: str, raw: Any) -> Any | None:
 
 
 def _validate_facades(items: list[dict[str, Any]]) -> str | None:
-    """Facades: an azimuth in degrees, clamped to a compass."""
+    """Facades: an azimuth in degrees, clamped to a compass, and a slope.
+
+    The slope is stored only off the vertical: a wall keeps the shape every
+    facade had before slopes existed, so saving one changes nothing.
+    """
     for item in items:
         try:
             azimuth = float(item.get("azimuth", 180))
+            tilt = float(item.get(CONF_TILT, WALL_TILT))
         except (TypeError, ValueError):
             return f"azimuth_invalid:{item.get('name')}"
         if not 0 <= azimuth <= 360:
             return f"azimuth_invalid:{item.get('name')}"
+        if not 0 <= tilt <= WALL_TILT:
+            return f"tilt_invalid:{item.get('name')}"
         item["azimuth"] = int(round(azimuth))
+        if int(round(tilt)) == WALL_TILT:
+            item.pop(CONF_TILT, None)
+        else:
+            item[CONF_TILT] = int(round(tilt))
         # Nothing else belongs in a facade; drop whatever the panel echoed back.
         for key in list(item):
-            if key not in ("name", "azimuth"):
+            if key not in ("name", "azimuth", CONF_TILT):
                 del item[key]
     return None
 
@@ -424,7 +463,10 @@ def _validate_templates(items: list[dict[str, Any]]) -> str | None:
     the config flow and the coordinator already read.
     """
     for idx, item in enumerate(items):
-        flat: dict[str, Any] = {"name": item["name"]}
+        kind = item.get(CONF_WINDOW_KIND) or "wall"
+        if kind not in WINDOW_KINDS:
+            return f"window_kind_invalid:{item['name']}"
+        flat: dict[str, Any] = {"name": item["name"], CONF_WINDOW_KIND: kind}
         for name in _BEHAVIOR_FIELDS:
             if name in _ACTIVATION_FLAGS:
                 continue
@@ -557,6 +599,9 @@ def _validate_covers(hass: HomeAssistant, items: list[dict[str, Any]]) -> str | 
         if error := _behavior_errors(entity_id, effective):
             return error
 
+        # Retired in 4.0: shading follows the left / right angles. A value left
+        # over from an older version goes with the next save.
+        item.pop("shade_degrees", None)
         items[idx] = item = _strip_template_defaults(item, tpl)
 
         # Immutable link to the entity, so it survives an entity_id rename.
@@ -567,6 +612,30 @@ def _validate_covers(hass: HomeAssistant, items: list[dict[str, Any]]) -> str | 
             item.pop("entity_registry_id", None)
     return None
 
+
+
+def _kind_mismatch(
+    hass: HomeAssistant, updates: dict[str, Any]
+) -> str | None:
+    """A cover whose template is for another kind of window than its facade.
+
+    A template's heights are a wall's and its lengths a roof's: on a facade of
+    another kind they would be read wrong. Checked on whatever the save leaves
+    behind, the updated sections and the stored others.
+    """
+    def section(key: str) -> list[dict[str, Any]]:
+        return updates[key] if key in updates else _items(hass, key)
+
+    facades = {f.get("name"): f for f in section(SECTION_FACADE)}
+    templates = {t.get("name"): t for t in section(SECTION_TEMPLATE)}
+    for cover in section(SECTION_COVER):
+        tpl = templates.get(cover.get("template") or None)
+        facade = facades.get(cover.get("facade"))
+        if tpl is None or facade is None:
+            continue
+        if _template_kind(tpl) != _facade_kind(facade):
+            return f"window_kind_mismatch:{cover.get('entity_id')}:{tpl.get('name')}:{facade.get('name')}"
+    return None
 
 
 def _referencing_covers(
@@ -915,6 +984,9 @@ async def ws_config_save(
     updates: dict[str, Any] = {section_key: items}
     if (covers := _renamed_covers(hass, section, old_items, items)) is not None:
         updates[SECTION_COVER] = covers
+    if section in ("facade", "template", "cover") and (error := _kind_mismatch(hass, updates)):
+        connection.send_error(msg["id"], "invalid_config", error)
+        return
     _persist(hass, updates)
     _LOGGER.debug("websocket_api: saved %s (%d item(s))", section, len(items))
     connection.send_result(msg["id"], {"saved": True, "count": len(items)})

@@ -59,7 +59,10 @@ class CoverExtenderConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 2
     # 2.2 (Cover Extender 4.0): helper entity ids renamed to <cover>_cx_<function>.
     # A minor bump, so going back to 3.x still loads the entry.
-    MINOR_VERSION = 2
+    # 2.3 (Cover Extender 4.0, sloped windows): maximum heights of 90° stored as 180°, so a
+    # roof window keeps shading past the zenith (see schemas.lift_max_elevation), and a
+    # template used only on roofs (or flat windows) gets that window type (infer_template_kinds).
+    MINOR_VERSION = 3
 
     @classmethod
     @callback

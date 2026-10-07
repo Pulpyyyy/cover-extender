@@ -7,9 +7,10 @@
   Renders the real panel (custom_components/.../cover-extender-admin.js) with a
   fake hass and demo data, for the README screenshots. Serve the repository
   root over HTTP (python -m http.server) and open
-  docs/screenshot-harness.html?tab=<tab>[&edit=<section>:<index>][&pop=override|auto][&theme=dark][&lang=fr]
+  docs/screenshot-harness.html?tab=<tab>[&edit=<section>:<index>][&pop=override|auto][&theme=dark][&lang=fr][&sun=<azimuth>,<elevation>]
   tab: volets | matrice | modes | horaires | reglages
   edit: cover:N | mode:N | facade:N | template:N opens that editor.
+  sun: puts the sun there (sun.sun), for the sketches of the cover editor.
   The title turns to "READY <page height>" once drawn, or "JSERROR: ..." on an error.
 -->
 <style>
@@ -149,6 +150,8 @@
     { name: FR ? "Ouest" : "West", azimuth: 248 },
     { name: FR ? "Est" : "East", azimuth: 68 },
     { name: FR ? "Nord" : "North", azimuth: 338 },
+    { name: FR ? "Toit" : "Roof", azimuth: 338, tilt: 30 },
+    { name: FR ? "Puits de lumière" : "Skylight", azimuth: 180, tilt: 0 },
   ];
   const M = {
     day:    FR ? "Jour" : "Day",
@@ -176,8 +179,16 @@
   const templates = [{
     name: TPL, angle_left: 60, angle_right: 70,
     shade_distance: 1.2, shade_max_height: 2.4, shade_min_height: 0.0,
-    shade_degrees: 90, shade_min_elevation: 5, shade_max_elevation: 90,
-    shade_minimum_position: 15, shade_default_position: 100,
+    shade_min_elevation: 5, shade_max_elevation: 180,
+    shade_minimum_position: 15, shade_default_position: 100, shade_sun_position: 30,
+    shade_change_threshold: 5, shade_time_out: 2,
+    solar_gain_position_solar: 100, solar_gain_position_cold: 0,
+  }, {
+    // A template for roof windows: lengths along the glass, not heights.
+    name: FR ? "Velux" : "Roof window", kind: "roof", angle_left: 85, angle_right: 85,
+    shade_distance: 0.4, shade_max_height: 1.0, shade_min_height: 0.0,
+    shade_min_elevation: 5, shade_max_elevation: 180,
+    shade_minimum_position: 15, shade_default_position: 100, shade_sun_position: 30,
     shade_change_threshold: 5, shade_time_out: 2,
     solar_gain_position_solar: 100, solar_gain_position_cold: 0,
   }];
@@ -224,29 +235,36 @@
     cover("bathroom", facades[3].name, {
       modes: { [M.day]: f(100), [M.night]: f(0) },
     }),
+    // A roof window on a north roof: the sun reaches it from behind once it
+    // is higher than the slope.
+    cover("attic", facades[4].name, {
+      shade_enable: true, angle_left: 180, angle_right: 180,
+      shade_distance: 0.5, shade_max_height: 1.4,
+      modes: { [M.day]: f(100), [M.night]: f(0), [M.shade]: A },
+    }),
   ];
 
   const BEHAVIOR_FIELDS = {
-    angle_left:                { default: 85,   min: 0, max: 90,  step: 1,    unit: "°", type: "number" },
-    angle_right:               { default: 85,   min: 0, max: 90,  step: 1,    unit: "°", type: "number" },
+    angle_left:                { default: 85,   min: 0, max: 180, step: 1,    unit: "°", type: "number" },
+    angle_right:               { default: 85,   min: 0, max: 180, step: 1,    unit: "°", type: "number" },
     shade_distance:            { default: 0.4,  min: 0, max: 3,   step: 0.1,  unit: "m", type: "number" },
     shade_max_height:          { default: 1.8,  min: 0, max: 3,   step: 0.1,  unit: "m", type: "number" },
     shade_min_height:          { default: 0.0,  min: 0, max: 3,   step: 0.1,  unit: "m", type: "number" },
-    shade_degrees:             { default: 90,   min: 0, max: 180, step: 1,    unit: "°", type: "number" },
-    shade_min_elevation:       { default: 5,    min: 0, max: 90,  step: 1,    unit: "°", type: "number" },
-    shade_max_elevation:       { default: 90,   min: 0, max: 90,  step: 1,    unit: "°", type: "number" },
+    shade_min_elevation:       { default: 5,    min: 0, max: 180, step: 1,    unit: "°", type: "number" },
+    shade_max_elevation:       { default: 180,  min: 0, max: 180, step: 1,    unit: "°", type: "number" },
     shade_minimum_position:    { default: 15,   min: 0, max: 100, step: 1,    unit: "%", type: "number" },
     shade_default_position:    { default: 100,  min: 0, max: 100, step: 1,    unit: "%", type: "number" },
     shade_change_threshold:    { default: 5,    min: 0, max: 50,  step: 1,    unit: "%", type: "number" },
     shade_time_out:            { default: 2,    min: 0, max: 60,  step: 1,    unit: "min", type: "number" },
+    shade_sun_position:        { default: 30,   min: 0, max: 100, step: 1,    unit: "%", type: "number" },
     solar_gain_position_solar: { default: 100,  min: 0, max: 100, step: 1,    unit: "%", type: "number" },
     solar_gain_position_cold:  { default: 0,    min: 0, max: 100, step: 1,    unit: "%", type: "number" },
     shade_enable:              { default: false, min: null, max: null, step: null, unit: "", type: "boolean" },
     solar_gain_enable:         { default: false, min: null, max: null, step: null, unit: "", type: "boolean" },
   };
   const SECTIONS = [
-    { key: "geometry",   fields: ["shade_distance", "shade_max_height", "shade_min_height"] },
-    { key: "detection",  fields: ["angle_left", "angle_right", "shade_degrees", "shade_min_elevation", "shade_max_elevation"] },
+    { key: "geometry",   fields: ["shade_distance", "shade_max_height", "shade_min_height", "shade_sun_position"] },
+    { key: "detection",  fields: ["angle_left", "angle_right", "shade_min_elevation", "shade_max_elevation"] },
     { key: "shading",    fields: ["shade_enable", "shade_minimum_position", "shade_default_position", "shade_change_threshold", "shade_time_out"] },
     { key: "solar_gain", fields: ["solar_gain_enable", "solar_gain_position_solar", "solar_gain_position_cold"] },
   ];
@@ -266,7 +284,7 @@
   }
 
   const PANEL_CFG = {
-    version: "4.0.0b5",
+    version: "4.0.0b6",
     facades, modes, templates, covers, helpers,
     global: {
       command_interval: 150,
@@ -323,11 +341,11 @@
   // ---- hass fake ------------------------------------------------------------
   const NAMES = FR
     ? { living_room: "Volet Salon", dining_room: "Volet SAM", office: "Volet Bureau",
-        kitchen: "Baie Cuisine", bedroom: "Volet Chambre", bathroom: "Volet SDB" }
+        kitchen: "Baie Cuisine", bedroom: "Volet Chambre", bathroom: "Volet SDB", attic: "Velux Combles" }
     : { living_room: "Living room", dining_room: "Dining room", office: "Office",
-        kitchen: "Kitchen bay", bedroom: "Bedroom", bathroom: "Bathroom" };
-  const NOW_MODE = { living_room: M.shade, dining_room: M.shade, office: M.day, kitchen: M.day, bedroom: M.nap, bathroom: M.day };
-  const NOW_POS = { living_room: 64, dining_room: 70, office: 100, kitchen: 100, bedroom: 0, bathroom: 100 };
+        kitchen: "Kitchen bay", bedroom: "Bedroom", bathroom: "Bathroom", attic: "Attic roof window" };
+  const NOW_MODE = { living_room: M.shade, dining_room: M.shade, office: M.day, kitchen: M.day, bedroom: M.nap, bathroom: M.day, attic: M.shade };
+  const NOW_POS = { living_room: 64, dining_room: 70, office: 100, kitchen: 100, bedroom: 0, bathroom: 100, attic: 57 };
   const states = {};
   const entities = {};
   const reg = (eid) => { entities[eid] = { platform: "cover_extender" }; };
@@ -357,6 +375,10 @@
     "sensor.outdoor_temperature": { state: "17.2", attributes: { friendly_name: FR ? "Température extérieure" : "Outdoor temperature", unit_of_measurement: "°C" } },
     "weather.home": { state: "sunny", attributes: { friendly_name: FR ? "Maison" : "Home" } },
   });
+  if (params.get("sun")) {
+    const [azimuth, elevation] = params.get("sun").split(",").map(Number);
+    states["sun.sun"] = { state: elevation > 0 ? "above_horizon" : "below_horizon", attributes: { azimuth, elevation } };
+  }
 
   const hass = {
     language: LANG,

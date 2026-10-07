@@ -9,6 +9,16 @@ CONF_ENTITY_PICTURE = "entity_picture"
 CONF_ANGLE_LEFT = "angle_left"
 CONF_ANGLE_RIGHT = "angle_right"
 CONF_AZIMUTH = "azimuth"
+# A facade's slope: the glass's angle with the horizontal. 90 is a wall (the
+# default, and every facade stored before it existed), 30 a roof window in a
+# 30° roof, 0 a flat skylight. Below FLAT_TILT the window counts as flat.
+CONF_TILT = "tilt"
+WALL_TILT = 90
+FLAT_TILT = 10
+# The kind of window a template is for: its heights are a wall's, its lengths a
+# roof's. Only "roof" and "flat" are stored; a template without it is a wall's.
+CONF_WINDOW_KIND = "kind"
+WINDOW_KINDS = ("wall", "roof", "flat")
 
 # State attributes injected into cover entities
 ATTR_FACADE = "facade"

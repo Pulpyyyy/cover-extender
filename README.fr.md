@@ -329,11 +329,22 @@ Chaque volet décide ensuite quand le soleil lui **fait face** avec deux angles,
 - **Angle à gauche** : vers l'est pour une façade sud ;
 - **Angle à droite** : vers l'ouest pour une façade sud.
 
-Le soleil fait face au volet quand son azimut est entre *façade − angle à gauche* et *façade + angle à droite*, et qu'il est au moins 3° au-dessus de l'horizon. Les valeurs par défaut (85° de chaque côté) couvrent presque tout le demi-plan devant le mur ; réduisez-les pour une fenêtre en retrait dans le mur ou masquée par un bâtiment voisin.
+Le soleil fait face au volet quand son azimut est entre *façade − angle à gauche* et *façade + angle à droite*, et qu'il est au moins 3° au-dessus de l'horizon. Les valeurs par défaut (85° de chaque côté) couvrent presque tout le demi-plan devant le mur ; réduisez-les pour une fenêtre en retrait dans le mur ou masquée par un bâtiment voisin. Ce secteur unique sert à tout : l'attribut `sun_facing` du volet, l'héliotropie et l'ombrage.
+
+#### Fenêtres de toit et puits de lumière
+
+Une façade a aussi une **pente** : l'angle de la vitre avec l'horizontale. Un mur fait 90° (la valeur par défaut, et celle de toute façade créée avant les pentes), une fenêtre dans un toit à 30° fait 30°, un puits de lumière à plat 0°. Elle se règle dans l'éditeur de façade, sous **Pente** : *Mur*, *Toit* (de 10° à 89°) ou *À plat*.
+
+- **Une fenêtre de toit** voit aussi une partie du ciel derrière elle : le soleil touche la vitre dès qu'il est plus haut que la pente (la pente elle-même quand il est juste derrière, moins quand il est sur le côté). Ses deux angles peuvent aller jusqu'à 180° de chaque côté ; à 180° ils ne masquent rien et ne servent plus qu'à une lucarne, une cheminée ou un bâtiment voisin. Les valeurs par défaut restent à 85° : ouvrez-les sur une fenêtre de toit.
+- **Un puits de lumière à plat** voit tout le ciel : le soleil le touche dès qu'il est levé, quelle que soit sa direction, et l'azimut ne sert plus.
+
+Sur un mur rien ne change : chaque règle et chaque formule ci-dessous redonne exactement le cas vertical.
 
 ### Gabarits
 
 Plusieurs fenêtres de même taille, sur le même type de mur, partagent leur géométrie et leurs réglages d'ombrage. Un **gabarit** porte ces valeurs une seule fois ; chaque volet qui l'utilise en hérite et n'enregistre que ce qu'il change (affiché comme *écarts* dans l'éditeur). Modifier le gabarit met à jour tous les volets qui l'utilisent.
+
+Un gabarit a aussi un **type de fenêtre**, *Mur*, *Toit* ou *À plat*, choisi en haut de son éditeur : le gabarit d'un mur porte des hauteurs, celui d'un toit des longueurs de vitre le long de la pente. Un volet ne peut prendre qu'un gabarit du type de sa façade ; les autres restent dans sa liste, grisés. Un gabarit de toit est dessiné sur le moins pentu des toits de la maison. Les gabarits créés avant la 4.0 sont ceux d'un mur, ou d'un toit (ou à plat) quand tous leurs volets sont déjà sur une telle façade.
 
 ### Ombrage automatique
 
@@ -350,14 +361,16 @@ La position est recalculée à chaque mise à jour de `sun.sun` (toutes les quel
 | Réglage | Défaut | Sens |
 |---|---|---|
 | Distance du volet | `0.4` m | Jusqu'où la lumière directe peut entrer dans la pièce, mesuré au sol depuis la fenêtre. Plus petit = le volet ferme davantage. |
-| Hauteur maxi | `1.8` m | Hauteur du bas du volet complètement ouvert (100 %), en général le haut de la fenêtre. |
+| Hauteur maxi | `1.8` m | Hauteur du bas du volet complètement ouvert (100 %), en général le haut de la fenêtre. Sur une fenêtre de toit, la longueur de la vitre le long de la pente. |
 | Hauteur mini | `0.0` m | Hauteur du bas du volet complètement fermé (0 %) : 0 pour une porte-fenêtre, la hauteur d'allège pour une fenêtre. |
-| Ouverture angulaire | `90` ° | Le soleil est « devant » quand son azimut est à ± cet angle de la direction de la façade. |
-| Élévation mini / maxi | `5` / `90` ° | En dehors de cette plage de hauteur du soleil, le volet va à sa position par défaut. |
+| Hauteur du soleil mini / maxi | `5` / `180` ° | En dehors de cette plage, le volet va à sa position par défaut. Se lit depuis l'horizon devant, par-dessus le zénith (90°) et, sur une fenêtre de toit, de l'autre côté jusqu'au toit : sur un toit à 30°, 120° est un soleil à 60° de haut derrière. 180 = pas de limite ; sur un mur la plage s'arrête à 90. |
+| Position quand le soleil tape | `30` % | Puits de lumière à plat seulement, à la place de la géométrie : la position tant que le soleil touche la vitre. |
 | Position mini | `15` % | L'ombrage ne ferme jamais plus que ça. |
 | Position par défaut | `100` % | Position quand le soleil n'est pas devant la fenêtre. |
 | Seuil de changement | `5` % | Les petits changements sont ignorés, pour ménager le moteur. |
 | Temporisation | `2` min | Délai minimal depuis le dernier mouvement du volet (quelle qu'en soit la source) avant que l'ombrage le bouge à nouveau. L'entrée dans un mode d'ombrage l'ignore. |
+
+Le volet laisse ouverte une longueur de vitre `distance × sin(α) / cos(i)`, où α est l'élévation du soleil et i l'angle entre le soleil et la perpendiculaire à la vitre, convertie ensuite en pourcentage entre les hauteurs mini et maxi. Sur un mur, c'est la hauteur habituelle du bas du volet, `distance / cos(γ) × tan(α)`, γ étant l'angle entre le soleil et la direction de la façade. Sur une fenêtre de toit, la longueur se mesure le long de la pente et la distance au niveau du bas de la vitre. Un puits de lumière à plat n'a pas de tache de soleil à tenir près d'un mur : il prend sa *position quand le soleil tape*.
 
 ### Héliotropie
 

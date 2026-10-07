@@ -17,6 +17,9 @@ from .const import (
     CONF_SOLAR_GAIN,
     CONF_ANGLE_LEFT,
     CONF_ANGLE_RIGHT,
+    CONF_AZIMUTH,
+    CONF_TILT,
+    CONF_WINDOW_KIND,
     CONF_EXCLUSION,
     CONF_INHIBITION,
     CONF_SCHEDULE,
@@ -27,7 +30,9 @@ from .const import (
     SECTION_GLOBAL,
     SECTION_MODE,
     SECTION_TEMPLATE,
+    WALL_TILT,
 )
+from .shade import tilt_kind
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,13 +41,15 @@ SHADE_DEFAULTS: dict[str, Any] = {
     "distance":         0.4,
     "max_height":       1.8,
     "min_height":       0.0,
-    "degrees":          90.0,
-    "max_elevation":    90.0,
+    # 180 = no limit: over the zenith and down to the roof (a wall stops at 90).
+    "max_elevation":    180.0,
     "min_elevation":    5.0,
     "minimum_position": 15.0,
     "default_position": 100.0,
     "change_threshold": 5.0,
     "time_out":         2.0,
+    # A flat window's position while the sun touches it (see shade.py).
+    "sun_position":     30.0,
 }
 
 _SHADING_SCHEMA = vol.Schema(
@@ -51,13 +58,13 @@ _SHADING_SCHEMA = vol.Schema(
         vol.Optional("distance",         default=SHADE_DEFAULTS["distance"]):         vol.Coerce(float),
         vol.Optional("max_height",       default=SHADE_DEFAULTS["max_height"]):       vol.Coerce(float),
         vol.Optional("min_height",       default=SHADE_DEFAULTS["min_height"]):       vol.Coerce(float),
-        vol.Optional("degrees",          default=SHADE_DEFAULTS["degrees"]):          vol.Coerce(float),
         vol.Optional("max_elevation",    default=SHADE_DEFAULTS["max_elevation"]):    vol.Coerce(float),
         vol.Optional("min_elevation",    default=SHADE_DEFAULTS["min_elevation"]):    vol.Coerce(float),
         vol.Optional("minimum_position", default=SHADE_DEFAULTS["minimum_position"]): vol.Coerce(float),
         vol.Optional("default_position", default=SHADE_DEFAULTS["default_position"]): vol.Coerce(float),
         vol.Optional("change_threshold", default=SHADE_DEFAULTS["change_threshold"]): vol.Coerce(float),
         vol.Optional("time_out",         default=SHADE_DEFAULTS["time_out"]):         vol.Coerce(float),
+        vol.Optional("sun_position",     default=SHADE_DEFAULTS["sun_position"]):     vol.Coerce(float),
     }
 )
 
@@ -78,6 +85,73 @@ _SOLAR_GAIN_GLOBAL_SCHEMA = vol.Schema(
         vol.Optional("good_conditions",       default=["sunny", "partlycloudy"]): vol.All(cv.ensure_list, [cv.string]),
     }
 )
+
+def lift_max_elevation(sections: dict[str, Any]) -> dict[str, Any] | None:
+    """Turn every stored maximum height of 90° into 180°, "no limit".
+
+    Heights now run past the zenith, down the far side of a roof (see
+    shade.sun_height). 90° was the default, meaning no limit on a wall; on a
+    roof it would now stop shading at the zenith. 180° is no limit on both,
+    and on a wall the two behave alike, so nothing changes for existing
+    covers. Values under 90° were chosen and stay. Returns the new sections,
+    or None when there is nothing to lift.
+    """
+    changed = False
+
+    def lift(value: Any) -> Any:
+        nonlocal changed
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value == 90:
+            changed = True
+            return 180
+        return value
+
+    out = dict(sections)
+    if SECTION_TEMPLATE in sections:
+        templates = []
+        for tpl in sections.get(SECTION_TEMPLATE) or []:
+            tpl = dict(tpl)
+            if isinstance(tpl.get("shade"), dict) and "max_elevation" in tpl["shade"]:
+                tpl["shade"] = {**tpl["shade"], "max_elevation": lift(tpl["shade"]["max_elevation"])}
+            templates.append(tpl)
+        out[SECTION_TEMPLATE] = templates
+    if SECTION_COVER in sections:
+        covers = []
+        for cover in sections.get(SECTION_COVER) or []:
+            cover = dict(cover)
+            if "shade_max_elevation" in cover:
+                cover["shade_max_elevation"] = lift(cover["shade_max_elevation"])
+            covers.append(cover)
+        out[SECTION_COVER] = covers
+    return out if changed else None
+
+
+def infer_template_kinds(sections: dict[str, Any]) -> dict[str, Any] | None:
+    """Give a template the kind of window all its covers have, roof or flat.
+
+    Templates had no kind before sloped windows: they were all a wall's. One
+    whose covers all sit on roof facades (or all on flat ones) becomes that
+    kind, so their lengths stay read as lengths. A template shared by kinds,
+    or by walls only, stays a wall's. Returns the new sections, or None when
+    nothing changes.
+    """
+    facades = {
+        f.get("name"): tilt_kind(float(f.get(CONF_TILT, WALL_TILT)))
+        for f in sections.get(SECTION_FACADE) or []
+    }
+    kinds: dict[str, set[str]] = {}
+    for cover in sections.get(SECTION_COVER) or []:
+        if (name := cover.get("template")) and cover.get("facade") in facades:
+            kinds.setdefault(name, set()).add(facades[cover["facade"]])
+    changed = False
+    templates = []
+    for tpl in sections.get(SECTION_TEMPLATE) or []:
+        found = kinds.get(tpl.get("name"), set())
+        if CONF_WINDOW_KIND not in tpl and len(found) == 1 and (kind := next(iter(found))) != "wall":
+            tpl = {**tpl, CONF_WINDOW_KIND: kind}
+            changed = True
+        templates.append(tpl)
+    return {**sections, SECTION_TEMPLATE: templates} if changed else None
+
 
 def _add_cover_profile(
     d: dict[str, Any],
@@ -127,13 +201,13 @@ def _add_cover_profile(
         "distance":         d.get("shade_distance",         tpl_shade.get("distance",         SHADE_DEFAULTS["distance"])),
         "max_height":       d.get("shade_max_height",       tpl_shade.get("max_height",       SHADE_DEFAULTS["max_height"])),
         "min_height":       d.get("shade_min_height",       tpl_shade.get("min_height",       SHADE_DEFAULTS["min_height"])),
-        "degrees":          d.get("shade_degrees",          tpl_shade.get("degrees",          SHADE_DEFAULTS["degrees"])),
         "min_elevation":    d.get("shade_min_elevation",    tpl_shade.get("min_elevation",    SHADE_DEFAULTS["min_elevation"])),
         "max_elevation":    d.get("shade_max_elevation",    tpl_shade.get("max_elevation",    SHADE_DEFAULTS["max_elevation"])),
         "minimum_position": d.get("shade_minimum_position", tpl_shade.get("minimum_position", SHADE_DEFAULTS["minimum_position"])),
         "default_position": d.get("shade_default_position", tpl_shade.get("default_position", SHADE_DEFAULTS["default_position"])),
         "change_threshold": d.get("shade_change_threshold", tpl_shade.get("change_threshold", SHADE_DEFAULTS["change_threshold"])),
         "time_out":         d.get("shade_time_out",         tpl_shade.get("time_out",         SHADE_DEFAULTS["time_out"])),
+        "sun_position":     d.get("shade_sun_position",     tpl_shade.get("sun_position",     SHADE_DEFAULTS["sun_position"])),
     }
     try:
         shade_cfg = _SHADING_SCHEMA(shade_raw)
@@ -267,7 +341,10 @@ def build_profiles_from_options(
     # ── Main pass ─────────────────────────────────────────────────────────────
     for item in sections.get(SECTION_FACADE) or []:
         if name := item.get("name"):
-            facades[name] = {"azimuth": float(item.get("azimuth", 180.0))}
+            facades[name] = {
+                CONF_AZIMUTH: float(item.get(CONF_AZIMUTH, 180.0)),
+                CONF_TILT:    float(item.get(CONF_TILT, WALL_TILT)),
+            }
 
     for item in sections.get(SECTION_MODE) or []:
         if name := item.get("name"):

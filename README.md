@@ -347,11 +347,22 @@ Each cover then decides when the sun is **facing** it with two angles, measured 
       ═══════════════════ window (inside below) ═══════════════
 ```
 
-The sun faces the cover when its azimuth lies between *facade − angle to the left* and *facade + angle to the right*, and it is at least 3° above the horizon. The defaults (85° each side) cover almost the whole half-plane in front of the wall; narrow them for a window set deep in the wall or flanked by a neighbour's building. The result is the `sun_facing` attribute of the cover, used by solar gain.
+The sun faces the cover when its azimuth lies between *facade − angle to the left* and *facade + angle to the right*, and it is at least 3° above the horizon. The defaults (85° each side) cover almost the whole half-plane in front of the wall; narrow them for a window set deep in the wall or flanked by a neighbour's building. This one sector answers for everything: the `sun_facing` attribute of the cover, solar gain and shading.
+
+#### Roof windows and skylights
+
+A facade also has a **slope**: the glass's angle with the horizontal. A wall is 90° (the default, and every facade created before slopes existed), a window in a 30° roof is 30°, a flat skylight is 0°. Set it in the facade editor, under **Slope**: *Wall*, *Roof* (10° to 89°) or *Flat*.
+
+- **A roof window** also sees part of the sky behind it: the sun reaches the glass once it is higher than the slope (the slope itself when the sun is right behind, less when it is to the side). Its two angles can go up to 180° on each side; at 180° they mask nothing and are left for a dormer, a chimney or a neighbour's building. The defaults stay 85°: open them on a roof window.
+- **A flat skylight** sees the whole sky: the sun reaches it as soon as it is up, from any direction, and the azimuth no longer matters.
+
+On a wall nothing changes: every rule and formula below gives back the vertical case exactly.
 
 ### Templates
 
 Several windows of the same size, on the same kind of wall, share their geometry and shading settings. A **template** holds those values once; each cover that uses it inherits them and only stores what it changes (shown as *overrides* in the editor). Editing the template updates every cover that uses it.
+
+A template also has a **window type**, *Wall*, *Roof* or *Flat*, chosen at the top of its editor: a wall's template holds heights, a roof's the lengths of glass along the slope. A cover can only take a template of its facade's type; the others show in its list, greyed out. A roof template is drawn on the flattest roof of the house. Templates created before 4.0 are a wall's, or a roof's (or flat) when all their covers already sit on such a facade.
 
 ### Autonomous shading
 
@@ -370,16 +381,16 @@ The settings, in the cover's **Geometry** and **Shading** sections:
 | Setting | Default | Meaning |
 |---|---|---|
 | Distance from the cover | `0.4` m | How far into the room direct sunlight may reach, measured on the floor from the window. Smaller = the cover closes more. |
-| Maximum height | `1.8` m | Height of the cover's bottom edge when fully open (100 %), usually the top of the window. |
+| Maximum height | `1.8` m | Height of the cover's bottom edge when fully open (100 %), usually the top of the window. On a roof window, the length of the glass along the slope. |
 | Minimum height | `0.0` m | Height of the bottom edge when fully closed (0 %): 0 for a French window, the sill height for a window. |
-| Angular aperture | `90` ° | The sun counts as "in front" when its azimuth is within ± this angle of the facade direction. |
-| Minimum / maximum elevation | `5` / `90` ° | Outside this range of sun heights, the cover goes to its default position. |
+| Minimum / maximum height of the sun | `5` / `180` ° | Outside this range, the cover goes to its default position. Read from the horizon in front, over the zenith (90°) and, on a roof window, down the far side to the roof: on a 30° roof, 120° is a sun 60° high behind it. 180 means no limit; on a wall the range stops at 90. |
+| Position in direct sun | `30` % | Flat skylights only, in place of the geometry above: the position while the sun reaches the glass. |
 | Minimum position | `15` % | Shading never closes further than this. |
 | Default position | `100` % | Position when the sun is not in front of the window. |
 | Change threshold | `5` % | Smaller changes are ignored, to spare the motor. |
 | Time-out | `2` min | Minimum time since the last movement of the cover (from any source) before shading moves it again. Entering a shading mode ignores it. |
 
-The height of the bottom edge is `distance / cos(γ) × tan(α)`, where α is the sun's elevation and γ the angle between the sun and the facade direction, then converted to a percentage between the minimum and maximum heights.
+The cover leaves open a length of glass `distance × sin(α) / cos(i)`, where α is the sun's elevation and i the angle between the sun and the perpendicular to the glass, then converted to a percentage between the minimum and maximum heights. On a wall that is the familiar height of the bottom edge, `distance / cos(γ) × tan(α)`, γ being the angle between the sun and the facade direction. On a roof window the length runs along the slope, and the distance is measured at the level of the glass's lower edge. A flat skylight has no patch of sun to hold near a wall: it takes its *position in direct sun*.
 
 ### Solar gain
 

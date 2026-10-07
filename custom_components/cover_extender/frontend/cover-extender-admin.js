@@ -229,8 +229,8 @@ const WORDS = {
     },
     entityTotal: (n) => `${n} entit${n > 1 ? "ies" : "y"} in total`,
     delete: "Delete",
-    inUseTitle: (n) => `Used by ${n} cover(s): unlink it in the matrix first.`,
-    inUseItemTitle: (n) => `Used by ${n} cover(s): move them first.`,
+    inUseTitle: (n) => `Used by ${n} cover${n > 1 ? "s" : ""}: unlink it in the matrix first.`,
+    inUseItemTitle: (n) => (n > 1 ? `Used by ${n} covers: move them first.` : "Used by 1 cover: move it first."),
     backToCovers: "All covers",
     entity: "Cover entity",
     picture: "Picture",
@@ -269,13 +269,16 @@ const WORDS = {
     fields: {
       angle_left: "Angle to the left", angle_right: "Angle to the right",
       shade_distance: "Distance from the cover", shade_max_height: "Maximum height",
-      shade_min_height: "Minimum height", shade_degrees: "Angular aperture",
+      shade_min_height: "Minimum height",
       shade_min_elevation: "Minimum elevation", shade_max_elevation: "Maximum elevation",
       shade_minimum_position: "Minimum position", shade_default_position: "Default position",
       shade_change_threshold: "Change threshold", shade_time_out: "Time-out",
       solar_gain_position_solar: "Position in the sun", solar_gain_position_cold: "Position when cold",
       shade_enable: "Automatic shading enabled", solar_gain_enable: "Solar gain enabled",
+      shade_sun_position: "Position in direct sun",
     },
+    /* A window in a roof: the same numbers, measured along the slope. */
+    fieldsRoof: { shade_max_height: "Glass length", shade_min_height: "Minimum length" },
     /* ---- editors, 4.0 layout ---- */
     inSelector: "In the selector:",
     colorPick: "Pick a color",
@@ -315,7 +318,7 @@ const WORDS = {
     },
     sectionSubs: {
       geometry: "To know how far the sun reaches into the room.",
-      detection: "The part of the sky from which the sun sees the window.",
+      detection: "Where the sun must be: one sector for everything, a range of heights for shading.",
       shading: "The cover comes down just enough when the sun is in front.",
       solar_gain: "Let the sun in when it is cool and fine. Temperature and weather: Settings tab.",
     },
@@ -325,13 +328,18 @@ const WORDS = {
       shade_min_height: "Bottom of the cover when closed: 0 for a French window.",
       angle_left: "Towards the east for a south facade.",
       angle_right: "Towards the west for a south facade.",
-      shade_degrees: "Shading: the sun is in front within ± this angle of the facade.",
       shade_minimum_position: "Shading never closes further than this.",
       shade_default_position: "When the sun is not in front of the window.",
       shade_change_threshold: "Small moves are skipped, to spare the motor.",
       shade_time_out: "Wait after any move of the cover, by hand included.",
       solar_gain_position_solar: "Cool, fine weather, sun in front.",
       solar_gain_position_cold: "Cool, but no sun on the window or bad weather.",
+      shade_sun_position: "Flat windows only: the sun falls straight in, so the cover takes this position while the sun reaches the glass.",
+    },
+    fieldHintsRoof: {
+      shade_distance: "How far direct light may reach, measured at the level of the glass's lower edge.",
+      shade_max_height: "Along the slope, from the bottom to the top of the glazing (cover open, 100 %).",
+      shade_min_height: "Cover closed: 0 for most roof windows.",
     },
     fromTemplate: (v) => `Template: ${v}.`,
     backToTpl: "back to the template",
@@ -345,11 +353,19 @@ const WORDS = {
     noOwn: "No override: this cover follows its template everywhere.",
     elevationRange: "Sun height",
     elevationHint: "Outside this range the cover goes to its default position.",
+    elevationHintRoof: "Read from the horizon in front, over the zenith (90°), down to the roof: 120° is 60° behind.",
+    elevEnds: ["horizon, in front", "zenith", "the roof, behind"],
     rangeTo: "to",
     fig: {
       outside: "outside", room: "room", max: "max height", min: "min height",
       distance: "distance", left: "left", right: "right", view: "seen from inside",
+      top: "from above", side: "in profile", section: "cross-section", horizon: "horizon", behindWall: "behind the wall",
+      sectorSun: "solar gain, sensor and shading", sectorShade: "heights for shading", sunNow: "the sun now",
+      behindRoof: "behind: only above the roof", wholeSky: "the whole sky, any direction", behind: "behind",
+      length: "length",
     },
+    detGroupSun: "Solar gain, the “sun facing” sensor and shading",
+    detGroupShade: "Shading",
     tplName: "Template name",
     usedBy: "Used by",
     noCoverYet: "No cover yet",
@@ -358,15 +374,38 @@ const WORDS = {
     facadeCovers: "Covers on this facade",
     orientTitle: "Orientation",
     orientSub: "Where the windows look, seen from inside.",
-    dragCompass: "or drag the arrow on the compass",
-    compassNote: "Blue marks the facade's wall; yellow is where the sun can face it.",
+    dragCompass: "or turn the compass",
+    compassNote: "The window is at the top, seen from inside: the letters turn around the house, the arrow stays. Yellow is where the sun can face the facade.",
+    compassLeft: "to the left",
+    sectorRange: "Sector",
+    sectorHint: "Where the sun counts as in front of the window, either side of its axis.",
+    sectorEnds: ["← left", "window's axis", "right →"],
+    compassRight: "to the right",
+    slopeTitle: "Slope",
+    slopeSub: "The glass's angle with the horizontal.",
+    slopeKinds: { wall: "Wall", roof: "Roof", flat: "Flat" },
+    kindNoun: { wall: "a wall", roof: "a roof", flat: "a flat window" },
+    tplKind: "Window type",
+    tplKindNote: "A cover only takes a template of its facade's type: heights for a wall, glass lengths for a roof.",
+    tplKindRef: (t, house) => `Drawn on a ${t}° roof${house ? ", the flattest of the house's roofs" : ""}.`,
+    tplKindMismatch: (t, tk, fk) => `Template “${t}” is meant for ${tk}, not ${fk}: pick another one, or none.`,
+    tplKindUsers: (list) => `Covers using it sit on a facade of another type: ${list}. Saving will be refused.`,
+    facadeKindUsers: (list) => `These covers have a template for another type of window: ${list}. Change their template first.`,
+    facadeDir: "Where the window faces",
+    slopeAria: "Slope, in degrees",
+    slopeNotes: {
+      wall: "An upright window sees only the sky in front of it. Roof and Flat let the sun in from behind too; a roof window is set by its glass's length instead of heights, a flat one by a position in the sun.",
+      roof: "A roof window also sees part of the sky behind it: the sun reaches the glass once it is higher than the slope.",
+      flat: "A flat skylight sees the whole sky: the sun reaches it as soon as it is up, from any direction. The azimuth no longer matters.",
+    },
+    slopeShort: (t) => (t >= 90 ? "" : t < 10 ? "flat" : `roof ${t}°`),
     dirs: ["N", "NE", "E", "SE", "S", "SW", "W", "NW"],
     houseTitle: "The house",
     houseSub: "saved item by item",
     globalTitle: "General settings",
     globalNote: "one save, at the bottom",
     addShort: "Add",
-    tplMeta: (h, d) => `height ${h} m · distance ${d} m`,
+    tplMeta: (kind, h, d) => (kind === "flat" ? "flat" : `${kind === "roof" ? "roof · length" : "height"} ${h} m · distance ${d} m`),
     sgTitle: "Solar gain",
     sgSub: "When is it cool and fine enough to let the sun in? Applies to every cover.",
     sgTemp: "Temperature",
@@ -400,7 +439,7 @@ const WORDS = {
       schedule_min_after_max: (k) => `The ${k} schedule: the min time is after the max time.`,
       schedule_floor_after_ceiling: (k) => `The ${k} schedule: the floor is not before the ceiling.`,
       return_mode_timed: (target, user) => `“${target}” is the mode “${user}” returns to: it cannot have a duration. Change the return of “${user}” first.`,
-      in_use: (n, count, covers) => `“${n}” is still used by ${count} cover(s): ${covers}`,
+      in_use: (n, count, covers) => `“${n}” is still used by ${count} cover${Number(count) > 1 ? "s" : ""}: ${covers}`,
       entity_required: () => "A cover must point at an entity.",
       cover_domain: (e) => `${e} is not an entity of the cover domain.`,
       cover_exists: (e) => `Cover ${e} is already in the list.`,
@@ -416,6 +455,9 @@ const WORDS = {
       min_height_above_max: (e) => `${e}: the minimum height is above the maximum.`,
       min_elevation_above_max: (e) => `${e}: the minimum elevation is above the maximum.`,
       azimuth_invalid: (n) => `Invalid azimuth for “${n}” (0 to 360°).`,
+      tilt_invalid: (n) => `Invalid slope for “${n}” (0 to 90°).`,
+      window_kind_invalid: (n) => `Invalid window type for “${n}”.`,
+      window_kind_mismatch: (e, t, f) => `${e}: template “${t}” and facade “${f}” are not the same type of window (wall, roof or flat).`,
       field_invalid: (f) => `Unreadable value for “${f}”.`,
       interval_invalid: () => "The interval must be between 0 and 5000 ms.",
       conditions_invalid: () => "Unreadable list of weather conditions.",
@@ -587,8 +629,8 @@ const WORDS = {
     },
     entityTotal: (n) => `${n} entité${n > 1 ? "s" : ""} au total`,
     delete: "Supprimer",
-    inUseTitle: (n) => `Utilisé par ${n} volet(s) : le délier d'abord dans la matrice.`,
-    inUseItemTitle: (n) => `Utilisé par ${n} volet(s) : les déplacer d'abord.`,
+    inUseTitle: (n) => `Utilisé par ${n} volet${n > 1 ? "s" : ""} : le délier d'abord dans la matrice.`,
+    inUseItemTitle: (n) => (n > 1 ? `Utilisé par ${n} volets : les déplacer d'abord.` : "Utilisé par 1 volet : le déplacer d'abord."),
     backToCovers: "Tous les volets",
     entity: "Entité du volet",
     picture: "Image",
@@ -627,13 +669,15 @@ const WORDS = {
     fields: {
       angle_left: "Angle à gauche", angle_right: "Angle à droite",
       shade_distance: "Distance du volet", shade_max_height: "Hauteur maxi",
-      shade_min_height: "Hauteur mini", shade_degrees: "Ouverture angulaire",
+      shade_min_height: "Hauteur mini",
       shade_min_elevation: "Élévation mini", shade_max_elevation: "Élévation maxi",
       shade_minimum_position: "Position mini", shade_default_position: "Position par défaut",
       shade_change_threshold: "Seuil de changement", shade_time_out: "Temporisation",
       solar_gain_position_solar: "Position au soleil", solar_gain_position_cold: "Position au froid",
       shade_enable: "Ombrage automatique activé", solar_gain_enable: "Héliotropie activée",
+      shade_sun_position: "Position quand le soleil tape",
     },
+    fieldsRoof: { shade_max_height: "Longueur de la vitre", shade_min_height: "Longueur mini" },
     /* ---- éditeurs, présentation 4.0 ---- */
     inSelector: "Dans le sélecteur :",
     colorPick: "Choisir une couleur",
@@ -673,7 +717,7 @@ const WORDS = {
     },
     sectionSubs: {
       geometry: "Pour savoir jusqu'où le soleil entre dans la pièce.",
-      detection: "La part du ciel d'où le soleil « voit » la fenêtre.",
+      detection: "Où doit être le soleil : un secteur pour tout, une plage de hauteur pour l'ombrage.",
       shading: "Le volet descend juste ce qu'il faut quand le soleil est devant.",
       solar_gain: "Laisser entrer le soleil quand il fait frais et beau. Température et météo : onglet Réglages.",
     },
@@ -683,13 +727,18 @@ const WORDS = {
       shade_min_height: "Bas du volet fermé : 0 pour une porte-fenêtre.",
       angle_left: "Vers l'est pour une façade sud.",
       angle_right: "Vers l'ouest pour une façade sud.",
-      shade_degrees: "Ombrage : le soleil est devant à ± cet angle de la façade.",
       shade_minimum_position: "L'ombrage ne ferme jamais plus que ça.",
       shade_default_position: "Quand le soleil n'est pas devant la fenêtre.",
       shade_change_threshold: "Les petits mouvements sont ignorés, pour ménager le moteur.",
       shade_time_out: "Attente après tout mouvement du volet, manuel compris.",
       solar_gain_position_solar: "Frais, beau temps, soleil devant.",
       solar_gain_position_cold: "Frais, mais pas de soleil sur la fenêtre ou mauvais temps.",
+      shade_sun_position: "Fenêtres à plat seulement : le soleil tombe droit dans la pièce, le volet prend cette position tant que le soleil touche la vitre.",
+    },
+    fieldHintsRoof: {
+      shade_distance: "Jusqu'où la lumière directe peut entrer, mesurée au niveau du bas de la vitre.",
+      shade_max_height: "Le long de la pente, du bas au haut du vitrage (volet ouvert, 100 %).",
+      shade_min_height: "Volet fermé : 0 pour la plupart des fenêtres de toit.",
     },
     fromTemplate: (v) => `Gabarit : ${v}.`,
     backToTpl: "revenir au gabarit",
@@ -703,11 +752,19 @@ const WORDS = {
     noOwn: "Aucun écart : ce volet suit son gabarit partout.",
     elevationRange: "Hauteur du soleil",
     elevationHint: "En dehors, le volet va à sa position par défaut.",
+    elevationHintRoof: "Se lit depuis l'horizon devant, par-dessus le zénith (90°), jusqu'au toit : 120° vaut 60° de dos.",
+    elevEnds: ["horizon, devant", "zénith", "le toit, de dos"],
     rangeTo: "à",
     fig: {
       outside: "dehors", room: "pièce", max: "haut. maxi", min: "haut. mini",
       distance: "distance", left: "gauche", right: "droite", view: "vu de l'intérieur",
+      top: "vue de dessus", side: "de profil", section: "en coupe", horizon: "horizon", behindWall: "derrière le mur",
+      sectorSun: "héliotropie, capteur et ombrage", sectorShade: "hauteur pour l'ombrage", sunNow: "le soleil maintenant",
+      behindRoof: "derrière : seulement au-dessus du toit", wholeSky: "tout le ciel, toutes directions", behind: "de dos",
+      length: "longueur",
     },
+    detGroupSun: "Héliotropie, capteur « face au soleil » et ombrage",
+    detGroupShade: "Ombrage",
     tplName: "Nom du gabarit",
     usedBy: "Utilisé par",
     noCoverYet: "Aucun volet pour l'instant",
@@ -716,15 +773,38 @@ const WORDS = {
     facadeCovers: "Volets sur cette façade",
     orientTitle: "Orientation",
     orientSub: "Vers où regardent les fenêtres, vu de l'intérieur.",
-    dragCompass: "ou glisser la flèche sur la boussole",
-    compassNote: "Le bleu marque le mur de la façade ; le jaune, d'où le soleil peut lui faire face.",
+    dragCompass: "ou faire tourner la boussole",
+    compassNote: "La fenêtre est en haut, vue de l'intérieur : les lettres tournent autour de la maison, la flèche ne bouge pas. Le jaune montre d'où le soleil peut faire face à la façade.",
+    compassLeft: "à gauche",
+    sectorRange: "Secteur",
+    sectorHint: "Où le soleil compte comme devant la fenêtre, de part et d'autre de son axe.",
+    sectorEnds: ["← gauche", "axe de la fenêtre", "droite →"],
+    compassRight: "à droite",
+    slopeTitle: "Pente",
+    slopeSub: "L'angle de la vitre avec l'horizontale.",
+    slopeKinds: { wall: "Mur", roof: "Toit", flat: "À plat" },
+    kindNoun: { wall: "un mur", roof: "un toit", flat: "une fenêtre à plat" },
+    tplKind: "Type de fenêtre",
+    tplKindNote: "Un volet ne prend qu'un gabarit du type de sa façade : des hauteurs pour un mur, des longueurs de vitre pour un toit.",
+    tplKindRef: (t, house) => `Dessiné sur un toit à ${t}°${house ? ", le moins pentu des toits de la maison" : ""}.`,
+    tplKindMismatch: (t, tk, fk) => `Le gabarit « ${t} » est prévu pour ${tk}, pas pour ${fk} : en choisir un autre, ou aucun.`,
+    tplKindUsers: (list) => `Des volets qui l'utilisent sont sur une façade d'un autre type : ${list}. L'enregistrement sera refusé.`,
+    facadeKindUsers: (list) => `Ces volets ont un gabarit d'un autre type de fenêtre : ${list}. Changer d'abord leur gabarit.`,
+    facadeDir: "Vers où regarde la fenêtre",
+    slopeAria: "Pente, en degrés",
+    slopeNotes: {
+      wall: "Une fenêtre droite ne voit que le ciel devant elle. Toit et À plat laissent aussi venir le soleil de derrière ; une fenêtre de toit se règle par la longueur de sa vitre au lieu des hauteurs, une fenêtre à plat par une position au soleil.",
+      roof: "Une fenêtre de toit voit aussi une partie du ciel derrière elle : le soleil touche la vitre dès qu'il est plus haut que la pente.",
+      flat: "Un puits de lumière à plat voit tout le ciel : le soleil le touche dès qu'il est levé, quelle que soit sa direction. L'azimut ne sert plus.",
+    },
+    slopeShort: (t) => (t >= 90 ? "" : t < 10 ? "à plat" : `toit ${t}°`),
     dirs: ["N", "NE", "E", "SE", "S", "SO", "O", "NO"],
     houseTitle: "La maison",
     houseSub: "enregistré élément par élément",
     globalTitle: "Réglages globaux",
     globalNote: "un seul enregistrement, en bas",
     addShort: "Ajouter",
-    tplMeta: (h, d) => `hauteur ${h} m · distance ${d} m`,
+    tplMeta: (kind, h, d) => (kind === "flat" ? "à plat" : `${kind === "roof" ? "toit · longueur" : "hauteur"} ${h} m · distance ${d} m`),
     sgTitle: "Héliotropie",
     sgSub: "Quand fait-il assez frais et beau pour laisser entrer le soleil ? Vaut pour tous les volets.",
     sgTemp: "Température",
@@ -758,7 +838,7 @@ const WORDS = {
       schedule_min_after_max: (k) => `Horaire « ${k} » : l'heure min est après l'heure max.`,
       schedule_floor_after_ceiling: (k) => `Horaire « ${k} » : le plancher n'est pas avant le plafond.`,
       return_mode_timed: (target, user) => `« ${target} » est le mode de retour de « ${user} » : il ne peut pas avoir de durée. Changez d'abord le retour de « ${user} ».`,
-      in_use: (n, count, covers) => `« ${n} » est encore utilisé par ${count} volet(s) : ${covers}`,
+      in_use: (n, count, covers) => `« ${n} » est encore utilisé par ${count} volet${Number(count) > 1 ? "s" : ""} : ${covers}`,
       entity_required: () => "Un volet doit désigner une entité.",
       cover_domain: (e) => `${e} n'est pas une entité du domaine cover.`,
       cover_exists: (e) => `Le volet ${e} figure déjà dans la liste.`,
@@ -774,6 +854,9 @@ const WORDS = {
       min_height_above_max: (e) => `${e} : la hauteur mini dépasse la maxi.`,
       min_elevation_above_max: (e) => `${e} : l'élévation mini dépasse la maxi.`,
       azimuth_invalid: (n) => `Azimut invalide pour « ${n} » (0 à 360°).`,
+      tilt_invalid: (n) => `Pente invalide pour « ${n} » (0 à 90°).`,
+      window_kind_invalid: (n) => `Type de fenêtre invalide pour « ${n} ».`,
+      window_kind_mismatch: (e, t, f) => `${e} : le gabarit « ${t} » et la façade « ${f} » ne sont pas du même type de fenêtre (mur, toit ou à plat).`,
       field_invalid: (f) => `Valeur illisible pour « ${f} ».`,
       interval_invalid: () => "L'intervalle doit être compris entre 0 et 5000 ms.",
       conditions_invalid: () => "Liste de conditions météo illisible.",
@@ -909,6 +992,103 @@ function behaviorBadge(behavior) {
   plate.title = T.legendBehavior[key];
   plate.append(icon(spec.icon));
   return plate;
+}
+
+/* ---------- orientation: one convention for every drawing ----------
+ * Azimuths are degrees from north, clockwise. On screen, angles are measured
+ * from straight up, clockwise, like a compass; every view puts the window at
+ * the bottom looking up (seen from inside), so "left" on screen is the left of
+ * someone looking out of the window. */
+const toRad = (deg) => (deg * Math.PI) / 180;
+const wrap360 = (deg) => ((deg % 360) + 360) % 360;
+const wrap180 = (deg) => wrap360(deg + 180) - 180;
+
+/** A facade's azimuth; 180 (south) when it has none, as the server assumes. */
+const facadeAzimuth = (facade) => Number(facade?.azimuth ?? 180);
+
+/* ---------- slopes: walls, roof windows, flat skylights ----------
+ * A facade's tilt is the glass's angle with the horizontal: 90 for a wall
+ * (and every facade saved without one), 30 for a window in a 30° roof, 0 for
+ * a flat skylight. The same rules as shade.py on the server. */
+const FLAT_TILT = 10;
+const facadeTilt = (facade) => Number(facade?.tilt ?? 90);
+/** "wall", "roof" or "flat": the three shapes the panel draws and words apart. */
+const tiltKind = (tilt) => (tilt >= 90 ? "wall" : tilt < FLAT_TILT ? "flat" : "roof");
+/** Where the heights stop: at the zenith on a wall or a flat window; on a roof,
+ *  down the far side to the roof itself. */
+/**
+ * Where to put the glass of a sloped profile, and how big its cone can be,
+ * so the drawing fills its 150 × 150 box. The cone is centred on the glass,
+ * opens over *ranges* of heights (0 in front, 90 the zenith, 180 behind) and
+ * keeps 8 around for its labels; the glass (*G* long, along *up*), its angle
+ * label on a roof and the horizon label under it keep their own size. The
+ * largest radius that fits wins, its cone centred in the room left.
+ */
+function profileFit(ranges, up, G, roof) {
+  const hs = ranges.flatMap(([a, b]) => {
+    const out = [a, b];
+    for (let h = Math.ceil(a / 10) * 10; h < b; h += 10) out.push(h);
+    return out;
+  });
+  const ux = hs.map((h) => Math.cos(toRad(h))), uy = hs.map((h) => -Math.sin(toRad(h)));
+  const ux0 = Math.min(0, ...ux), ux1 = Math.max(0, ...ux), uy0 = Math.min(0, ...uy);
+  const half = G / 2;
+  // The glass and its words, from the cone's centre.
+  const fixL = Math.min(up[0] * half, -up[0] * half) - (roof ? 41 : 0);
+  const fixR = Math.max(up[0] * half, -up[0] * half);
+  const fixB = -up[1] * half + 15;
+  for (let r = 115; r > 30; r -= 1) {
+    const xlo = Math.max(14 - r * ux0, 6 - fixL), xhi = Math.min(136 - r * ux1, 144 - fixR);
+    const ylo = 16 - r * uy0, yhi = 146 - fixB;
+    if (xlo <= xhi && ylo <= yhi) return [[(xlo + xhi) / 2, (ylo + yhi) / 2], r];
+  }
+  return [[75, 100], 30];
+}
+
+/** The window type a template is for; one saved before types existed is a wall's. */
+const templateKind = (tpl) => (["roof", "flat"].includes(tpl?.kind) ? tpl.kind : "wall");
+const heightLimit = (tilt) => (tiltKind(tilt) === "roof" ? 180 - tilt : 90);
+/** Whether a sun `off` degrees from the window's axis and `el` high is on the
+ *  outer side of the glass (the sign of the cosine of incidence). */
+const sunOnGlass = (off, el, tilt) =>
+  Math.sin(toRad(el)) * Math.cos(toRad(tilt)) + Math.cos(toRad(el)) * Math.sin(toRad(tilt)) * Math.cos(toRad(off)) >= -1e-9;
+
+/** The nearest of the eight directions to an azimuth, in the reader's language. */
+const dirName = (azimuth) => T.dirs[Math.round(wrap360(azimuth) / 45) % 8];
+
+/** The point at screen angle `deg`, distance `r` from (cx, cy). */
+const polar = (cx, cy, deg, r) => [cx + r * Math.sin(toRad(deg)), cy - r * Math.cos(toRad(deg))];
+
+/** Where a ray leaving (x0, y0) at screen angle `deg` meets the circle of radius
+ *  `r` around (cx, cy): how a sector drawn from a window's edges keeps a true arc. */
+function rayToCircle(x0, y0, cx, cy, deg, r) {
+  const dx = Math.sin(toRad(deg)), dy = -Math.cos(toRad(deg)), ox = x0 - cx, oy = y0 - cy;
+  const b = ox * dx + oy * dy;
+  const t = -b + Math.sqrt(b * b - (ox * ox + oy * oy - r * r));
+  return [x0 + t * dx, y0 + t * dy];
+}
+
+/** The sun seen from a window facing `azimuth`: its angle from the window's axis
+ *  (negative = to the left) and its height. Null while it is down or unknown. */
+function sunFromFacade(hass, azimuth) {
+  const sun = hass?.states?.["sun.sun"]?.attributes;
+  if (!sun || !(Number(sun.elevation) > 0)) return null;
+  return { off: wrap180(Number(sun.azimuth) - azimuth), el: Number(sun.elevation) };
+}
+
+/** The way a facade's windows look, on a map with north up: down for south.
+ *  A flat skylight looks nowhere in particular: a plain compass. */
+function facadeArrow(facade, cls = "round az") {
+  const badge = el("span", cls);
+  badge.title = T.facadeDir;
+  if (tiltKind(facadeTilt(facade)) === "flat") {
+    badge.append(icon("mdi:compass-outline"));
+    return badge;
+  }
+  const arrow = icon("mdi:arrow-up");
+  arrow.style.transform = `rotate(${facadeAzimuth(facade)}deg)`;
+  badge.append(arrow);
+  return badge;
 }
 
 /* ---------- error helper ---------- */
@@ -1537,6 +1717,10 @@ const STYLE = `
                  background: color-mix(in srgb, var(--secondary-text-color) 35%, transparent); }
   .dual .track i { position: absolute; top: 0; bottom: 0; border-radius: 2px; background: var(--primary-color); }
   .numf.ovr .dual .track i { background: var(--fp-warn); }
+  .dual .track .axis { position: absolute; top: -4px; width: 2px; height: 12px; margin-left: -1px;
+                       background: var(--secondary-text-color); }
+  .numf .ends { grid-column: 1 / -1; display: flex; justify-content: space-between;
+                font-size: 11px; color: var(--secondary-text-color); margin-top: 2px; }
   .dual input[type=range] { position: absolute; inset: 0; width: 100%; margin: 0; pointer-events: none;
                             -webkit-appearance: none; appearance: none; background: transparent; }
   .dual input[type=range]::-webkit-slider-runnable-track { background: transparent; }
@@ -1549,15 +1733,58 @@ const STYLE = `
   .numf.ovr .dual input[type=range]::-moz-range-thumb { background: var(--fp-warn); }
   .numf.sep-top { border-top: 1px solid var(--divider-color); margin-top: var(--fp-s1); }
   .sect.dim .sect-body { opacity: .5; }
-  .withfig { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: var(--fp-s4); align-items: start; }
-  .fig { background: var(--secondary-background-color); border-radius: 10px; padding: var(--fp-sh); }
-  .fig svg { display: block; width: 100%; height: auto; }
-  .fig text { font-size: 9px; font-family: inherit; }
+  .withfig { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: var(--fp-s4); align-items: start; }
+  /* Every sketch of the cover editor: a caption, then the drawing at the
+     width of its box and the height its proportions give, so it fills the box
+     on every screen. The top view and the profile are drawn 225 and 150 wide
+     for the 1.5 / 1 columns they sit in: the two come out the same height.
+     Labels get a halo of the background, to stay legible over a line. */
+  .fig { background: var(--secondary-background-color); border-radius: 10px; padding: var(--fp-sh) var(--fp-sh) var(--fp-s1); }
+  .fig .cap, .fig2 .cap { display: block; font-size: var(--f-10-5); letter-spacing: .05em; text-transform: uppercase;
+                          padding: 0 var(--fp-s1); color: var(--secondary-text-color); }
+  .fig svg, .fig2 svg { display: block; width: 100%; height: auto; margin: 0 auto; }
+  .fig svg { aspect-ratio: 170 / 152; }
+  .fig2 .figv:first-child svg { aspect-ratio: 225 / 150; }
+  .fig2 .figv:nth-child(2) svg { aspect-ratio: 1; }
+  .fig text { font-size: 8px; font-family: inherit; }
+  .fig text, .fig2 text { paint-order: stroke; stroke: var(--secondary-background-color); stroke-width: 2.5px;
+                          stroke-linejoin: round; }
 
+
+  /* The detection card: a top view and a profile side by side, a legend, then
+     one group per rule, each marked like its shape on the picture. */
+  .fig2 { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: var(--fp-s2);
+          color: var(--secondary-text-color); }
+  .fig2 .figv { background: var(--secondary-background-color); border-radius: 10px; padding: var(--fp-sh) var(--fp-sh) var(--fp-s1); }
+  .fig2 svg text { font-size: 7px; font-family: inherit; }
+  .flegend { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--fp-s1) var(--fp-s4); font-size: var(--f-12); }
+  .flegend span { display: inline-flex; align-items: center; gap: var(--fp-sh); }
+  .flegend span[hidden] { display: none; }
+  .lg-sun::before, .g-sun h4::before { content: ""; width: 18px; height: 10px; border-radius: 3px; flex: none;
+          background: color-mix(in srgb, var(--ce-b-shade) 30%, transparent); border: 1px dashed var(--ce-b-shade); }
+  .lg-shade::before, .g-shade h4::before { content: ""; width: 18px; height: 10px; border-radius: 3px; flex: none;
+          border: 2px dashed var(--primary-color); }
+  .lg-dot::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--ce-b-shade); }
+  .sgroup { margin-top: var(--fp-s3); border-top: 1px solid var(--divider-color); padding-top: var(--fp-s2); }
+  .sgroup h4 { display: flex; align-items: center; gap: var(--fp-s2); margin: 0 0 var(--fp-s1);
+               font-size: var(--f-13); font-weight: 600; }
+  /* A word placed under one value of a double slider (the zenith). */
+  .numf .ends { position: relative; }
+  .numf .ends .at { position: absolute; transform: translateX(-50%); }
+  /* Facade slope: a cross-section beside its controls. */
+  .slope { display: grid; grid-template-columns: 240px minmax(0, 520px); gap: 28px; align-items: center; }
+  .slope-sketch { display: block; width: 100%; height: auto; aspect-ratio: 220 / 120;
+                  background: var(--secondary-background-color); border-radius: 10px; }
+  .slope .azrow input[type=range] { flex: 1; min-width: 120px; accent-color: var(--primary-color); }
+  .slope .azrow[hidden] { display: none; }
   /* Facade compass. */
   .orient { display: grid; grid-template-columns: 240px 1fr; gap: 28px; align-items: center; }
   .compass { width: 240px; height: 240px; touch-action: none; cursor: grab; user-select: none; }
   .compass text { font-size: 13px; font-weight: 600; }
+  .dial { display: grid; justify-items: center; gap: var(--fp-s1); }
+  .compass-sides { display: flex; justify-content: space-between; width: 240px; max-width: 100%;
+                   font-size: var(--f-12-5); color: var(--secondary-text-color); }
+  .compass-sides b { color: var(--primary-text-color); }
   .azrow { display: flex; align-items: center; gap: var(--fp-s2); flex-wrap: wrap; font-size: var(--f-13);
            color: var(--secondary-text-color); }
   .azrow input { width: 84px; height: 40px; text-align: right; font: inherit; font-size: var(--f-17); font-weight: 600;
@@ -1590,6 +1817,9 @@ const STYLE = `
            background: var(--secondary-background-color); border: 1px solid var(--divider-color); color: var(--secondary-text-color); }
   .round ha-icon { --mdc-icon-size: 20px; width: 20px; height: 20px; }
   .round.az { color: var(--primary-color); }
+  .narrow { display: inline-flex; width: 14px; height: 14px; align-items: center; justify-content: center;
+            color: inherit; flex: none; vertical-align: -2px; margin: 0 2px; }
+  .narrow ha-icon { --mdc-icon-size: 13px; width: 13px; height: 13px; }
   .sline { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: var(--fp-s3); align-items: center; padding: var(--fp-sh) 0; }
   .sline > .k { font-size: var(--f-12-5); color: var(--secondary-text-color); }
   .sline ha-selector { margin: 0; }
@@ -1598,6 +1828,8 @@ const STYLE = `
   .verdict { grid-column: 2; justify-self: start; }
   .thr { display: flex; align-items: center; gap: var(--fp-s3); flex-wrap: wrap; }
   .seg.thr-seg { margin: 0; flex: none; }
+  .seg.kind-seg { margin: 0; flex: none; }
+  .seg.kind-seg button { flex: none; padding: 0 var(--fp-s4); }
   .seg.thr-seg button { flex: none; padding: 0 var(--fp-s3); }
   .thr-body { flex: 1 1 220px; display: flex; align-items: center; gap: var(--fp-sh); min-width: 0; }
   .thr-body ha-selector { flex: 1; margin: 0; }
@@ -1653,6 +1885,7 @@ const STYLE = `
   .ed-cols.own-only .numf.inh, .ed-cols.own-only .sect.no-own, .ed-cols.own-only .fig { display: none; }
   .ed-cols.own-only .withfig { grid-template-columns: minmax(0, 1fr); }
   .ed-note[hidden] { display: none; }
+  .ed-note.warn, .ed-note.warn ha-icon { color: var(--fp-warn); }
 
 
   /* ---------- schedules, 4.0 layout ---------- */
@@ -1714,9 +1947,10 @@ const STYLE = `
     .set-cols { grid-template-columns: minmax(0, 1fr); }
   }
   @media (max-width: 720px) {
-    /* Five tabs are wider than a phone: they scroll instead of pushing the page. */
-    .tabs { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
-    .tab { flex: none; }
+    /* The tabs take their own full row and share it; on the narrowest phones
+       they scroll rather than push the page, the current one kept in view. */
+    .tabs { flex: 1 1 100%; margin-left: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+    .tab { flex: 1 0 auto; padding: 0 var(--fp-s2); }
     /* The plate keeps the name beside it; everything else takes a full row. */
     .ed-ident, .ed-ident.three { grid-template-columns: auto minmax(0, 1fr); }
     .ed-ident > :not(.ed-plate):not(.wide) { grid-column: 1 / -1; }
@@ -1725,8 +1959,13 @@ const STYLE = `
     .ed-input.small { width: 100%; }
     .ed-cols, .prot { grid-template-columns: minmax(0, 1fr); }
     .withfig { grid-template-columns: minmax(0, 1fr); }
-    .fig { max-width: 220px; }
+    .fig2 { grid-template-columns: minmax(0, 1fr); }
+    /* One under the other, the square profile and the cross-section would
+       fill a whole screen: they keep a sketch's size. */
+    .fig svg { max-width: 300px; }
+    .fig2 .figv:nth-child(2) svg { max-width: 260px; }
     .orient { grid-template-columns: 1fr; justify-items: center; }
+    .slope { grid-template-columns: 1fr; }
     .sline { grid-template-columns: minmax(0, 1fr); gap: var(--fp-s1); }
     .verdict { grid-column: 1; }
     .opt-more { margin-left: 0; }
@@ -1988,6 +2227,10 @@ class CoverExtenderPanel extends HTMLElement {
     }
     bar.append(tabs);
     wrap.append(bar);
+    requestAnimationFrame(() => {
+      const on = tabs.querySelector('[aria-selected="true"]');
+      if (on && tabs.scrollWidth > tabs.clientWidth) tabs.scrollLeft = on.offsetLeft - tabs.offsetLeft - (tabs.clientWidth - on.offsetWidth) / 2;
+    });
 
     if (this._state === "loading") {
       wrap.append(el("div", "center", T.loading));
@@ -2625,6 +2868,13 @@ class CoverExtenderPanel extends HTMLElement {
     return p;
   }
 
+  /** A note that something will not save as it stands. */
+  _warnNote(text) {
+    const p = el("p", "ed-note warn");
+    p.append(icon("mdi:alert-outline"), el("span", "", text));
+    return p;
+  }
+
   /** The delete button, and why it is off when it is: said, not hidden in a tooltip. */
   _deleteButton(used, reason, onDelete) {
     const out = [];
@@ -2670,6 +2920,52 @@ class CoverExtenderPanel extends HTMLElement {
     return bar;
   }
 
+  /** The cover's facade. Changing it redraws the editor, whose sketches and
+   *  angle hints depend on it. */
+  _facadeField(draft, rerender) {
+    const sel = this._edSelect(draft.facade,
+      this._cfg.facades.map((f) => [f.name,
+        [f.name, `${facadeAzimuth(f)}°`, T.slopeShort(facadeTilt(f))].filter(Boolean).join(" · ")]),
+      (v) => { draft.facade = v; rerender(); });
+    return this._labeled(T.facade, sel);
+  }
+
+  /** The cover's template. Only those made for its facade's type of window can
+   *  be picked; the others show theirs, greyed out. */
+  _templateField(draft, rerender) {
+    const facKind = tiltKind(facadeTilt(this._cfg.facades.find((f) => f.name === draft.facade)));
+    const sel = this._edSelect(draft.template,
+      [[null, T.noTemplateOpt], ...this._cfg.templates.map((t) => [t.name,
+        templateKind(t) === facKind ? t.name : `${t.name} (${T.slopeKinds[templateKind(t)].toLowerCase()})`])],
+      (v) => { draft.template = v; rerender(); });
+    // Options follow the list above, after "no template".
+    this._cfg.templates.forEach((t, i) => {
+      sel.options[i + 1].disabled = templateKind(t) !== facKind && t.name !== draft.template;
+    });
+    return this._labeled(T.templateTitle, sel);
+  }
+
+  /**
+   * The slope the behavior editor works with. A cover has its facade's: a
+   * wall stops the angles at 90° and the heights at the zenith, a roof opens
+   * the angles to 180° and the heights down to the roof. A template has its
+   * own window type; a roof's is drawn on the flattest roof of the house,
+   * whose heights reach the furthest (30° when the house has none).
+   */
+  _slope(draft) {
+    const geo = (tilt, template, refFromHouse = false) => {
+      const kind = tiltKind(tilt);
+      return { tilt, kind, angleMax: kind === "wall" ? 90 : 180, heightMax: heightLimit(tilt), template, refFromHouse };
+    };
+    if (this._edit?.section !== "template") {
+      return geo(facadeTilt(this._cfg.facades.find((f) => f.name === draft.facade)), false);
+    }
+    const kind = templateKind(draft);
+    if (kind !== "roof") return geo(kind === "wall" ? 90 : 0, true);
+    const roofs = this._cfg.facades.map(facadeTilt).filter((t) => tiltKind(t) === "roof");
+    return roofs.length ? geo(Math.min(...roofs), true, true) : geo(30, true);
+  }
+
   /** Entities as chips with their live state, and one picker to add another. */
   _entityChips(list, onChange) {
     const box = el("div");
@@ -2708,7 +3004,7 @@ class CoverExtenderPanel extends HTMLElement {
    * (also marked on the slider) and offers the way back.
    * `tplName` is the template's name, or null when there is none to inherit.
    */
-  _behaviorRow(name, spec, draft, baseline, tplName, onValue) {
+  _behaviorRow(name, spec, draft, baseline, tplName, onValue, hintText, labelText) {
     const has = (k) => Object.prototype.hasOwnProperty.call(draft, k);
     const num = new Intl.NumberFormat(LANG, { maximumFractionDigits: 2 });
     const fmt = (v) => `${num.format(v)}${spec.unit ? ` ${spec.unit}` : ""}`;
@@ -2716,8 +3012,9 @@ class CoverExtenderPanel extends HTMLElement {
     const clamp = (n) => Math.min(spec.max, Math.max(spec.min, n));
     const row = el("div", "numf");
     const t = el("div", "t");
-    t.append(el("span", "", T.fields[name] || name));
-    const hint = el("div", "h", T.fieldHints?.[name] || "");
+    const label = labelText || T.fields[name] || name;
+    t.append(el("span", "", label));
+    const hint = el("div", "h", hintText || T.fieldHints?.[name] || "");
     row.append(t, hint);
 
     const box = document.createElement("input");
@@ -2725,7 +3022,7 @@ class CoverExtenderPanel extends HTMLElement {
     box.min = String(spec.min);
     box.max = String(spec.max);
     box.step = String(spec.step || 1);
-    box.setAttribute("aria-label", T.fields[name] || name);
+    box.setAttribute("aria-label", label);
     const val = el("div", "val");
     const lnk = icon("mdi:link-variant", "lnk");
     if (tplName) val.append(lnk);
@@ -2795,15 +3092,58 @@ class CoverExtenderPanel extends HTMLElement {
     return row;
   }
 
-  /** Minimum and maximum sun elevation: one range, two thumbs, two boxes. */
+  /**
+   * Minimum and maximum sun height: one range, two thumbs, two boxes. Past a
+   * wall's 90° the range goes on over the zenith, down the far side of a roof
+   * (see shade.sun_height): the zenith is marked on the track.
+   */
   _elevationRow(lo, hi, specs, draft, baseline, tplName, onValue) {
+    const over = specs[hi].max > 90;
+    const v = (k) => Math.min(specs[k].max, baseline[k]);
+    return this._dualRow(lo, hi, specs, draft, baseline, tplName, onValue, {
+      title: T.elevationRange, hint: over ? T.elevationHintRoof : T.elevationHint, sep: T.rangeTo,
+      tpl: `${v(lo)} ${T.rangeTo} ${v(hi)} ${specs[lo].unit}`,
+      ...(over ? { axisAt: 90, ends: [T.elevEnds[0], { text: T.elevEnds[1], at: 90 }, T.elevEnds[2]] } : {}),
+    });
+  }
+
+  /**
+   * The angles to the left and to the right: one track centred on the window's
+   * axis, as seen from inside looking out. The left thumb moves over the left
+   * half, the right one over the right half, and the fill between them is the
+   * sector.
+   */
+  _sectorRow(lo, hi, specs, draft, baseline, tplName, onValue) {
+    const u = specs[lo].unit;
+    const v = (k) => Math.min(specs[k].max, baseline[k]);
+    return this._dualRow(lo, hi, specs, draft, baseline, tplName, onValue, {
+      title: T.sectorRange, hint: T.sectorHint, sep: u, sector: true,
+      tpl: `${v(lo)} ${u} | ${v(hi)} ${u}`,
+      ends: T.sectorEnds,
+    });
+  }
+
+  /**
+   * Two numbers on one track, two thumbs, two boxes. A range (`sector` false)
+   * keeps lo <= hi. A sector puts lo to the left of a middle axis, counted
+   * outwards, and hi to its right. A value stored past what this window allows
+   * (a roof's 180° on a wall) is shown at the limit and kept until edited.
+   */
+  _dualRow(lo, hi, specs, draft, baseline, tplName, onValue, o) {
     const has = (k) => Object.prototype.hasOwnProperty.call(draft, k);
-    const cur = (k) => (has(k) ? draft[k] : baseline[k]);
+    const cur = (k) => Math.min(specs[k].max, has(k) ? draft[k] : baseline[k]);
     const spec = specs[lo];
+    const mid = o.sector ? specs[lo].max : 0;
+    const tMin = o.sector ? 0 : spec.min;
+    const tMax = o.sector ? specs[lo].max + specs[hi].max : spec.max;
+    // Value <-> place on the track.
+    const toPos = (k, v) => (!o.sector ? v : k === lo ? mid - v : mid + v);
+    const fromPos = (k, p) => (!o.sector ? p : k === lo ? mid - p : p - mid);
+    const clampK = (k, n) => Math.min(specs[k].max, Math.max(specs[k].min, n));
     const row = el("div", "numf");
     const t = el("div", "t");
-    t.append(el("span", "", T.elevationRange));
-    const hint = el("div", "h", T.elevationHint);
+    t.append(el("span", "", o.title));
+    const hint = el("div", "h", o.hint);
     row.append(t, hint);
     let reset = null;
     if (tplName) {
@@ -2812,7 +3152,7 @@ class CoverExtenderPanel extends HTMLElement {
       reset.title = T.revertTitle;
       reset.append(icon("mdi:link-variant"), document.createTextNode(T.backToTpl));
       t.append(reset);
-      hint.append(el("span", "from", ` ${T.fromTemplate(`${baseline[lo]} ${T.rangeTo} ${baseline[hi]} ${spec.unit}`)}`));
+      hint.append(el("span", "from", ` ${T.fromTemplate(o.tpl)}`));
     }
 
     const mkBox = (k) => {
@@ -2828,20 +3168,26 @@ class CoverExtenderPanel extends HTMLElement {
     const val = el("div", "val");
     const lnk = icon("mdi:link-variant", "lnk");
     if (tplName) val.append(lnk);
-    val.append(boxes[lo], el("span", "u", T.rangeTo), boxes[hi], el("span", "u", spec.unit || ""));
+    val.append(boxes[lo], el("span", "u", o.sep), boxes[hi], el("span", "u", spec.unit || ""));
     row.append(val);
 
     const dual = el("div", "dual");
     const track = el("div", "track");
     const fill = el("i");
     track.append(fill);
+    const axisAt = o.sector ? mid : o.axisAt;
+    if (axisAt != null) {
+      const axis = el("b", "axis");
+      axis.style.left = `${((axisAt - tMin) / ((tMax - tMin) || 1)) * 100}%`;
+      track.append(axis);
+    }
     dual.append(track);
     const ranges = {};
     for (const k of [lo, hi]) {
       const r = document.createElement("input");
       r.type = "range";
-      r.min = String(specs[k].min);
-      r.max = String(specs[k].max);
+      r.min = String(tMin);
+      r.max = String(tMax);
       r.step = String(specs[k].step || 1);
       r.tabIndex = -1;
       r.setAttribute("aria-hidden", "true");
@@ -2849,12 +3195,24 @@ class CoverExtenderPanel extends HTMLElement {
       dual.append(r);
     }
     row.append(dual);
+    if (o.ends) {
+      // A word with `at` sits under that value (the zenith), the others spread.
+      const ends = el("div", "ends");
+      for (const w of o.ends) {
+        if (typeof w === "string") { ends.append(el("span", "", w)); continue; }
+        const at = el("span", "at", w.text);
+        at.style.left = `${((w.at - tMin) / ((tMax - tMin) || 1)) * 100}%`;
+        ends.append(at);
+      }
+      row.append(ends);
+    }
 
     const paint = () => {
-      for (const k of [lo, hi]) { boxes[k].value = String(cur(k)); ranges[k].value = String(cur(k)); }
-      const span = spec.max - spec.min || 1;
-      fill.style.left = `${((cur(lo) - spec.min) / span) * 100}%`;
-      fill.style.width = `${((cur(hi) - cur(lo)) / span) * 100}%`;
+      for (const k of [lo, hi]) { boxes[k].value = String(cur(k)); ranges[k].value = String(toPos(k, cur(k))); }
+      const span = tMax - tMin || 1;
+      const a = toPos(lo, cur(lo)), b = toPos(hi, cur(hi));
+      fill.style.left = `${((Math.min(a, b) - tMin) / span) * 100}%`;
+      fill.style.width = `${(Math.abs(b - a) / span) * 100}%`;
     };
     const mark = () => {
       if (!tplName) return;
@@ -2865,18 +3223,20 @@ class CoverExtenderPanel extends HTMLElement {
       lnk.setAttribute("icon", on ? "mdi:pencil" : "mdi:link-variant");
       for (const k of [lo, hi]) boxes[k].title = on ? "" : T.inheritedTitle(tplName);
     };
-    // The two thumbs never cross: each one stops at the other.
+    // A range's thumbs never cross: each one stops at the other. A sector's
+    // stop at the axis, each on its own side.
     const set = (k, n) => {
-      draft[k] = k === lo ? Math.min(n, cur(hi)) : Math.max(n, cur(lo));
+      n = clampK(k, n);
+      draft[k] = o.sector ? n : k === lo ? Math.min(n, cur(hi)) : Math.max(n, cur(lo));
       paint();
       mark();
       onValue?.();
     };
     for (const k of [lo, hi]) {
-      ranges[k].addEventListener("input", () => set(k, Math.round(Number(ranges[k].value))));
+      ranges[k].addEventListener("input", () => set(k, fromPos(k, Math.round(Number(ranges[k].value)))));
       boxes[k].addEventListener("input", () => {
         if (boxes[k].value === "" || !Number.isFinite(Number(boxes[k].value))) return;
-        set(k, Math.min(specs[k].max, Math.max(specs[k].min, Math.round(Number(boxes[k].value)))));
+        set(k, Math.round(Number(boxes[k].value)));
       });
       boxes[k].addEventListener("change", paint);
     }
@@ -2892,11 +3252,12 @@ class CoverExtenderPanel extends HTMLElement {
    * just enough for a sun 40° high to light the floor up to the distance. The
    * scale shrinks to keep a tall window or a long distance inside the sketch.
    */
-  _figGeometry(draft, baseline) {
+  _figGeometry(draft, baseline, geo) {
+    if (geo?.kind === "roof") return this._figGeometrySloped(draft, baseline, geo.tilt);
     const F = T.fig;
     const box = el("div", "fig");
     box.style.color = "var(--secondary-text-color)";
-    box.innerHTML = `<svg viewBox="0 0 170 152" aria-hidden="true">
+    box.innerHTML = `<span class="cap"></span><svg viewBox="0 0 170 152" aria-hidden="true">
       <rect class="wall" x="52" y="4" width="8" fill="currentColor" fill-opacity=".25"/>
       <rect class="glass" x="52" width="8" fill="var(--card-background-color)" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="2 2"/>
       <rect class="cover" x="52" width="8" fill="var(--primary-color)" opacity=".85"/>
@@ -2916,6 +3277,7 @@ class CoverExtenderPanel extends HTMLElement {
       <text x="4" y="122" fill="currentColor" fill-opacity=".6"></text>
     </svg>`;
     const $ = (sel) => box.querySelector(sel);
+    $(".cap").textContent = F.section;
     const texts = box.querySelectorAll("text");
     // Words go in as text, never as markup.
     texts[3].textContent = F.room;
@@ -2923,7 +3285,7 @@ class CoverExtenderPanel extends HTMLElement {
     const set = (sel, attrs) => { for (const [k, v] of Object.entries(attrs)) $(sel).setAttribute(k, String(Math.round(v * 10) / 10)); };
     const num = new Intl.NumberFormat(LANG, { maximumFractionDigits: 2 });
     const cur = (k) => Number(Object.prototype.hasOwnProperty.call(draft, k) ? draft[k] : baseline[k]);
-    const FLOOR = 128, WALL = 52, IN = 60, TAN = Math.tan((40 * Math.PI) / 180);
+    const FLOOR = 128, WALL = 52, IN = 60, TAN = Math.tan(toRad(40));
 
     box.redraw = () => {
       const d = Math.max(0, cur("shade_distance"));
@@ -2968,35 +3330,295 @@ class CoverExtenderPanel extends HTMLElement {
     return box;
   }
 
-  /** The window seen from inside: the wedge of sky the two angles open. */
-  _figDetection(draft, baseline) {
+
+  /**
+   * The same cross-section for a window in a roof: the glass along the slope,
+   * the cover come down from its top just enough for a sun 40° high in front
+   * to light the room up to the distance, measured at the level of the glass's
+   * lower edge, as shade.py does.
+   */
+  _figGeometrySloped(draft, baseline, tilt) {
     const F = T.fig;
     const box = el("div", "fig");
     box.style.color = "var(--secondary-text-color)";
-    box.innerHTML = `<svg viewBox="0 0 170 150" aria-hidden="true">
-      <path class="wedge" fill="var(--ce-b-shade)" fill-opacity=".16" stroke="var(--ce-b-shade)" stroke-dasharray="3 2"/>
-      <rect x="25" y="128" width="120" height="14" fill="currentColor" fill-opacity=".25"/>
-      <rect x="66" y="125" width="38" height="5" fill="var(--primary-color)"/>
-      <line x1="85" y1="122" x2="85" y2="92" stroke="var(--primary-text-color)" stroke-width="1.5"/>
-      <path d="M80 98 L85 89 L90 98" fill="none" stroke="var(--primary-text-color)" stroke-width="1.5"/>
-      <circle cx="122" cy="40" r="6" fill="var(--ce-b-shade)"/>
-      <text x="6" y="118" fill="var(--ce-b-shade)"></text>
-      <text x="164" y="118" fill="var(--ce-b-shade)" text-anchor="end"></text>
-      <text x="85" y="150" fill="currentColor" text-anchor="middle"></text>
-    </svg>`;
-    const texts = box.querySelectorAll("text");
-    const wedge = box.querySelector(".wedge");
-    const cur = (k) => (Object.prototype.hasOwnProperty.call(draft, k) ? draft[k] : baseline[k]);
-    const R = 110, cx = 85, cy = 125;
-    box.redraw = () => {
-      const l = (Number(cur("angle_left")) * Math.PI) / 180;
-      const r = (Number(cur("angle_right")) * Math.PI) / 180;
-      const p = (a, s) => `${(cx + s * R * Math.sin(a)).toFixed(1)} ${(cy - R * Math.cos(a)).toFixed(1)}`;
-      wedge.setAttribute("d", `M${cx} ${cy} L${p(l, -1)} A${R} ${R} 0 0 1 ${p(r, 1)} Z`);
-      texts[0].textContent = `${F.left} ${cur("angle_left")}°`;
-      texts[1].textContent = `${F.right} ${cur("angle_right")}°`;
+    box.append(el("span", "cap", F.section));
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 170 152");
+    svg.setAttribute("aria-hidden", "true");
+    box.append(svg);
+    // Words go in as text, never as markup.
+    const mk = (tag, attrs, text) => {
+      const n = document.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, typeof v === "number" ? String(Math.round(v * 10) / 10) : v);
+      if (text != null) n.textContent = text;
+      svg.append(n);
+      return n;
     };
-    texts[2].textContent = F.view;
+    const num = new Intl.NumberFormat(LANG, { maximumFractionDigits: 2 });
+    const cur = (k) => Number(Object.prototype.hasOwnProperty.call(draft, k) ? draft[k] : baseline[k]);
+    const A = toRad(40), B = toRad(tilt);
+    const cosI = Math.sin(A) * Math.cos(B) + Math.cos(A) * Math.sin(B);
+    const dir = [Math.cos(B), -Math.sin(B)];  // along the glass, up towards the room
+    const u = [Math.cos(A), Math.sin(A)];      // the ray, going down into the room
+    // The drawing's room: "outside" takes the top-left corner, "room" the bottom-right.
+    const X0 = 4, X1 = 166, Y0 = 16, Y1 = 140;
+
+    box.redraw = () => {
+      svg.replaceChildren();
+      const d = Math.max(0, cur("shade_distance"));
+      const hi = Math.max(0, cur("shade_max_height"));
+      const lo = Math.min(Math.max(0, cur("shade_min_height")), hi);
+      // Open length along the glass, held between closed and open like the real computation.
+      const open = Math.min(hi, Math.max(lo, (d * Math.sin(A)) / cosI));
+      const dLabel = `${F.distance} ${num.format(d)} m`, lLabel = `${F.length} ${num.format(hi)} m`;
+      const width = (str) => str.length * 4.1;
+      // Everything laid out around the glass's lower edge, where the patch is
+      // measured, at k pixels per metre; the sun and the words keep their size.
+      const layout = (k) => {
+        const at = (m) => [dir[0] * m * k, dir[1] * m * k];
+        const E = at(open), top = at(hi), bottom = at(lo);
+        const r0 = [-dir[0] * 26, -dir[1] * 26], r1 = [top[0] + dir[0] * 22, top[1] + dir[1] * 22];
+        const land = [E[0] - (u[0] * E[1]) / u[1], 0];
+        const sun = [E[0] - u[0] * 46, E[1] - u[1] * 46];
+        const end = d * k, mid = end / 2;
+        // The length sits above the glass's top, over the outside, ending there.
+        const lab = [top[0] - 4, top[1] - 8];
+        const xs = [r0[0] - 4, r1[0] + 4, sun[0] - 8, end, land[0], mid - width(dLabel) / 2, mid + width(dLabel) / 2, lab[0] - width(lLabel)];
+        const ys = [r0[1] + 4, r1[1] - 4, sun[1] - 8, 26, lab[1] - 8];
+        return { E, top, bottom, r0, r1, land, sun, end, lab, x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+      };
+      let k = Math.min(110, 100 / Math.max(hi * Math.sin(B), 0.1), 130 / Math.max(hi * Math.cos(B) + d, 0.3));
+      let L = layout(k);
+      for (let i = 0; i < 30 && (L.x1 - L.x0 > X1 - X0 || L.y1 - L.y0 > Y1 - Y0); i++) L = layout(k *= 0.92);
+      // Centred in the room left by the two corner words.
+      const tx = (X0 + X1 - L.x0 - L.x1) / 2, ty = (Y0 + Y1 - L.y0 - L.y1) / 2;
+      const g = mk("g", { transform: `translate(${tx.toFixed(1)} ${ty.toFixed(1)})` });
+      const add = (tag, attrs, text) => g.append(mk(tag, attrs, text));
+      const { E, top, bottom, r0, r1, land, sun, end, lab } = L;
+      add("line", { x1: r0[0], y1: r0[1], x2: r1[0], y2: r1[1], stroke: "currentColor", "stroke-opacity": ".25", "stroke-width": 8 });
+      add("line", { x1: bottom[0], y1: bottom[1], x2: top[0], y2: top[1], stroke: "var(--card-background-color)", "stroke-width": 4 });
+      if (open < hi) add("line", { x1: E[0], y1: E[1], x2: top[0], y2: top[1], stroke: "var(--primary-color)", "stroke-width": 5, opacity: ".85" });
+      add("line", { x1: 0, y1: 0, x2: 168 - tx, y2: 0, stroke: "currentColor", "stroke-opacity": ".45", "stroke-dasharray": "3 3" });
+      // The ray, in from the sun through the cover's edge, down to that level.
+      add("line", { x1: sun[0], y1: sun[1], x2: E[0], y2: E[1], stroke: "var(--ce-b-shade)", "stroke-width": 1.5 });
+      add("line", { x1: E[0], y1: E[1], x2: land[0], y2: land[1], stroke: "var(--ce-b-shade)", "stroke-width": 1.5, "stroke-dasharray": "4 2" });
+      add("circle", { cx: sun[0], cy: sun[1], r: 7, fill: "var(--ce-b-shade)" });
+      for (const x of [0, end]) add("line", { x1: x, y1: 5, x2: x, y2: 13, stroke: "var(--fp-warn)", "stroke-width": 1.5 });
+      add("line", { x1: 0, y1: 9, x2: end, y2: 9, stroke: "var(--fp-warn)", "stroke-width": 1.5 });
+      add("text", { x: end / 2, y: 23, fill: "var(--fp-warn)", "text-anchor": "middle" }, dLabel);
+      // The slope, and the glass's length along it.
+      const r = 15;
+      add("path", { d: `M${r} 0 A${r} ${r} 0 0 0 ${(dir[0] * r).toFixed(1)} ${(dir[1] * r).toFixed(1)}`,
+        fill: "none", stroke: "currentColor", "stroke-opacity": ".6" });
+      add("text", { x: r + 3, y: -2, fill: "currentColor" }, `${tilt}°`);
+      add("text", { x: lab[0], y: lab[1], fill: "currentColor", "text-anchor": "end" }, lLabel);
+      mk("text", { x: 4, y: 10, fill: "currentColor", "fill-opacity": ".6" }, F.outside);
+      mk("text", { x: 166, y: 148, fill: "currentColor", "fill-opacity": ".6", "text-anchor": "end" }, F.room);
+    };
+    box.redraw();
+    return box;
+  }
+
+  /**
+   * Where the sun must be for this cover, in two views. Seen from above, with
+   * the window at the bottom looking out: the sector of the two angles, the one
+   * solar gain, the "sun facing" sensor and shading all use, starting at the
+   * window's edges. Behind a wall nothing gets through; behind a roof, a sun
+   * higher than the slope does; a flat window sees the whole sky. In profile:
+   * the heights shading works between, one cone from the bottom edge (lowest)
+   * to the top edge (highest), over the zenith on a roof. The sun is drawn
+   * where it is now (sun.sun), relative to the cover's facade, when the cover
+   * has one and the sun is up; faded when it does not reach the glass.
+   */
+  _figDetection(draft, baseline, geo) {
+    const F = T.fig;
+    const cur = (k) => Number(Object.prototype.hasOwnProperty.call(draft, k) ? draft[k] : baseline[k]);
+    const f1 = (n) => n.toFixed(1);
+    const { kind, tilt } = geo;
+    const box = el("div", "fig2");
+    const view = (caption, viewBox) => {
+      const v = el("div", "figv");
+      v.append(el("span", "cap", caption));
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", viewBox);
+      svg.setAttribute("aria-hidden", "true");
+      v.append(svg);
+      box.append(v);
+      return svg;
+    };
+    // The top view is drawn 220 wide and shown 225, to match its column.
+    const topSvg = view(F.top, "-2.5 0 225 150");
+    const sideSvg = view(F.side, "0 0 150 150");
+    const legend = el("div", "flegend");
+    legend.append(
+      el("span", "lg-sun", F.sectorSun),
+      el("span", "lg-shade", F.sectorShade));
+    const sunNow = el("span", "lg-dot", F.sunNow);
+    legend.append(sunNow);
+    box.append(legend);
+
+    // The sun right now, seen from this cover's window; a template has no
+    // facade, so no sun and no north.
+    const facade = this._cfg.facades.find((f) => f.name === draft.facade);
+    const az = facade ? facadeAzimuth(facade) : null;
+    const now = facade ? sunFromFacade(this._hass, az) : null;
+    sunNow.hidden = !now;
+
+    // Top view: window from wl to wr at y = cy; each limit leaves its own edge
+    // and stops on the circle of radius R around the window's centre. Only a
+    // roof whose sector goes past its sides needs room below the window: it
+    // then sits higher, on a smaller circle, so the sky behind fits too.
+    const cx = 110, wl = 92, wr = 128;
+    let cy = 118, R = 92;
+    const reach = (x, deg, r) => rayToCircle(x, cy, cx, cy, deg, r);
+    const sector = (a1, a2, r) => {
+      const [x1, y1] = reach(wl, a1, r), [x2, y2] = reach(wr, a2, r);
+      return `M${wl} ${cy} L${f1(x1)} ${f1(y1)} A${r} ${r} 0 ${a2 - a1 > 180 ? 1 : 0} 1 ${f1(x2)} ${f1(y2)} L${wr} ${cy} Z`;
+    };
+    const text = (x, y, s, color, anchor = "middle") =>
+      `<text x="${f1(x)}" y="${f1(y)}" fill="${color}" text-anchor="${anchor}">${s}</text>`;
+    const dot = (x, y, on) =>
+      `<circle cx="${f1(x)}" cy="${f1(y)}" r="7" fill="var(--ce-b-shade)" ${on ? "" : 'fill-opacity=".45"'} stroke="var(--card-background-color)" stroke-width="2"/>`;
+    const SHADE = 'fill="var(--ce-b-shade)" fill-opacity=".22" stroke="var(--ce-b-shade)" stroke-dasharray="3 3"';
+    const CONE = 'fill="none" stroke="var(--primary-color)" stroke-width="1.6" stroke-dasharray="5 3"';
+    // Profile of a wall: the window on the left, looking right; heights above
+    // the horizon. The window spans wt..wb above the horizon at y = py; like
+    // the top view, the lowest height leaves the bottom edge, the highest the top edge.
+    const px = 18, py = 132, pr = 98, wt = py - 40, wb = py - 8, wc = (wt + wb) / 2;
+    const pp = (height, r) => polar(px, wc, 90 - height, r);
+    const fromEdge = (y, height, r) => rayToCircle(px, y, px, wc, 90 - height, r);
+
+    const topView = (left, right, lit) => {
+      // How far the sector reaches below the window, at most R; the caption
+      // under the window needs 24. The whole is centred in the height.
+      const below = kind === "roof" ? Math.sin(toRad(Math.min(90, Math.max(0, Math.max(left, right) - 90)))) : 0;
+      R = Math.min(92, 130 / (1 + below));
+      cy = (150 + R - Math.max(R * below, 24)) / 2;
+      let s = "";
+      if (kind === "flat") {
+        // No front, no back: the sector, if the angles cut one, leaves the window's centre.
+        const c = [110, 72], r = 64;
+        s += left + right >= 360
+          ? `<circle cx="${c[0]}" cy="${c[1]}" r="${r}" ${SHADE}/>`
+          : (() => {
+            const [ax, ay] = polar(c[0], c[1], -left, r), [bx, by] = polar(c[0], c[1], right, r);
+            return `<path d="M${c[0]} ${c[1]} L${f1(ax)} ${f1(ay)} A${r} ${r} 0 ${left + right > 180 ? 1 : 0} 1 ${f1(bx)} ${f1(by)} Z" ${SHADE}/>`;
+          })();
+        s += `<rect x="${c[0] - 9}" y="${c[1] - 9}" width="18" height="18" rx="2" fill="var(--primary-color)"/>`;
+        s += text(110, 146, F.wholeSky, "var(--secondary-text-color)");
+        if (now) {
+          const [sx, sy] = polar(c[0], c[1], now.off, 12 + (r - 12) * Math.cos(toRad(now.el)));
+          s += `<line x1="${c[0]}" y1="${c[1]}" x2="${f1(sx)}" y2="${f1(sy)}" stroke="var(--ce-b-shade)" stroke-dasharray="2 3"/>` + dot(sx, sy, lit);
+        }
+        return s;
+      }
+      // Unmasked on both sides, the sector is the whole circle.
+      s += left >= 180 && right >= 180
+        ? `<circle cx="${cx}" cy="${cy}" r="${R}" ${SHADE}/>`
+        : `<path d="${sector(-left, right, R)}" ${SHADE}/>`;
+      // Behind a wall nothing; behind a roof, only a sun above it.
+      s += `<rect x="-2.5" y="${cy}" width="225" height="${150 - cy}" fill="var(--card-background-color)" fill-opacity="${kind === "wall" ? ".55" : ".3"}"/>`;
+      s += text(cx, Math.min(146, cy + 20), kind === "wall" ? F.behindWall : F.behindRoof, "var(--secondary-text-color)");
+      s += `<line x1="8" y1="${cy}" x2="212" y2="${cy}" stroke="var(--secondary-text-color)" stroke-width="1.6"/>`;
+      s += `<rect x="${wl}" y="${cy - 2.5}" width="${wr - wl}" height="5" fill="var(--primary-color)"/>`;
+      for (const [edge, deg, v, side] of [[wl, -left, left, -1], [wr, right, right, 1]]) {
+        if (kind !== "wall" && v >= 180) continue;  // no mask on that side: nothing to label
+        let [x, y] = reach(edge, deg, R + 8);
+        y = v <= 90 ? Math.min(cy - 4, y) : Math.min(146, Math.max(10, y));
+        x = side < 0 ? Math.max(2, x) : Math.min(218, x);
+        const anchor = x < cx - 4 ? "start" : x > cx + 4 ? "end" : "middle";
+        s += text(x, y, `${v}°`, "var(--ce-b-shade)", anchor);
+      }
+      if (now) {
+        const r = 22 + (R - 22) * Math.cos(toRad(now.el));
+        const [sx, sy] = polar(cx, cy, now.off, r);
+        s += `<line x1="${cx}" y1="${cy}" x2="${f1(sx)}" y2="${f1(sy)}" stroke="var(--ce-b-shade)" stroke-dasharray="2 3"/>` + dot(sx, sy, lit);
+      }
+      return s;
+    };
+
+    const sideWall = (emin, emax) => {
+      let p = `<line x1="${px}" y1="${py}" x2="146" y2="${py}" stroke="var(--secondary-text-color)" stroke-width="1.6"/>`;
+      p += text(144, py + 13, F.horizon, "var(--secondary-text-color)", "end");
+      p += `<rect x="${px - 6}" y="${py - 52}" width="6" height="52" fill="var(--secondary-text-color)" fill-opacity=".35"/>`;
+      p += `<rect x="${px - 6}" y="${py - 40}" width="6" height="32" fill="var(--primary-color)"/>`;
+      const [ax, ay] = fromEdge(wb, emin, pr - 6), [bx, by] = fromEdge(wt, emax, pr - 6);
+      p += `<path d="M${px} ${wb} L${f1(ax)} ${f1(ay)} A${pr - 6} ${pr - 6} 0 0 0 ${f1(bx)} ${f1(by)} L${px} ${wt} Z" ${CONE}/>`;
+      const [t1x, t1y] = fromEdge(wb, emin, pr + 8);
+      p += text(Math.min(146, t1x), Math.min(py - 3, t1y), `${emin}°`, "var(--primary-color)", "end");
+      const [t2x, t2y] = fromEdge(wt, emax, pr - 18);
+      p += text(t2x + 10, Math.max(10, t2y), `${emax}°`, "var(--primary-color)", "start");
+      if (now) {
+        const [sx, sy] = pp(Math.min(89, now.el), pr - 28);
+        p += `<line x1="${px}" y1="${wc}" x2="${f1(sx)}" y2="${f1(sy)}" stroke="var(--ce-b-shade)" stroke-dasharray="2 3"/>`;
+        p += `<circle cx="${f1(sx)}" cy="${f1(sy)}" r="7" fill="var(--ce-b-shade)" stroke="var(--card-background-color)" stroke-width="2"/>`;
+        p += text(sx + 10, sy + 4, `${Math.round(now.el)}°`, "var(--primary-text-color)", "start");
+      }
+      return p;
+    };
+
+    // Profile of a roof or a flat window: the glass on its slope, looking up
+    // and to the right; the room below it. One cone, the lowest height from
+    // the bottom edge, the highest from the top edge, read over the zenith.
+    const sideSloped = (emin, emax, lim, lit) => {
+      const up = [-Math.cos(toRad(tilt)), -Math.sin(toRad(tilt))], G = 30;
+      const [Gc, r] = profileFit(kind === "roof" ? [[emin, emax]]
+        : emax >= 90 ? [[emin, 180 - emin]] : [[emin, emax], [180 - emax, 180 - emin]], up, G, kind === "roof");
+      const Pb = [Gc[0] - (up[0] * G) / 2, Gc[1] - (up[1] * G) / 2];
+      const Pt = [Gc[0] + (up[0] * G) / 2, Gc[1] + (up[1] * G) / 2];
+      const ray = (from, h, rr = r) => rayToCircle(from[0], from[1], Gc[0], Gc[1], 90 - h, rr);
+      const pt = (q) => `${f1(q[0])} ${f1(q[1])}`;
+      const far = (t) => [Pb[0] + up[0] * t, Pb[1] + up[1] * t];
+      const A0 = far(-300), A1 = far(300);
+      let p = `<polygon points="${pt(A0)} ${pt(A1)} ${f1(A1[0] - 300)} ${f1(A1[1])} ${f1(A1[0] - 300)} 400 ${f1(A0[0] + 300)} 400" fill="var(--card-background-color)" fill-opacity=".55"/>`;
+      p += `<line x1="${Pb[0]}" y1="${Pb[1]}" x2="146" y2="${Pb[1]}" stroke="var(--secondary-text-color)" stroke-dasharray="3 3"/>`;
+      p += text(144, Pb[1] + 13, F.horizon, "var(--secondary-text-color)", "end");
+      const cone = (a, ha, b, hb) =>
+        `<path d="M${pt(a)} L${pt(ray(a, ha))} A${r} ${r} 0 0 0 ${pt(ray(b, hb))} L${pt(b)} Z" ${CONE}/>`;
+      if (kind === "roof") p += cone(Pb, emin, Pt, emax);
+      else if (emax >= 90) p += cone(Pb, emin, Pt, 180 - emin);
+      else p += cone(Pb, emin, Pt, emax) + cone(Pb, 180 - emax, Pt, 180 - emin);
+      p += `<line x1="${f1(A0[0])}" y1="${f1(A0[1])}" x2="${f1(A1[0])}" y2="${f1(A1[1])}" stroke="var(--secondary-text-color)" stroke-opacity=".6" stroke-width="5"/>`;
+      p += `<line x1="${f1(Pb[0])}" y1="${f1(Pb[1])}" x2="${f1(Pt[0])}" y2="${f1(Pt[1])}" stroke="var(--primary-color)" stroke-width="5"/>`;
+      if (kind === "roof") {
+        const a = 16;
+        p += `<line x1="${f1(Pt[0])}" y1="${f1(Pt[1])}" x2="${f1(Pt[0] - 30)}" y2="${f1(Pt[1])}" stroke="var(--secondary-text-color)" stroke-dasharray="2 3"/>`;
+        p += `<path d="M${f1(Pt[0] - a)} ${f1(Pt[1])} A${a} ${a} 0 0 1 ${f1(Pt[0] + up[0] * a)} ${f1(Pt[1] + up[1] * a)}" fill="none" stroke="var(--secondary-text-color)"/>`;
+        p += text(Pt[0] - a - 3, Pt[1] + 10, `${tilt}°`, "var(--primary-text-color)", "end");
+      }
+      const [t1x, t1y] = ray(Pb, emin, r + 8);
+      p += text(Math.min(146, t1x), Math.min(Pb[1] - 3, t1y), `${emin}°`, "var(--primary-color)", "end");
+      if (kind === "roof" && emax < lim) {
+        const [t2x, t2y] = ray(Pt, emax, r - 14);
+        const label = emax <= 90 ? `${emax}°` : `${180 - emax}° ${F.behind}`;
+        p += text(t2x + (emax <= 90 ? 8 : -8), Math.max(10, t2y), label, "var(--primary-color)", emax <= 90 ? "start" : "end");
+      }
+      if (now) {
+        const back = kind === "roof" && Math.abs(now.off) > 90;
+        const [sx, sy] = polar(Gc[0], Gc[1], back ? now.el - 90 : 90 - now.el, r - 22);
+        p += `<line x1="${f1(Gc[0])}" y1="${f1(Gc[1])}" x2="${f1(sx)}" y2="${f1(sy)}" stroke="var(--ce-b-shade)" stroke-dasharray="2 3"/>` + dot(sx, sy, lit);
+        p += text(sx + (back ? -10 : 10), sy + 4, `${Math.round(now.el)}°`, "var(--primary-text-color)", back ? "end" : "start");
+      }
+      return p;
+    };
+
+    box.redraw = () => {
+      const cap = kind === "wall" ? 90 : 180;
+      const left = Math.min(cur("angle_left"), cap), right = Math.min(cur("angle_right"), cap);
+      const lim = kind === "wall" ? 90 : heightLimit(tilt);
+      const emin = Math.min(cur("shade_min_elevation"), lim), emax = Math.min(cur("shade_max_elevation"), lim);
+      const lit = !!now && now.off >= -left && now.off <= right && sunOnGlass(now.off, now.el, tilt);
+      let s = topView(left, right, lit);
+      // Where north is from this window, like the arrow of the facade list.
+      if (az !== null) {
+        s += `<g transform="rotate(${f1(-az)} 14 14)"><circle cx="14" cy="14" r="10" fill="var(--secondary-background-color)" stroke="var(--divider-color)"/>`
+          + `<path d="M14 6 L18 14 L14 12 L10 14 Z" fill="var(--fp-bad)"/></g>`;
+        s += text(14, 33, T.dirs[0], "var(--fp-bad)");
+      }
+      topSvg.innerHTML = s;
+      sideSvg.innerHTML = kind === "wall" ? sideWall(emin, emax) : sideSloped(emin, emax, lim, lit);
+    };
     box.redraw();
     return box;
   }
@@ -3009,7 +3631,23 @@ class CoverExtenderPanel extends HTMLElement {
    * and `onCount(own)` hears the cover's total after every change.
    */
   _behaviorGrid(sections, draft, baseline, tplName, onCount) {
-    const specs = this._cfg.behavior?.fields || {};
+    const raw = this._cfg.behavior?.fields || {};
+    const geo = this._slope(draft);
+    // The angles and heights stop where this window's shape stops them.
+    const capped = (name, max) => raw[name] && { ...raw[name], max: Math.min(raw[name].max, max) };
+    const specs = {
+      ...raw,
+      angle_left: capped("angle_left", geo.angleMax),
+      angle_right: capped("angle_right", geo.angleMax),
+      shade_min_elevation: capped("shade_min_elevation", geo.heightMax),
+      shade_max_elevation: capped("shade_max_elevation", geo.heightMax),
+    };
+    // A flat window has no patch to hold near a wall: one position in the sun
+    // replaces the geometry. Every other window has no use for that position.
+    const flatOnly = ["shade_sun_position"];
+    const notFlat = ["shade_distance", "shade_max_height", "shade_min_height", "shade_minimum_position"];
+    const hidden = new Set(geo.kind === "flat" ? notFlat : flatOnly);
+    const roof = geo.kind === "roof";
     const has = (k) => Object.prototype.hasOwnProperty.call(draft, k);
     const cols = el("div", "ed-cols");
     const left = el("div", "ed-stack");
@@ -3053,20 +3691,51 @@ class CoverExtenderPanel extends HTMLElement {
         h3.append(sw);
       }
 
-      const fig = key === "geometry" ? this._figGeometry(draft, baseline)
-        : key === "detection" ? this._figDetection(draft, baseline) : null;
+      const fig = key === "geometry" ? (geo.kind === "flat" ? null : this._figGeometry(draft, baseline, geo))
+        : key === "detection" ? this._figDetection(draft, baseline, geo) : null;
       const changed = () => { fig?.redraw(); recount(); };
       const beside = key === "geometry" ? null : ["angle_left", "angle_right"];
-      const nums = fields.filter((f) => specs[f] && specs[f].type !== "boolean");
-      const merge = nums.includes("shade_min_elevation") && nums.includes("shade_max_elevation");
+      const nums = fields.filter((f) => specs[f] && specs[f].type !== "boolean" && !hidden.has(f));
+      // Pairs shown as one double slider: the second of each is drawn with the first.
+      const pair = (a, b) => nums.includes(a) && nums.includes(b);
+      const merge = pair("shade_min_elevation", "shade_max_elevation");
+      const mergeAngles = pair("angle_left", "angle_right");
+      const skip = (f) => (merge && f === "shade_max_elevation") || (mergeAngles && f === "angle_right");
+      const mkRow = (f) => (merge && f === "shade_min_elevation"
+        ? this._elevationRow("shade_min_elevation", "shade_max_elevation", specs, draft, baseline, tplName, changed)
+        : mergeAngles && f === "angle_left"
+          ? this._sectorRow("angle_left", "angle_right", specs, draft, baseline, tplName, changed)
+          : this._behaviorRow(f, specs[f], draft, baseline, tplName, changed,
+            roof ? T.fieldHintsRoof?.[f] : undefined, roof ? T.fieldsRoof?.[f] : undefined));
+      if (key === "detection") {
+        // Two groups, each marked like its shape on the picture above: the
+        // sector of the two angles, which solar gain, the "sun facing" sensor
+        // and shading all use, then the heights only shading looks at.
+        const body = el("div", "sect-body");
+        body.append(fig);
+        const group = (cls, title, names) => {
+          const g = el("div", `sgroup ${cls}`);
+          g.append(el("h4", "", title));
+          for (const f of names) {
+            if (skip(f)) continue;
+            g.append(mkRow(f));
+          }
+          if (g.childElementCount > 1) body.append(g);
+        };
+        const sunSide = ["angle_left", "angle_right"];
+        group("g-sun", T.detGroupSun, nums.filter((f) => sunSide.includes(f)));
+        group("g-shade", T.detGroupShade, nums.filter((f) => !sunSide.includes(f)));
+        card.append(body);
+        cards.push({ card, cnt });
+        (side[key] || right).append(card);
+        continue;
+      }
       const body = el("div", "sect-body");
       const next = fig ? el("div") : body;
       const after = el("div");
       for (const f of nums) {
-        if (merge && f === "shade_max_elevation") continue;
-        const row = merge && f === "shade_min_elevation"
-          ? this._elevationRow("shade_min_elevation", "shade_max_elevation", specs, draft, baseline, tplName, changed)
-          : this._behaviorRow(f, specs[f], draft, baseline, tplName, changed);
+        if (skip(f)) continue;
+        const row = mkRow(f);
         (fig && beside && !beside.includes(f) ? after : next).append(row);
       }
       if (fig) {
@@ -3477,7 +4146,9 @@ class CoverExtenderPanel extends HTMLElement {
 
         const chips = el("div", "chips");
         const fchip = el("span", "chip");
-        fchip.append(icon("mdi:compass-outline"), document.createTextNode(facade || T.noFacade));
+        const fac = this._cfg.facades.find((f) => f.name === facade);
+        fchip.append(fac ? facadeArrow(fac, "narrow") : icon("mdi:compass-outline"),
+          document.createTextNode(facade || T.noFacade));
         chips.append(fchip);
         if (c.template) {
           const tchip = el("span", "chip");
@@ -3614,14 +4285,15 @@ class CoverExtenderPanel extends HTMLElement {
     grid.append(plate,
       this._labeled(T.entity, this._haSelector({ entity: { domain: ["cover"] } },
         draft.entity_id || undefined, (v) => { draft.entity_id = v || ""; }), "wide"),
-      this._labeled(T.facade, this._edSelect(draft.facade,
-        this._cfg.facades.map((f) => [f.name, `${f.name} · ${Number(f.azimuth ?? 180)}°`]),
-        (v) => { draft.facade = v; })),
-      this._labeled(T.templateTitle, this._edSelect(draft.template,
-        [[null, T.noTemplateOpt], ...this._cfg.templates.map((t) => [t.name, t.name])],
-        (v) => { draft.template = v; rerender(); })),
+      this._facadeField(draft, rerender),
+      this._templateField(draft, rerender),
       line2);
     idCard.append(grid);
+    // A template for another type of window than the facade's: the server refuses it.
+    const facKind = tiltKind(facadeTilt(this._cfg.facades.find((f) => f.name === draft.facade)));
+    if (tpl && templateKind(tpl) !== facKind) {
+      idCard.append(this._warnNote(T.tplKindMismatch(tpl.name, T.kindNoun[templateKind(tpl)], T.kindNoun[facKind])));
+    }
     wrap.append(idCard);
 
     /* what holds it back: safety stops and pauses, side by side */
@@ -4480,13 +5152,9 @@ class CoverExtenderPanel extends HTMLElement {
       this._render();
     });
     this._cfg.facades.forEach((f, i) => {
-      const az = Number(f.azimuth ?? 180);
-      // The arrow points where the windows look, north up like a map.
-      const badge = el("span", "round az");
-      const arrow = icon("mdi:arrow-up");
-      arrow.style.transform = `rotate(${az}deg)`;
-      badge.append(arrow);
-      list.append(this._listRow(badge, f.name, `${az}° · ${T.covers(used[f.name] || 0)}`, () => {
+      const az = facadeAzimuth(f);
+      const meta = [`${az}°`, T.slopeShort(facadeTilt(f)), T.covers(used[f.name] || 0)].filter(Boolean).join(" · ");
+      list.append(this._listRow(facadeArrow(f), f.name, meta, () => {
         this._openEditor({ section: "facade", idx: i, draft: { ...f } });
         this._render();
       }));
@@ -4507,7 +5175,7 @@ class CoverExtenderPanel extends HTMLElement {
     this._cfg.templates.forEach((t, i) => {
       const badge = el("span", "round");
       badge.append(icon("mdi:ruler-square"));
-      const meta = `${T.tplMeta(t.shade_max_height ?? "?", t.shade_distance ?? "?")} · ${T.covers(used[t.name] || 0)}`;
+      const meta = `${T.tplMeta(templateKind(t), t.shade_max_height ?? "?", t.shade_distance ?? "?")} · ${T.covers(used[t.name] || 0)}`;
       list.append(this._listRow(badge, t.name, meta, () => {
         this._openEditor({ section: "template", idx: i, draft: { ...t } });
         this._render();
@@ -4547,33 +5215,55 @@ class CoverExtenderPanel extends HTMLElement {
     idCard.append(grid);
     wrap.append(idCard);
 
-    /* the compass: drawn facing north, turned by the azimuth */
+    /* The compass, seen from inside: the house stays put with its facade on
+       top and the arrow pointing out of the window; the rose of directions
+       turns around it, like the bezel of a hand compass. Left and right on
+       screen are then left and right for someone looking out, the same sides
+       as the cover's "angle to the left / right". */
     const card = this._edCard("mdi:compass-rose", T.orientTitle, T.orientSub);
     card.style.marginTop = "var(--fp-s4)";
     const orient = el("div", "orient");
-    const dial = el("div");
-    dial.innerHTML = `<svg class="compass" viewBox="0 0 240 240" role="img">
-      <circle cx="120" cy="120" r="104" fill="var(--secondary-background-color)" stroke="var(--divider-color)"/>
-      <g stroke="var(--divider-color)"><line x1="120" y1="16" x2="120" y2="28"/><line x1="120" y1="212" x2="120" y2="224"/>
-        <line x1="16" y1="120" x2="28" y2="120"/><line x1="212" y1="120" x2="224" y2="120"/></g>
-      <text x="120" y="46" text-anchor="middle" fill="var(--primary-text-color)"></text>
-      <text x="200" y="125" text-anchor="middle" fill="var(--secondary-text-color)"></text>
-      <text x="120" y="206" text-anchor="middle" fill="var(--secondary-text-color)"></text>
-      <text x="40" y="125" text-anchor="middle" fill="var(--secondary-text-color)"></text>
-      <g class="rot">
-        <path d="M120 120 L34.3 112.5 A86 86 0 0 1 205.7 112.5 Z" fill="var(--ce-b-shade)" fill-opacity=".12"/>
-        <rect x="92" y="92" width="56" height="56" rx="4" fill="var(--card-background-color)" stroke="var(--secondary-text-color)" stroke-opacity=".6"/>
-        <rect x="92" y="90" width="56" height="5" fill="var(--primary-color)"/>
-        <line x1="120" y1="88" x2="120" y2="64" stroke="var(--primary-color)" stroke-width="3"/>
-        <path d="M112 68 L120 56 L128 68 Z" fill="var(--primary-color)"/>
-      </g>
-      <circle cx="120" cy="120" r="3" fill="var(--secondary-text-color)"/>
-    </svg>`;
-    const svg = dial.querySelector("svg");
+    const dial = el("div", "dial");
+    const NS = "http://www.w3.org/2000/svg";
+    const C = 120, R = 104;
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("class", "compass");
+    svg.setAttribute("viewBox", "0 0 240 240");
+    svg.setAttribute("role", "img");
     svg.setAttribute("aria-label", T.azimuth);
-    const letters = svg.querySelectorAll("text");
-    [0, 2, 4, 6].forEach((d, i) => { letters[i].textContent = T.dirs[d]; });
-    const rot = svg.querySelector(".rot");
+    const mk = (tag, attrs, parent = svg) => {
+      const n = document.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v));
+      parent.append(n);
+      return n;
+    };
+    mk("circle", { cx: C, cy: C, r: R, fill: "var(--secondary-background-color)", stroke: "var(--divider-color)" });
+    // The house, its facade and the sky in front of it: fixed, facing up.
+    mk("path", { d: `M${C} ${C} L34.3 112.5 A86 86 0 0 1 205.7 112.5 Z`, fill: "var(--ce-b-shade)", "fill-opacity": ".12" });
+    mk("rect", { x: 92, y: 92, width: 56, height: 56, rx: 4, fill: "var(--card-background-color)", stroke: "var(--secondary-text-color)", "stroke-opacity": ".6" });
+    mk("rect", { x: 92, y: 90, width: 56, height: 5, fill: "var(--primary-color)" });
+    mk("line", { x1: C, y1: 88, x2: C, y2: 64, stroke: "var(--primary-color)", "stroke-width": 3 });
+    mk("path", { d: "M112 68 L120 56 L128 68 Z", fill: "var(--primary-color)" });
+    mk("circle", { cx: C, cy: C, r: 3, fill: "var(--secondary-text-color)" });
+    // The rose: a tick every 45°, a letter on the four cardinal points. North in red.
+    const rose = T.dirs.map((label, i) => ({
+      deg: i * 45,
+      tick: mk("line", { stroke: "var(--secondary-text-color)", "stroke-opacity": i % 2 ? ".35" : ".7" }),
+      text: i % 2 ? null : mk("text", { "text-anchor": "middle", fill: i === 0 ? "var(--fp-bad)" : "var(--secondary-text-color)" }),
+      label,
+    }));
+    rose.forEach((r) => { if (r.text) r.text.textContent = r.label; });
+    const at = (deg, r) => polar(C, C, deg, r);
+    dial.append(svg);
+    const sides = el("div", "compass-sides");
+    const leftTxt = el("b");
+    const rightTxt = el("b");
+    const leftBox = el("span");
+    leftBox.append(document.createTextNode(`← ${T.compassLeft} : `), leftTxt);
+    const rightBox = el("span");
+    rightBox.append(document.createTextNode(`${T.compassRight} : `), rightTxt, document.createTextNode(" →"));
+    sides.append(leftBox, rightBox);
+    dial.append(sides);
 
     const side = el("div");
     const azRow = el("div", "azrow");
@@ -4595,9 +5285,25 @@ class CoverExtenderPanel extends HTMLElement {
     side.append(el("span", "ed-lbl", T.azimuth), azRow, dirs, this._note(T.compassNote));
 
     const set = (deg, from) => {
-      const az = ((Math.round(deg) % 360) + 360) % 360;
+      const az = wrap360(Math.round(deg));
       draft.azimuth = az;
-      rot.setAttribute("transform", `rotate(${az} 120 120)`);
+      // A direction d sits at screen angle d - az: the azimuth itself is on top.
+      for (const r of rose) {
+        const a = r.deg - az;
+        const [x1, y1] = at(a, R);
+        const [x2, y2] = at(a, R - (r.text ? 12 : 8));
+        r.tick.setAttribute("x1", x1.toFixed(1));
+        r.tick.setAttribute("y1", y1.toFixed(1));
+        r.tick.setAttribute("x2", x2.toFixed(1));
+        r.tick.setAttribute("y2", y2.toFixed(1));
+        if (r.text) {
+          const [tx, ty] = at(a, R - 26);
+          r.text.setAttribute("x", tx.toFixed(1));
+          r.text.setAttribute("y", (ty + 5).toFixed(1));
+        }
+      }
+      leftTxt.textContent = dirName(az - 90);
+      rightTxt.textContent = dirName(az + 90);
       if (from !== box) box.value = String(az);
       dirBtns.forEach((b, i) => b.setAttribute("aria-pressed", String(az === i * 45)));
     };
@@ -4606,17 +5312,17 @@ class CoverExtenderPanel extends HTMLElement {
       set(Math.min(360, Math.max(0, Number(box.value))), box);
     });
     box.addEventListener("change", () => { box.value = String(draft.azimuth); });
-    // Drag anywhere on the dial: the arrow follows the pointer.
-    const fromPointer = (e) => {
+    // Turn the rose like a bezel: it follows the pointer around the centre, so
+    // turning it clockwise brings the direction on the left up to the window.
+    const angleOf = (e) => {
       const r = svg.getBoundingClientRect();
-      const dx = e.clientX - (r.left + r.width / 2);
-      const dy = e.clientY - (r.top + r.height / 2);
-      set((Math.atan2(dx, -dy) * 180) / Math.PI);
+      return (Math.atan2(e.clientX - (r.left + r.width / 2), -(e.clientY - (r.top + r.height / 2))) * 180) / Math.PI;
     };
     svg.addEventListener("pointerdown", (e) => {
       svg.setPointerCapture(e.pointerId);
-      fromPointer(e);
-      const move = (ev) => fromPointer(ev);
+      const start = angleOf(e);
+      const from = facadeAzimuth(draft);
+      const move = (ev) => set(from - (angleOf(ev) - start));
       const up = () => {
         svg.removeEventListener("pointermove", move);
         svg.removeEventListener("pointerup", up);
@@ -4626,11 +5332,111 @@ class CoverExtenderPanel extends HTMLElement {
       svg.addEventListener("pointerup", up);
       svg.addEventListener("pointercancel", up);
     });
-    set(Number(draft.azimuth ?? 180));
+    set(facadeAzimuth(draft));
 
     orient.append(dial, side);
     card.append(orient);
     wrap.append(card);
+
+    /* The slope: an upright wall, a window in a roof, or a flat skylight. Shown
+       in a cross-section, the window looking out to the left. */
+    const slope = this._edCard("mdi:angle-acute", T.slopeTitle, T.slopeSub);
+    slope.style.marginTop = "var(--fp-s4)";
+    const slopeBody = el("div", "slope");
+    const sketch = document.createElementNS(NS, "svg");
+    sketch.setAttribute("class", "slope-sketch");
+    sketch.setAttribute("viewBox", "0 0 220 120");
+    sketch.setAttribute("aria-hidden", "true");
+    const ctl = el("div");
+    const seg = el("div", "seg");
+    const presets = { wall: 90, roof: 30, flat: 0 };
+    const kindBtns = {};
+    for (const [k, v] of Object.entries(presets)) {
+      const b = el("button", "", T.slopeKinds[k]);
+      b.type = "button";
+      b.addEventListener("click", () => { if (tiltKind(facadeTilt(draft)) !== k) setTilt(v); });
+      seg.append(b);
+      kindBtns[k] = b;
+    }
+    const tiltRow = el("div", "azrow");
+    const tbox = document.createElement("input");
+    tbox.type = "number";
+    tbox.min = String(FLAT_TILT);
+    tbox.max = "89";
+    tbox.step = "1";
+    tbox.setAttribute("aria-label", T.slopeAria);
+    const trange = document.createElement("input");
+    trange.type = "range";
+    trange.min = String(FLAT_TILT);
+    trange.max = "89";
+    trange.step = "1";
+    trange.tabIndex = -1;
+    trange.setAttribute("aria-hidden", "true");
+    tiltRow.append(tbox, el("span", "", "°"), trange);
+    const slopeNote = this._note("");
+    // Covers here whose template is for another type of window: saving refuses them.
+    const kindWarn = this._warnNote("");
+    const here = saved ? this._cfg.covers.filter((c) => c.facade === saved && this._templateOf(c)) : [];
+    ctl.append(seg, tiltRow, slopeNote, kindWarn);
+    slopeBody.append(sketch, ctl);
+    slope.append(slopeBody);
+    wrap.append(slope);
+
+    const drawSlope = (t) => {
+      sketch.replaceChildren();
+      // d runs up the glass towards the room; out points out of it: up and to
+      // the left for a roof, left for a wall, straight up when flat.
+      const P = [96, 86], d = [Math.cos(toRad(t)), -Math.sin(toRad(t))];
+      const out = [-Math.sin(toRad(t)), -Math.cos(toRad(t))];
+      const f1 = (v) => v.toFixed(1);
+      mk("line", { x1: f1(P[0] - d[0] * 70), y1: f1(P[1] - d[1] * 70), x2: f1(P[0] + d[0] * 70), y2: f1(P[1] + d[1] * 70),
+        stroke: "var(--secondary-text-color)", "stroke-opacity": ".5", "stroke-width": 6 }, sketch);
+      mk("line", { x1: f1(P[0] - d[0] * 18), y1: f1(P[1] - d[1] * 18), x2: f1(P[0] + d[0] * 18), y2: f1(P[1] + d[1] * 18),
+        stroke: "var(--primary-color)", "stroke-width": 6 }, sketch);
+      mk("line", { x1: P[0], y1: P[1], x2: P[0] + 60, y2: P[1], stroke: "var(--secondary-text-color)", "stroke-dasharray": "3 3" }, sketch);
+      if (t > 0) {
+        const r = 24, end = [P[0] + d[0] * r, P[1] + d[1] * r];
+        // The angle between the horizontal and the glass.
+        mk("path", { d: `M${P[0] + r} ${P[1]} A${r} ${r} 0 0 0 ${f1(end[0])} ${f1(end[1])}`, fill: "none", stroke: "var(--secondary-text-color)" }, sketch);
+        const lab = mk("text", { x: P[0] + r + 6, y: P[1] - 6, fill: "var(--primary-text-color)", "font-size": "12" }, sketch);
+        lab.textContent = `${t}°`;
+      }
+      const tip = [P[0] + out[0] * 36, P[1] + out[1] * 36];
+      mk("line", { x1: P[0], y1: P[1], x2: f1(tip[0]), y2: f1(tip[1]), stroke: "var(--ce-b-shade)", "stroke-width": 2 }, sketch);
+      mk("circle", { cx: f1(tip[0]), cy: f1(tip[1]), r: 4, fill: "var(--ce-b-shade)" }, sketch);
+      const o = mk("text", { x: 6, y: 14, fill: "var(--secondary-text-color)", "font-size": "11" }, sketch);
+      o.textContent = T.fig.outside;
+      const room = mk("text", { x: 214, y: 114, fill: "var(--secondary-text-color)", "font-size": "11", "text-anchor": "end" }, sketch);
+      room.textContent = T.fig.room;
+    };
+    // Paints without writing: opening a facade must not mark it as edited.
+    const paintSlope = (t, from) => {
+      const kind = tiltKind(t);
+      for (const [k, b] of Object.entries(kindBtns)) {
+        b.classList.toggle("on", k === kind);
+        b.setAttribute("aria-pressed", String(k === kind));
+      }
+      tiltRow.hidden = kind !== "roof";
+      if (from !== tbox) tbox.value = String(t);
+      if (from !== trange) trange.value = String(t);
+      slopeNote.lastChild.textContent = T.slopeNotes[kind];
+      const odd = here.filter((c) => templateKind(this._templateOf(c)) !== kind);
+      kindWarn.hidden = !odd.length;
+      kindWarn.lastChild.textContent = T.facadeKindUsers(odd.map((c) => this._coverName(c)).join(", "));
+      drawSlope(t);
+    };
+    const setTilt = (t, from) => {
+      t = Math.max(0, Math.min(90, Math.round(t)));
+      draft.tilt = t;
+      paintSlope(t, from);
+    };
+    trange.addEventListener("input", () => setTilt(Number(trange.value), trange));
+    tbox.addEventListener("input", () => {
+      if (tbox.value === "" || !Number.isFinite(Number(tbox.value))) return;
+      setTilt(Math.max(FLAT_TILT, Math.min(89, Number(tbox.value))), tbox);
+    });
+    tbox.addEventListener("change", () => { tbox.value = String(facadeTilt(draft)); });
+    paintSlope(facadeTilt(draft));
 
     wrap.append(this._itemActions("facade", "facades", idx, draft, creating, used));
   }
@@ -4648,10 +5454,36 @@ class CoverExtenderPanel extends HTMLElement {
     const grid = el("div", "ed-ident three");
     const plate = el("div", "ed-plate");
     plate.append(icon("mdi:ruler-square"));
+    // The window type: switching it redraws the cards, whose sketches, words
+    // and limits follow it. The draft survives the redraw.
+    const kind = templateKind(draft);
+    const line2 = el("div", "line2");
+    const kindLbl = el("span", "ed-lbl", T.tplKind);
+    kindLbl.style.margin = "0";
+    const seg = el("div", "seg kind-seg");
+    for (const k of ["wall", "roof", "flat"]) {
+      const b = el("button", k === kind ? "on" : "", T.slopeKinds[k]);
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(k === kind));
+      b.addEventListener("click", () => {
+        if (k === templateKind(draft)) return;
+        if (k === "wall") delete draft.kind; else draft.kind = k;
+        this._render();
+      });
+      seg.append(b);
+    }
+    line2.append(kindLbl, seg);
     grid.append(plate,
       this._labeled(T.tplName, this._edInput(draft.name, (v) => { draft.name = v; }, "big"), "wide"),
-      this._labeled(T.usedBy, this._usersChips("template", saved)));
-    idCard.append(grid, this._note(T.tplIdentityNote));
+      this._labeled(T.usedBy, this._usersChips("template", saved)),
+      line2);
+    idCard.append(grid, this._note(T.tplIdentityNote), this._note(T.tplKindNote));
+    const geo = this._slope(draft);
+    if (kind === "roof") idCard.append(this._note(T.tplKindRef(geo.tilt, geo.refFromHouse)));
+    // Covers already on it from a facade of another type: the server refuses that.
+    const odd = saved ? this._cfg.covers.filter((c) => c.template === saved
+      && tiltKind(facadeTilt(this._cfg.facades.find((f) => f.name === c.facade))) !== kind) : [];
+    if (odd.length) idCard.append(this._warnNote(T.tplKindUsers(odd.map((c) => this._coverName(c)).join(", "))));
     wrap.append(idCard);
 
     if (schema) {

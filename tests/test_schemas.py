@@ -12,7 +12,11 @@ from custom_components.cover_extender.const import (
     SECTION_MODE,
     SECTION_TEMPLATE,
 )
-from custom_components.cover_extender.schemas import build_profiles_from_options
+from custom_components.cover_extender.schemas import (
+    build_profiles_from_options,
+    infer_template_kinds,
+    lift_max_elevation,
+)
 
 
 class FakeEntry:
@@ -48,7 +52,7 @@ def test_facades_and_modes_parsed():
         modes=[{"name": "Night", "icon": "mdi:weather-night", "lock": True, "behavior": None}],
     )
     _, modes, facades, _, _, _ = build_profiles_from_options(entry)
-    assert facades == {"south": {"azimuth": 175.0}}
+    assert facades == {"south": {"azimuth": 175.0, "tilt": 90.0}}  # a wall unless told otherwise
     assert modes["Night"]["lock"] is True
     assert modes["Night"]["behavior"] is None
     assert modes["Night"]["icon"] == "mdi:weather-night"
@@ -190,3 +194,80 @@ def test_cover_without_inhibition_gets_an_empty_list():
     entry = _entry(covers=[{"entity_id": "cover.volet_sam", "facade": "south"}])
     profiles, _, _, _, _, _ = build_profiles_from_options(entry)
     assert profiles["cover.volet_sam"]["inhibition"] == []
+
+
+# ── Sloped windows ────────────────────────────────────────────────────────────
+
+def test_sloped_facade_parsed():
+    entry = _entry(facades=[{"name": "Roof", "azimuth": 0, "tilt": 30}])
+    _, _, facades, _, _, _ = build_profiles_from_options(entry)
+    assert facades == {"Roof": {"azimuth": 0.0, "tilt": 30.0}}
+
+
+def test_cover_sun_position_from_cover_then_template():
+    entry = _entry(
+        templates=[{"name": "Skylight", "shade": {"sun_position": 20}}],
+        covers=[
+            {"entity_id": "cover.a", "facade": "f", "template": "Skylight"},
+            {"entity_id": "cover.b", "facade": "f", "template": "Skylight", "shade_sun_position": 45},
+            {"entity_id": "cover.c", "facade": "f"},
+        ],
+    )
+    profiles, _, _, _, _, _ = build_profiles_from_options(entry)
+    assert profiles["cover.a"]["shade"]["sun_position"] == 20
+    assert profiles["cover.b"]["shade"]["sun_position"] == 45
+    assert profiles["cover.c"]["shade"]["sun_position"] == 30   # default
+
+
+def test_max_elevation_defaults_to_no_limit():
+    entry = _entry(covers=[{"entity_id": "cover.a", "facade": "f"}])
+    profiles, _, _, _, _, _ = build_profiles_from_options(entry)
+    assert profiles["cover.a"]["shade"]["max_elevation"] == 180
+
+
+def test_lift_max_elevation_turns_90_into_180_only():
+    sections = {
+        SECTION_TEMPLATE: [
+            {"name": "A", "shade": {"max_elevation": 90, "min_elevation": 5}},
+            {"name": "B", "shade": {"max_elevation": 60}},
+            {"name": "C", "shade": {}},
+        ],
+        SECTION_COVER: [
+            {"entity_id": "cover.a", "shade_max_elevation": 90.0},
+            {"entity_id": "cover.b", "shade_max_elevation": 70},
+            {"entity_id": "cover.c"},
+        ],
+        SECTION_FACADE: [{"name": "S", "azimuth": 180}],
+    }
+    out = lift_max_elevation(sections)
+    assert [t["shade"].get("max_elevation") for t in out[SECTION_TEMPLATE]] == [180, 60, None]
+    assert out[SECTION_TEMPLATE][0]["shade"]["min_elevation"] == 5
+    assert [c.get("shade_max_elevation") for c in out[SECTION_COVER]] == [180, 70, None]
+    assert out[SECTION_FACADE] == sections[SECTION_FACADE]
+    # the input is left untouched
+    assert sections[SECTION_TEMPLATE][0]["shade"]["max_elevation"] == 90
+
+
+def test_lift_max_elevation_nothing_to_do():
+    assert lift_max_elevation({SECTION_COVER: [{"entity_id": "cover.a", "shade_max_elevation": 45}]}) is None
+    assert lift_max_elevation({}) is None
+
+
+def test_infer_template_kinds_from_their_covers():
+    sections = {
+        SECTION_FACADE: [{"name": "S", "azimuth": 180}, {"name": "R", "azimuth": 0, "tilt": 30},
+                         {"name": "F", "azimuth": 180, "tilt": 0}],
+        SECTION_TEMPLATE: [{"name": "Velux"}, {"name": "Dome"}, {"name": "Mixed"}, {"name": "Bay"}, {"name": "Unused"}],
+        SECTION_COVER: [
+            {"entity_id": "cover.a", "facade": "R", "template": "Velux"},
+            {"entity_id": "cover.b", "facade": "R", "template": "Velux"},
+            {"entity_id": "cover.c", "facade": "F", "template": "Dome"},
+            {"entity_id": "cover.d", "facade": "R", "template": "Mixed"},
+            {"entity_id": "cover.e", "facade": "S", "template": "Mixed"},
+            {"entity_id": "cover.f", "facade": "S", "template": "Bay"},
+        ],
+    }
+    out = infer_template_kinds(sections)
+    assert [t.get("kind") for t in out[SECTION_TEMPLATE]] == ["roof", "flat", None, None, None]
+    assert "kind" not in sections[SECTION_TEMPLATE][0]   # the input is left untouched
+    assert infer_template_kinds(out) is None              # nothing left to do

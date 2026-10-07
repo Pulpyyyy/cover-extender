@@ -74,6 +74,7 @@ from .const import (
     SECTIONS_WITH_ITEMS,
 )
 from .coordinator import CoverExtenderCoordinator
+from .schemas import infer_template_kinds, lift_max_elevation
 from .helpers import (
     HELPER_UNIQUE_ID_TEMPLATES,
     carry_restored_states,
@@ -186,6 +187,22 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if entry.version == 2 and entry.minor_version < 2:
         _migrate_entity_ids_v4(hass, entry)
         hass.config_entries.async_update_entry(entry, minor_version=2)
+
+    if entry.version == 2 and entry.minor_version < 3:
+        # Sloped windows: a maximum height of 90° becomes 180°, no limit, and a
+        # template used only on roofs (or only on flat windows) becomes theirs.
+        sections = dict(entry.options.get(OPT_CONFIG) or {})
+        if (lifted := lift_max_elevation(sections)) is not None:
+            _LOGGER.info("cover_extender: maximum heights of 90° now read as no limit (180°)")
+            sections = lifted
+        if (kinds := infer_template_kinds(sections)) is not None:
+            _LOGGER.info("cover_extender: templates used only on roof or flat windows now marked as such")
+            sections = kinds
+        if lifted is not None or kinds is not None:
+            hass.config_entries.async_update_entry(
+                entry, options={**entry.options, OPT_CONFIG: sections}
+            )
+        hass.config_entries.async_update_entry(entry, minor_version=3)
 
     return True
 
