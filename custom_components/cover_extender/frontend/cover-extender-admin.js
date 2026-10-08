@@ -1225,6 +1225,7 @@ const STYLE = `
   }
   * { box-sizing: border-box; }
   .wrap { max-width: 1400px; margin: 0 auto; padding: var(--fp-s4) var(--fp-s4) calc(var(--fp-s5) * 2); }
+  .wrap.full { max-width: none; }
 
   header.bar {
     display: flex; align-items: center; gap: var(--fp-s3); flex-wrap: wrap;
@@ -1288,7 +1289,7 @@ const STYLE = `
 
   .m-scroll { overflow: auto; border: 1px solid var(--divider-color);
               border-radius: var(--ha-card-border-radius, 12px); position: relative;
-              background: var(--card-background-color); max-height: calc(100vh - 190px); }
+              background: var(--card-background-color); }
   table.matrix { border-collapse: separate; border-spacing: 0; min-width: 100%; width: max-content;
                  font-variant-numeric: tabular-nums; }
   .matrix th, .matrix td { padding: 0; }
@@ -1298,15 +1299,15 @@ const STYLE = `
                      border-right: 1px solid var(--divider-color); text-align: left; font-weight: normal; }
   .matrix thead th.corner { left: 0; z-index: 3; }
   .mh { display: flex; flex-direction: column; align-items: center; gap: var(--fp-s1); width: 100%;
-        padding: var(--fp-s3) var(--fp-s2) var(--fp-sh); border: 0; background: none; font: inherit; cursor: pointer;
-        min-width: 76px; font-weight: 500; font-size: var(--f-11-5); color: var(--secondary-text-color); }
+        padding: var(--fp-s3) var(--fp-s1) var(--fp-sh); border: 0; background: none; font: inherit; cursor: pointer;
+        min-width: 68px; font-weight: 500; font-size: var(--f-11-5); color: var(--secondary-text-color); }
   .mh:hover { color: var(--primary-text-color); }
   .mh .mico { width: 27px; height: 27px; border-radius: var(--fp-ctl-r);
               display: flex; align-items: center; justify-content: center; }
   .mh .mico ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; }
   /* What sets the mode apart, in words, under its name. */
-  .mh .tags { min-height: 13px; font-size: var(--f-10-5); font-weight: 400; white-space: nowrap;
-              color: var(--secondary-text-color); }
+  .mh .tags { min-height: 13px; max-width: 92px; font-size: var(--f-10-5); font-weight: 400; line-height: 1.25;
+              text-align: center; color: var(--secondary-text-color); }
   .rowh { display: flex; align-items: center; gap: var(--fp-s3);
           padding: var(--fp-s1) var(--fp-s4) var(--fp-s1) var(--fp-s3); min-width: 180px; }
   .rowh img, .rowh .pic { width: var(--fp-pill-h); height: var(--fp-pill-h);
@@ -1321,7 +1322,7 @@ const STYLE = `
                   color: var(--secondary-text-color); }
   tr.facade .fl ha-icon { --mdc-icon-size: 13px; width: 13px; height: 13px; }
   .cell { padding: var(--fp-s1); }
-  .cv { height: 34px; min-width: 70px; border-radius: var(--fp-ctl-r); display: flex; align-items: center;
+  .cv { height: 34px; min-width: 64px; border-radius: var(--fp-ctl-r); display: flex; align-items: center;
         justify-content: center; gap: var(--fp-s1); font-size: var(--f-12-5); font-weight: 600; cursor: pointer;
         border: 1px solid transparent; color: var(--primary-text-color); }
   .cv:hover { border-color: var(--primary-color); }
@@ -2403,7 +2404,10 @@ class CoverExtenderPanel extends HTMLElement {
     if (!this.shadowRoot.firstChild) this._renderShell();
     const wrap = this.shadowRoot.querySelector(".wrap");
     wrap.replaceChildren();
+    // The matrix grows with the number of modes: it takes the whole width.
+    wrap.classList.toggle("full", this._tab === "matrice");
     this._syncSaveBar = null;
+    this._mxFit = null;
     // The popover is mounted on the shadow root, so clearing .wrap does not
     // remove it — close it explicitly (also detaches its scroll listeners).
     this._closePopover();
@@ -2688,6 +2692,19 @@ class CoverExtenderPanel extends HTMLElement {
     box.append(scroll, list);
     wrap.append(box);
     this._matrixScroll = scroll;
+    // The table scrolls inside its box only past the bottom of the window:
+    // the box ends where the page does, measured rather than guessed, so the
+    // page itself never scrolls as well.
+    this._mxFit = () => {
+      if (!scroll.isConnected) return;
+      const pad = parseFloat(getComputedStyle(wrap).paddingBottom) || 0;
+      scroll.style.maxHeight = `${Math.max(240, Math.floor(window.innerHeight - scroll.getBoundingClientRect().top - pad))}px`;
+    };
+    if (!this._mxFitBound) {
+      this._mxFitBound = true;
+      window.addEventListener("resize", () => this._mxFit?.());
+    }
+    requestAnimationFrame(() => this._mxFit?.());
   }
 
   _cellNode(cover, mode, onApply = null) {
