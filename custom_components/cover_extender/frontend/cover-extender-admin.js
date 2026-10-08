@@ -1225,7 +1225,6 @@ const STYLE = `
   }
   * { box-sizing: border-box; }
   .wrap { max-width: 1400px; margin: 0 auto; padding: var(--fp-s4) var(--fp-s4) calc(var(--fp-s5) * 2); }
-  .wrap.full { max-width: none; }
 
   header.bar {
     display: flex; align-items: center; gap: var(--fp-s3); flex-wrap: wrap;
@@ -1309,7 +1308,7 @@ const STYLE = `
   .mh .tags { min-height: 13px; max-width: 92px; font-size: var(--f-10-5); font-weight: 400; line-height: 1.25;
               text-align: center; color: var(--secondary-text-color); }
   .rowh { display: flex; align-items: center; gap: var(--fp-s3);
-          padding: var(--fp-s1) var(--fp-s4) var(--fp-s1) var(--fp-s3); min-width: 180px; }
+          padding: var(--fp-s1) var(--fp-s3) var(--fp-s1) var(--fp-s2); min-width: 140px; }
   .rowh img, .rowh .pic { width: var(--fp-pill-h); height: var(--fp-pill-h);
                           border-radius: var(--fp-ctl-r); object-fit: cover; flex: none; }
   .rowh .pic { background: var(--secondary-background-color); border: 1px solid var(--divider-color);
@@ -2404,8 +2403,6 @@ class CoverExtenderPanel extends HTMLElement {
     if (!this.shadowRoot.firstChild) this._renderShell();
     const wrap = this.shadowRoot.querySelector(".wrap");
     wrap.replaceChildren();
-    // The matrix grows with the number of modes: it takes the whole width.
-    wrap.classList.toggle("full", this._tab === "matrice");
     this._syncSaveBar = null;
     this._mxFit = null;
     // The popover is mounted on the shadow root, so clearing .wrap does not
