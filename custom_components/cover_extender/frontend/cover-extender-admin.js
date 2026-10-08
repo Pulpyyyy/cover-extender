@@ -1416,27 +1416,32 @@ const STYLE = `
 
   /* ---------- read-only tabs ---------- */
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr)); gap: var(--fp-s3); }
-  /* Cover cards side by side keep each part on the same line: every card
-     spans the same five rows of the grid (head, state, schedules, forecast,
-     features), so a card without schedules leaves that row empty instead of
-     moving its features up. */
-  @supports (grid-template-rows: subgrid) {
-    .grid.covers { row-gap: 0; }
-    .grid.covers > .card { display: grid; grid-row: span 5; grid-template-rows: subgrid; row-gap: 0;
-                           align-content: start; margin-bottom: var(--fp-s3); }
-    .grid.covers > .card > .c-head { grid-row: 1; }
-    .grid.covers > .card > .status { grid-row: 2; }
-    .grid.covers > .card > .sched-row { grid-row: 3; }
-    .grid.covers > .card > .sched-hint { grid-row: 4; }
-    .grid.covers > .card > .feats { grid-row: 5; align-self: end; }
-  }
   /* A list's title line: what it holds and how many, its Add on the right. */
   .list-head { margin-bottom: var(--fp-s2); }
   .list-head h2 { margin: 0; font-size: var(--f-16); font-weight: 600; }
   .list-head .hint { margin: 0; }
   /* The covers of one facade, under its name, as in the matrix. */
-  .fgroups { display: flex; flex-wrap: wrap; gap: var(--fp-s2) var(--fp-s3); }
-  .fgroup { flex: 1 1 calc(var(--n) * 290px + (var(--n) - 1) * var(--fp-s3)); min-width: 0; max-width: 100%; }
+  .fgroup { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr));
+            gap: var(--fp-s3); min-width: 0; }
+  .fgroup > .grp-h { grid-column: 1 / -1; margin-bottom: 0; }
+  /* All facades share one grid: every card has the same width, and cards on
+     the same line share their five rows (head, state, schedules, forecast,
+     features) even across facades, so a card without schedules leaves that
+     row empty instead of moving its features up. A facade spans as many
+     columns as it has covers, up to the grid's width (set from the script). */
+  @supports (grid-template-rows: subgrid) {
+    .fgroups { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr));
+               column-gap: var(--fp-s3); }
+    .fgroup { grid-template-columns: subgrid; grid-template-rows: subgrid; row-gap: 0; }
+    .fgroup > .grp-h { margin-bottom: var(--fp-s2); }
+    .fgroup > .card { display: grid; grid-row: span 5; grid-template-rows: subgrid; row-gap: 0;
+                      align-content: start; margin-bottom: var(--fp-s3); }
+    .fgroup > .card > .c-head { grid-row: 1; }
+    .fgroup > .card > .status { grid-row: 2; align-self: start; }
+    .fgroup > .card > .sched-row { grid-row: 3; align-self: start; }
+    .fgroup > .card > .sched-hint { grid-row: 4; }
+    .fgroup > .card > .feats { grid-row: 5; align-self: end; }
+  }
   .grp-h { display: flex; align-items: baseline; gap: var(--fp-s2); margin: var(--fp-s2) var(--fp-s1);
            font-size: var(--f-11); font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
            color: var(--secondary-text-color); }
@@ -4401,7 +4406,7 @@ class CoverExtenderPanel extends HTMLElement {
     bar.append(el("h2", "", T.covers(this._cfg.covers.length)), el("span", "spacer"), add);
     wrap.append(bar);
 
-    // One grid per facade, under its name: the order of the matrix and the
+    // The covers by facade, under its name: the order of the matrix and the
     // schedules, so a cover sits among the same neighbours on every tab.
     const groups = el("div", "fgroups");
     wrap.append(groups);
@@ -4411,12 +4416,11 @@ class CoverExtenderPanel extends HTMLElement {
       const gh = el("div", "grp-h");
       gh.append(el("span", "", facade ? `${T.facade} ${facade}` : T.noFacade));
       if (fac) gh.append(el("span", "az", [`${facadeAzimuth(fac)}°`, T.slopeShort(facadeTilt(fac))].filter(Boolean).join(" · ")));
-      const grid = el("div", "grid covers");
-      // A facade of two covers asks for two card widths; the groups then flow
-      // side by side and share the rows, instead of each taking a whole one.
+      // The facade's cards go straight into its section, a slice of the
+      // shared grid (see .fgroups).
       const group = el("section", "fgroup");
-      group.style.setProperty("--n", String(covers.length));
-      group.append(gh, grid);
+      group.dataset.n = String(covers.length);
+      group.append(gh);
       groups.append(group);
       for (const c of covers) {
         const idx = this._cfg.covers.indexOf(c);
@@ -4459,9 +4463,29 @@ class CoverExtenderPanel extends HTMLElement {
         const overrides = this._overrideCount(c);
         if (overrides) feat("ovr", "mdi:pencil-outline", T.overrides(overrides));
         if (feats.childElementCount) card.append(feats);
-        grid.append(card);
+        group.append(card);
       }
     }
+
+    // A facade of two covers takes two columns, so facades flow side by side
+    // and share the lines; one with more covers than columns takes the whole
+    // width and wraps. Its rows: the title, then five per line of cards.
+    let cols = 0;
+    const spread = () => {
+      const n = getComputedStyle(groups).gridTemplateColumns.split(" ").filter(Boolean).length;
+      if (n === cols) return;
+      cols = n;
+      for (const g of groups.children) {
+        const k = Number(g.dataset.n);
+        g.style.gridColumn = `span ${Math.min(k, cols)}`;
+        g.style.gridRow = `span ${1 + 5 * Math.ceil(k / cols)}`;
+      }
+    };
+    const resized = new ResizeObserver(() => {
+      if (!groups.isConnected) { resized.disconnect(); return; }
+      spread();
+    });
+    resized.observe(groups);
   }
 
   /** Every state the cover cards show, as one string: the redraw trigger. */
