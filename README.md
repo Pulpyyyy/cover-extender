@@ -287,8 +287,9 @@ The **Schedules** tab holds the house's **morning opening** and **evening closin
 
 Each time follows the sun over the year, within bounds you set:
 
+- **Sun reference**: the sun event the curve follows, chosen separately for the morning and the evening. **Sunrise / sunset** (the default: the edge of the sun on the horizon), or the **civil**, **nautical** or **astronomical** dawn / dusk (the sun 6°, 12° or 18° below the horizon: earlier in the morning, later in the evening). A reference that does not happen every day where you live is greyed out: north of about 48.6° N the sky never gets dark enough for the astronomical dawn and dusk in June, north of 54.6° N for the nautical ones. An evening reference that falls after midnight on some days is refused too, since an evening closing has to stay on the same day.
 - **Max time / min time**: the time on the day the sun rises or sets the latest, and the earliest. In between, the curve follows the sun. Drag the two handles together for a **fixed time** all year.
-- **Spring / autumn crossing** (optional): the curve lands exactly on sunrise or sunset that day.
+- **Spring / autumn crossing** (optional): the curve lands exactly on the sun reference that day.
 - **Floor ("not before") / ceiling ("not after")**: legal times the schedule never goes past, whatever the sun does.
 
 The chart shows the sun, the curve, today's time and where the cover closes before sunset (or opens before sunrise). Every setting is a field and a handle to drag.

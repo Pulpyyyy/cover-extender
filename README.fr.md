@@ -268,8 +268,9 @@ L'onglet **Horaires** contient l'**ouverture du matin** et la **fermeture du soi
 
 Chaque heure suit le soleil sur l'année, dans des bornes que vous fixez :
 
+- **Référence solaire** : le moment du soleil que suit la courbe, choisi séparément pour le matin et le soir. **Lever / coucher** (par défaut : le bord du soleil sur l'horizon), ou l'aube / le crépuscule **civil**, **nautique** ou **astronomique** (le soleil 6°, 12° ou 18° sous l'horizon : plus tôt le matin, plus tard le soir). Une référence qui n'existe pas tous les jours chez vous est grisée : au nord d'environ 48,6° N, le ciel ne devient jamais assez sombre en juin pour l'aube et le crépuscule astronomiques, au nord de 54,6° N pour les nautiques. Une référence du soir qui tombe après minuit certains jours est refusée aussi, car une fermeture du soir doit rester dans la même journée.
 - **Heure max / heure min** : l'heure le jour où le soleil se lève ou se couche le plus tard, et le plus tôt. Entre les deux, la courbe suit le soleil. Collez les deux poignées pour une **heure fixe** toute l'année.
-- **Croisement de printemps / d'automne** (optionnel) : la courbe tombe pile sur le lever ou le coucher ce jour-là.
+- **Croisement de printemps / d'automne** (optionnel) : la courbe tombe pile sur la référence solaire ce jour-là.
 - **Plancher (« pas avant ») / plafond (« pas après »)** : des heures légales que l'horaire ne dépasse jamais, quoi que fasse le soleil.
 
 Le graphique montre le soleil, la courbe, l'heure du jour et les jours où le volet se ferme avant le coucher (ou s'ouvre avant le lever). Chaque réglage est un champ et une poignée à faire glisser.

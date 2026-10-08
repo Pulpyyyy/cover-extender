@@ -137,17 +137,60 @@ def test_missed_event(now, last, expected):
 # ── The Home Assistant side ───────────────────────────────────────────────────
 
 def test_ha_sun_year_reads_the_sun_day_by_day():
-    def sunset(event, day):
-        assert event == "sunset"
+    def sunset(day):
         return datetime(day.year, day.month, day.day, 18, 0, tzinfo=timezone.utc)
 
-    sun = sch.ha_sun_year(sunset, YEAR, "sunset", timezone(timedelta(hours=1)))
+    sun = sch.ha_sun_year(sunset, YEAR, timezone(timedelta(hours=1)))
     assert sun.ref[1] == 18 * 60 and sun.ref[sch.DAYS] == 18 * 60
     assert sun.off[100] == 60
+    assert sun.error is None
 
 
 def test_ha_sun_year_gives_up_where_the_sun_does_not_set():
-    assert sch.ha_sun_year(lambda e, d: None, YEAR, "sunset", timezone.utc) is None
+    assert sch.ha_sun_year(lambda d: None, YEAR, timezone.utc) is None
+
+
+def test_a_dusk_past_midnight_cannot_be_followed():
+    # 23:30 UTC is 01:30 the next day at UTC+2: a closing on the wrong day.
+    def dusk(day):
+        return datetime(day.year, day.month, day.day, 23, 30, tzinfo=timezone.utc)
+
+    sun = sch.ha_sun_year(dusk, YEAR, timezone(timedelta(hours=2)))
+    assert sun.error == "schedule_sun_past_midnight"
+
+
+@pytest.mark.parametrize("value, expected", [
+    (None, None), ("horizon", None), ("civil", None), ("nautical", None),
+    ("astronomical", None), ("golden", "schedule_invalid"),
+])
+def test_sun_reference_is_validated(value, expected):
+    cfg = {"type": "fixed", "time": "21:00"}
+    if value is not None:
+        cfg["sun"] = value
+    assert sch.validate_settings(cfg) == expected
+    if expected is None:
+        assert sch.sun_ref(cfg) == (value or "horizon")
+
+
+def test_sun_event_at_follows_the_chosen_depression():
+    pytest.importorskip("astral")
+    # Central France, 8 October: dawns 18, 12, 6 degrees down, then sunrise;
+    # dusks the other way round, each about 30 to 40 minutes apart.
+    day = date(YEAR, 10, 8)
+    mornings = [sch.sun_event_at("morning", ref, 47.88, 1.92, 95)(day)
+                for ref in ("astronomical", "nautical", "civil", "horizon")]
+    evenings = [sch.sun_event_at("evening", ref, 47.88, 1.92, 95)(day)
+                for ref in ("horizon", "civil", "nautical", "astronomical")]
+    for times in (mornings, evenings):
+        gaps = [(b - a).total_seconds() / 60 for a, b in zip(times, times[1:])]
+        assert all(25 < g < 45 for g in gaps), gaps
+    assert mornings[-1].hour == 5 and evenings[0].hour == 17   # UTC
+
+
+def test_sun_event_at_is_none_when_the_sky_stays_light():
+    pytest.importorskip("astral")
+    # Mid June at 55° N: the sun never gets 18 degrees down.
+    assert sch.sun_event_at("evening", "astronomical", 55.0, 0.0, 0)(date(YEAR, 6, 21)) is None
 
 
 @pytest.mark.parametrize("kind", sch.KINDS)

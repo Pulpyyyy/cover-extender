@@ -56,6 +56,7 @@ from .schedule import (
     DEFAULTS as SCHEDULE_DEFAULTS,
     KINDS as SCHEDULE_KINDS,
     parse_action as parse_schedule_action,
+    sun_ref,
     validate_settings as validate_schedule,
 )
 
@@ -882,8 +883,13 @@ def _save_schedule(
         connection.send_error(msg["id"], "invalid_format", "schedule expects a dict")
         return
     house = {k: v for k, v in (data.get("house") or {}).items() if k in SCHEDULE_KINDS}
+    entry = _entry(hass)
+    coordinator = getattr(entry, "runtime_data", None) if entry else None
     for kind, cfg in house.items():
-        if error := validate_schedule(cfg):
+        error = validate_schedule(cfg)
+        if error is None and coordinator is not None:
+            error = coordinator.schedule_sun_error(kind, sun_ref(cfg))
+        if error:
             connection.send_error(msg["id"], "invalid_config", f"{error}:{kind}")
             return
     covers = _items(hass, SECTION_COVER)

@@ -76,7 +76,7 @@ def coord(hass, monkeypatch):
     c = CoverExtenderCoordinator(hass, entry)
     c.timers = timers
     sun = SunYear(ref=[0.0] + [7 * 60.0] * DAYS, off=[0] * (DAYS + 1))
-    monkeypatch.setattr(c, "_sun_year", lambda kind, year: sun)
+    monkeypatch.setattr(c, "_sun_year", lambda kind, ref, year: sun)
     hass.data[DOMAIN] = {
         DATA_COVER_PROFILES: {
             LIVING: {CONF_MODES: {"Day": 100, "Night": 0}, CONF_SCHEDULE: {"morning": "Day", "evening": "Night"}},
@@ -152,6 +152,19 @@ def test_preview_returns_the_year(coord, monkeypatch):
     preview = coord.schedule_preview("evening", {"type": "curve", "max": "21:00", "min": "19:00"})
     assert preview["error"] is None and len(preview["points"]) == DAYS
     assert len(preview["sun"]) == DAYS and preview["today"] == 279
+    assert preview["suns"] == {"horizon": None, "civil": None, "nautical": None, "astronomical": None}
+
+
+def test_preview_refuses_a_sun_event_that_does_not_happen(coord, monkeypatch):
+    _now(monkeypatch, 12)
+    sun = coord._sun_year("evening", "horizon", 2026)
+    monkeypatch.setattr(coord, "_sun_year", lambda kind, ref, year: None if ref == "astronomical" else sun)
+    cfg = {"type": "curve", "max": "21:00", "min": "19:00", "sun": "astronomical"}
+    preview = coord.schedule_preview("evening", cfg)
+    assert preview["error"] == "schedule_no_sun" and preview["suns"]["astronomical"] == "schedule_no_sun"
+    assert preview["suns"]["civil"] is None
+    # And the schedule does not run on it.
+    assert coord._schedule_curve("evening", cfg, 2026) is None
 
 
 # ── WebSocket validation ──────────────────────────────────────────────────────

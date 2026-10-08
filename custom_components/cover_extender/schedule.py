@@ -1,8 +1,8 @@
 """Morning and evening schedules: one annual curve per event.
 
 Pure: the caller supplies, for each day of the year (1..365), the time of the
-sun event (sunrise for the morning, sunset for the evening) in UTC minutes and
-the local time-zone offset in minutes. Nothing here imports Home Assistant,
+sun event (sunrise or a dawn for the morning, sunset or a dusk for the
+evening) in UTC minutes and the local time-zone offset in minutes. Nothing here imports Home Assistant,
 so the whole computation is tested as is; ha_sun_year below is the one place
 that asks Home Assistant for the sun.
 
@@ -30,15 +30,20 @@ DAYS = 365
 P_YEAR = 365.2425
 MARCH_EQUINOX = 79          # day of the year, used to tell spring from autumn
 KINDS = ("morning", "evening")
-SUN_EVENT = {"morning": "sunrise", "evening": "sunset"}
+# The sun event a schedule follows: the disc on the horizon (sunrise or
+# sunset, refraction included), or the sun 6, 12 or 18 degrees below it (the
+# civil, nautical and astronomical dawn or dusk).
+SUN_REFS = ("horizon", "civil", "nautical", "astronomical")
+SUN_DEFAULT = "horizon"
+SUN_DEPRESSION = {"civil": 6.0, "nautical": 12.0, "astronomical": 18.0}
 # What a schedule starts from when it is switched on in the panel: a curve
 # that follows the sun between sensible bounds, never before 07:00 in the
 # morning, nor after 22:30 in the evening.
 DEFAULTS = {
     "morning": {"type": "curve", "max": "08:30", "min": "06:30", "cross_spring": None,
-                "cross_autumn": None, "not_before": "07:00", "not_after": None},
+                "cross_autumn": None, "not_before": "07:00", "not_after": None, "sun": "horizon"},
     "evening": {"type": "curve", "max": "22:00", "min": "17:30", "cross_spring": None,
-                "cross_autumn": None, "not_before": None, "not_after": "22:30"},
+                "cross_autumn": None, "not_before": None, "not_after": "22:30", "sun": "horizon"},
 }
 
 _HHMM = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
@@ -111,9 +116,12 @@ def validate_settings(cfg: Any) -> str | None:
 
     Stored shape: {"type": "fixed", "time": "HH:MM"} or {"type": "curve",
     "max", "min" ("HH:MM"), "cross_spring", "cross_autumn" ("MM-DD" or
-    null)}, plus "not_before" / "not_after" ("HH:MM" or null) for both.
+    null)}, plus "not_before" / "not_after" ("HH:MM" or null) and "sun"
+    (one of SUN_REFS, horizon when missing) for both.
     """
     if not isinstance(cfg, dict):
+        return "schedule_invalid"
+    if cfg.get("sun", SUN_DEFAULT) not in SUN_REFS:
         return "schedule_invalid"
     try:
         if cfg.get("type") == "fixed":
@@ -138,6 +146,11 @@ def validate_settings(cfg: Any) -> str | None:
     if floor is not None and ceiling is not None and floor >= ceiling:
         return "schedule_floor_after_ceiling"
     return None
+
+
+def sun_ref(cfg: dict[str, Any]) -> str:
+    """The sun event a stored schedule follows."""
+    return cfg.get("sun") or SUN_DEFAULT
 
 
 def parse_settings(cfg: dict[str, Any], year: int) -> Settings:
@@ -176,6 +189,18 @@ class SunYear:
 
     def local(self, j: int) -> float:
         return self.ref[j] + self.off[j]
+
+    @property
+    def error(self) -> str | None:
+        """Why no schedule can follow this sun event, or None.
+
+        The event must fall within the local day it belongs to: in June, the
+        astronomical dusk of central France comes after midnight, and a
+        closing past midnight would belong to the next day.
+        """
+        if any(not 0 <= self.local(j) < 1440 for j in range(1, DAYS + 1)):
+            return "schedule_sun_past_midnight"
+        return None
 
     @property
     def dst_gap(self) -> int:
@@ -297,19 +322,20 @@ def missed_event(
 
 # ── Home Assistant side ───────────────────────────────────────────────────────
 
-def ha_sun_year(sun_event_at: Any, year: int, event: str, tz: tzinfo) -> SunYear | None:
-    """The sun for every day of *year*, from a callable (event, date) → aware
-    UTC datetime, typically homeassistant.helpers.sun.get_astral_event_date.
+def ha_sun_year(sun_event_at: Any, year: int, tz: tzinfo) -> SunYear | None:
+    """The sun for every day of *year*, from a callable date → aware UTC
+    datetime or None (see sun_event_at).
 
-    None where the sun does not rise or set on some day (polar latitudes):
-    no curve can follow it there.
+    None where the event does not happen on some day (the sun does not set
+    near the poles, the sky stays light all night in summer for the
+    astronomical dusk past 48.6° N): no curve can follow it there.
     """
     ref: list[float] = [0.0] * (DAYS + 1)
     off: list[int] = [0] * (DAYS + 1)
     start = date(year, 1, 1)
     for j in range(1, DAYS + 1):
         day = start + timedelta(days=j - 1)
-        when = sun_event_at(event, day)
+        when = sun_event_at(day)
         if when is None:
             return None
         utc_midnight = datetime(day.year, day.month, day.day, tzinfo=when.tzinfo)
@@ -317,3 +343,39 @@ def ha_sun_year(sun_event_at: Any, year: int, event: str, tz: tzinfo) -> SunYear
         noon = datetime(day.year, day.month, day.day, 12, tzinfo=tz)
         off[j] = int(noon.utcoffset().total_seconds() // 60)
     return SunYear(ref=ref, off=off)
+
+
+def sun_event_at(kind: str, ref: str, latitude: float, longitude: float, elevation: float) -> Any:
+    """A callable date → the *ref* event of *kind* that day (aware, UTC), or
+    None when it does not happen.
+
+    astral directly, the library behind Home Assistant's sun helpers, with
+    the same observer (latitude, longitude, elevation): HA's own helper only
+    knows the civil dawn and dusk.
+    """
+    from datetime import timezone
+
+    from astral import Observer
+    from astral import sun as astral_sun
+
+    observer = Observer(latitude, longitude, elevation)
+    morning = kind == "morning"
+    if ref == SUN_DEFAULT:
+        fn = astral_sun.sunrise if morning else astral_sun.sunset
+
+        def event(day: date) -> datetime:
+            return fn(observer, day, tzinfo=timezone.utc)
+    else:
+        fn = astral_sun.dawn if morning else astral_sun.dusk
+        depression = SUN_DEPRESSION[ref]
+
+        def event(day: date) -> datetime:
+            return fn(observer, day, depression, tzinfo=timezone.utc)
+
+    def at(day: date) -> datetime | None:
+        try:
+            return event(day)
+        except ValueError:   # the sun never gets that low, or that high, that day
+            return None
+
+    return at

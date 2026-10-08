@@ -11,6 +11,8 @@
   tab: volets | modes | matrice | horaires | maison | reglages
   edit: cover:N | mode:N | facade:N | template:N opens that editor (facades and templates: tab=maison).
   sun: puts the sun there (sun.sun), for the sketches of the cover editor.
+  kind: morning | evening, the schedule the Schedules tab opens on.
+  schedsun: horizon | civil | nautical | astronomical, the sun event both schedules follow.
   The title turns to "READY <page height>" once drawn, or "JSERROR: ..." on an error.
 -->
 <style>
@@ -295,7 +297,8 @@
       sg_weather_entity: "weather.home",
       sg_good_conditions: ["sunny", "partlycloudy"],
     },
-    schedule: { morning: SCHEDULE_DEFAULTS.morning, evening: SCHEDULE_DEFAULTS.evening },
+    schedule: Object.fromEntries(["morning", "evening"].map((k) =>
+      [k, { ...SCHEDULE_DEFAULTS[k], sun: params.get("schedsun") || "horizon" }])),
     schedule_defaults: SCHEDULE_DEFAULTS,
     behavior: { sections: SECTIONS, template_sections: TEMPLATE_SECTIONS, fields: BEHAVIOR_FIELDS },
     weather_conditions: [
@@ -311,12 +314,19 @@
   // (off), and the curve built the way schedule.build_curve builds it, so the
   // chart and its figures look like a real install's.
   const hm = (t) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+  // A dawn or a dusk: the sun event moved away from noon, more in summer.
+  const SUN_SHIFT = { horizon: [0, 0], civil: [36, 6], nautical: [78, 20], astronomical: [125, 60] };
   const preview = (kind, s) => {
     const evening = kind === "evening";
+    const suns = { horizon: null, civil: null, nautical: null, astronomical: evening ? "schedule_sun_past_midnight" : null };
+    const ref = s.sun || "horizon";
+    if (suns[ref]) return { error: suns[ref], suns };
+    const [base, summer] = SUN_SHIFT[ref];
     const sunU = [], off = [];
     for (let j = 1; j <= 365; j++) {
       const w = Math.sin((2 * Math.PI * (j - 81)) / 365);
-      sunU.push(evening ? 1136 + 121 * w : 404 - 118 * w);
+      const shift = base + summer * Math.max(0, w);
+      sunU.push(evening ? 1136 + 121 * w + shift : 404 - 118 * w - shift);
       off.push(j >= 88 && j < 298 ? 60 : 0);
     }
     const sun = sunU.map((v, i) => Math.round((v + off[i]) * 10) / 10);
@@ -334,7 +344,7 @@
     const now = new Date();
     const today = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 864e5);
     return {
-      error: null, ignored: {}, year: now.getFullYear(), today, points, sun,
+      error: null, suns, ignored: {}, year: now.getFullYear(), today, points, sun,
       max_day: jp, min_day: jt, rising_days: (jp - jt + 365) % 365, dst_gap: 60,
     };
   };
@@ -419,6 +429,7 @@
   const TABS = ["volets", "modes", "matrice", "horaires", "maison", "reglages"];
   const tab = params.get("tab") || "volets";
   until(() => panel._state === "ready" && panel.shadowRoot?.querySelector(".tabs"), () => {
+    if (params.get("kind")) panel._schedKind = params.get("kind");
     if (tab !== "volets") panel.shadowRoot.querySelectorAll(".tabs .tab")[Math.max(0, TABS.indexOf(tab))]?.click();
     // ?edit=cover:0 / mode:2 / facade:0 / template:0 : open that editor.
     const edit = params.get("edit");

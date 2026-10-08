@@ -85,7 +85,7 @@ from .helpers import (
 from .shade import compute_sun_facing, compute_shade_sync
 from .schedule import (
     KINDS as SCHEDULE_KINDS,
-    SUN_EVENT,
+    SUN_REFS,
     Curve,
     SunYear,
     build_curve,
@@ -94,6 +94,8 @@ from .schedule import (
     ha_sun_year,
     missed_event,
     parse_settings,
+    sun_event_at,
+    sun_ref,
     validate_settings as validate_schedule,
 )
 from .schemas import build_profiles_from_options
@@ -528,20 +530,25 @@ class CoverExtenderCoordinator:
     def _time_zone(self):
         return dt_util.get_time_zone(self.hass.config.time_zone) or dt_util.DEFAULT_TIME_ZONE
 
-    def _sun_year(self, kind: str, year: int) -> SunYear | None:
-        key = (kind, year, self.hass.config.latitude, self.hass.config.longitude)
+    def _sun_year(self, kind: str, ref: str, year: int) -> SunYear | None:
+        config = self.hass.config
+        elevation = getattr(config, "elevation", 0) or 0
+        key = (kind, ref, year, config.latitude, config.longitude, elevation)
         if key not in self._sun_cache:
-            from homeassistant.helpers.sun import get_astral_event_date
-
             self._sun_cache[key] = ha_sun_year(
-                lambda event, day: get_astral_event_date(self.hass, event, day),
-                year, SUN_EVENT[kind], self._time_zone(),
+                sun_event_at(kind, ref, config.latitude, config.longitude, elevation),
+                year, self._time_zone(),
             )
         return self._sun_cache[key]
 
+    def schedule_sun_error(self, kind: str, ref: str, year: int | None = None) -> str | None:
+        """Why *kind* cannot follow the *ref* sun event here, or None."""
+        sun = self._sun_year(kind, ref, year or dt_util.now(self._time_zone()).year)
+        return "schedule_no_sun" if sun is None else sun.error
+
     def _schedule_curve(self, kind: str, cfg: dict[str, Any], year: int) -> Curve | None:
-        sun = self._sun_year(kind, year)
-        if sun is None:
+        sun = self._sun_year(kind, sun_ref(cfg), year)
+        if sun is None or sun.error:
             return None
         return build_curve(sun, parse_settings(cfg, year))
 
@@ -637,16 +644,20 @@ class CoverExtenderCoordinator:
             _LOGGER.debug("schedule %s: %s → %s%s", kind, entity_id, action, f" ({reason})" if reason else "")
 
     def schedule_preview(self, kind: str, cfg: dict[str, Any]) -> dict[str, Any]:
-        """The curve the panel draws: the year's points, the sun, and what was ignored."""
+        """The curve the panel draws: the year's points, the sun, and what was
+        ignored, plus which sun events this kind can follow here ("suns":
+        reference -> error code or None)."""
         tz = self._time_zone()
         today = dt_util.now(tz).date()
-        sun = self._sun_year(kind, today.year)
-        if sun is None:
-            return {"error": "schedule_no_sun"}
+        suns = {ref: self.schedule_sun_error(kind, ref, today.year) for ref in SUN_REFS}
+        sun = self._sun_year(kind, sun_ref(cfg), today.year)
+        if sun is None or sun.error:
+            return {"error": "schedule_no_sun" if sun is None else sun.error, "suns": suns}
         curve = build_curve(sun, parse_settings(cfg, today.year))
         rnd = lambda v: round(v, 1)  # noqa: E731 - a payload, not logic
         return {
             "error": curve.error,
+            "suns": suns,
             "ignored": curve.ignored,
             "year": today.year,
             "today": day_of_year(today),

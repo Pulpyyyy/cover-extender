@@ -72,11 +72,27 @@ const WORDS = {
         evening: "Off: no evening event, and the covers keep their mode.",
       },
       verb: { morning: "Opening", evening: "Closing" },
-      ref: { morning: "sunrise", evening: "sunset" },
-      refCap: { morning: "Sunrise", evening: "Sunset" },
-      refLong: { morning: "sunrise", evening: "sunset" },
-      refLongCap: { morning: "Sunrise", evening: "Sunset" },
-      band: { morning: "Open before sunrise", evening: "Closed before sunset" },
+      // The sun event a schedule follows, per kind: s alone before a time,
+      // the inside a sentence, long after "follows", cap in the legend.
+      sun: {
+        morning: {
+          horizon: { s: "sunrise", the: "sunrise", long: "sunrise", cap: "Sunrise" },
+          civil: { s: "civil dawn", the: "civil dawn", long: "civil dawn", cap: "Civil dawn" },
+          nautical: { s: "nautical dawn", the: "nautical dawn", long: "nautical dawn", cap: "Nautical dawn" },
+          astronomical: { s: "astronomical dawn", the: "astronomical dawn", long: "astronomical dawn", cap: "Astronomical dawn" },
+        },
+        evening: {
+          horizon: { s: "sunset", the: "sunset", long: "sunset", cap: "Sunset" },
+          civil: { s: "civil dusk", the: "civil dusk", long: "civil dusk", cap: "Civil dusk" },
+          nautical: { s: "nautical dusk", the: "nautical dusk", long: "nautical dusk", cap: "Nautical dusk" },
+          astronomical: { s: "astronomical dusk", the: "astronomical dusk", long: "astronomical dusk", cap: "Astronomical dusk" },
+        },
+      },
+      sunDeg: { horizon: "−0.8°", civil: "−6°", nautical: "−12°", astronomical: "−18°" },
+      sunLabel: "Sun reference",
+      sunHint: "The sun event the curve follows. Sunrise and sunset: the edge of the sun on the horizon. Civil, nautical and astronomical: the sun 6, 12 or 18° below the horizon, earlier in the morning and later in the evening, when the sky is darker.",
+      sunOff: { schedule_no_sun: "not every day here", schedule_sun_past_midnight: "after midnight in summer" },
+      band: { morning: (r) => `Open before ${r}`, evening: (r) => `Closed before ${r}` },
       hi: "Max time", hiFixed: "Max time = min", lo: "Min time",
       x1: "Spring crossing", x2: "Autumn crossing",
       fl: "Not before", ce: "Not after", flShort: "not before", ceShort: "not after",
@@ -98,7 +114,8 @@ const WORDS = {
         schedule_min_after_max: "The min time is after the max time. For a fixed time, enter the same time in both fields.",
         schedule_floor_after_ceiling: "“Not before” must come before “not after”.",
         schedule_invalid: "These settings cannot be read.",
-        schedule_no_sun: "The sun does not rise or set every day at this latitude: no curve can follow it.",
+        schedule_no_sun: "At this latitude, this sun event does not happen every day (the sky stays light all night in summer, or the sun does not rise or set): no curve can follow it.",
+        schedule_sun_past_midnight: "Here, this dusk comes after midnight in summer: an evening closing must stay on the same day. Choose an earlier reference.",
       },
       ignored: {
         out_of_range: (d, r, t) => `Crossing on ${d} ignored: that day, ${r} (${t}) is not between the min and max times.`,
@@ -122,7 +139,7 @@ const WORDS = {
       effPart: (label, n) => `${label}: ${n}`,
       introInfo: "A mode applies as a mode change like any other: exclusions, inhibitions, the lock and timed modes apply. A position leaves the mode alone; it respects the lock unless it is forced, and an open window always holds it back.",
       offShort: "off",
-      follows: (r, t) => (t ? `follows the ${r} (today ${t})` : `follows the ${r}`),
+      follows: (r, t) => (t ? `follows ${r} (today ${t})` : `follows ${r}`),
       grpCurve: "Curve over the year", grpBounds: "Bounds in legal time", grpFine: "Fine-tune",
       crossSum: (a, b) => `Crossings: spring ${a} · autumn ${b}`,
       no: "no",
@@ -493,11 +510,25 @@ const WORDS = {
         evening: "Désactivée : pas d'événement le soir, les volets gardent leur mode.",
       },
       verb: { morning: "Ouverture", evening: "Fermeture" },
-      ref: { morning: "lever", evening: "coucher" },
-      refCap: { morning: "Lever", evening: "Coucher" },
-      refLong: { morning: "lever du soleil", evening: "coucher du soleil" },
-      refLongCap: { morning: "Lever du soleil", evening: "Coucher du soleil" },
-      band: { morning: "Ouvert avant le lever", evening: "Fermé avant le coucher" },
+      sun: {
+        morning: {
+          horizon: { s: "lever", the: "le lever", long: "le lever du soleil", cap: "Lever du soleil" },
+          civil: { s: "aube civile", the: "l'aube civile", long: "l'aube civile", cap: "Aube civile" },
+          nautical: { s: "aube nautique", the: "l'aube nautique", long: "l'aube nautique", cap: "Aube nautique" },
+          astronomical: { s: "aube astronomique", the: "l'aube astronomique", long: "l'aube astronomique", cap: "Aube astronomique" },
+        },
+        evening: {
+          horizon: { s: "coucher", the: "le coucher", long: "le coucher du soleil", cap: "Coucher du soleil" },
+          civil: { s: "crépuscule civil", the: "le crépuscule civil", long: "le crépuscule civil", cap: "Crépuscule civil" },
+          nautical: { s: "crépuscule nautique", the: "le crépuscule nautique", long: "le crépuscule nautique", cap: "Crépuscule nautique" },
+          astronomical: { s: "crépuscule astronomique", the: "le crépuscule astronomique", long: "le crépuscule astronomique", cap: "Crépuscule astronomique" },
+        },
+      },
+      sunDeg: { horizon: "−0,8°", civil: "−6°", nautical: "−12°", astronomical: "−18°" },
+      sunLabel: "Référence solaire",
+      sunHint: "Le moment du soleil que suit la courbe. Lever et coucher : le bord du soleil sur l'horizon. Civil, nautique et astronomique : le soleil 6, 12 ou 18° sous l'horizon, plus tôt le matin et plus tard le soir, quand le ciel est plus sombre.",
+      sunOff: { schedule_no_sun: "pas tous les jours ici", schedule_sun_past_midnight: "après minuit en été" },
+      band: { morning: (r) => `Ouvert avant ${r}`, evening: (r) => `Fermé avant ${r}` },
       hi: "Heure max", hiFixed: "Heure max = min", lo: "Heure min",
       x1: "Croisement printemps", x2: "Croisement automne",
       fl: "Pas avant", ce: "Pas après", flShort: "pas avant", ceShort: "pas après",
@@ -519,14 +550,15 @@ const WORDS = {
         schedule_min_after_max: "L'heure min est après l'heure max. Pour une heure fixe, mets la même heure dans les deux champs.",
         schedule_floor_after_ceiling: "« Pas avant » doit précéder « pas après ».",
         schedule_invalid: "Ces réglages sont illisibles.",
-        schedule_no_sun: "À cette latitude, le soleil ne se lève pas ou ne se couche pas tous les jours : aucune courbe ne peut le suivre.",
+        schedule_no_sun: "À cette latitude, ce moment du soleil n'existe pas tous les jours (le ciel reste clair toute la nuit en été, ou le soleil ne se lève pas ou ne se couche pas) : aucune courbe ne peut le suivre.",
+        schedule_sun_past_midnight: "Ici, ce crépuscule tombe après minuit en été : une fermeture du soir doit rester dans la même journée. Choisis une référence plus tôt.",
       },
       ignored: {
-        out_of_range: (d, r, t) => `Croisement du ${d} ignoré : ce jour-là, le ${r} (${t}) n'est pas entre l'heure min et l'heure max.`,
+        out_of_range: (d, r, t) => `Croisement du ${d} ignoré : ce jour-là, ${r} (${t}) n'est pas entre l'heure min et l'heure max.`,
         same_half: (d) => `Croisement du ${d} ignoré : les deux croisements tombent sur la même moitié de courbe, il en faut un avant le jour le plus long et un après.`,
         too_steep: (d) => `Croisement du ${d} ignoré : il demande une courbe trop déformée. Rapproche-le de l'équinoxe, ou change l'heure min ou max.`,
       },
-      manyCross: (r, n) => `La courbe croise le ${r} ${n} fois dans l'année. Vérifie que c'est voulu.`,
+      manyCross: (r, n) => `La courbe croise ${r} ${n} fois dans l'année. Vérifie que c'est voulu.`,
       clampHiLo: "Le max ne descend pas sous le min : les poignées restent collées.",
       clampHiFl: (t) => `Le max ne descend pas sous « pas avant » (${t}).`,
       clampLoHi: "Le min ne monte pas au-dessus du max : les poignées restent collées.",
@@ -543,7 +575,7 @@ const WORDS = {
       effPart: (label, n) => `${label} : ${n}`,
       introInfo: "Un mode s'applique comme tout changement de mode : les exclusions, les inhibitions, le verrou et les modes minutés s'appliquent. Une position ne change pas le mode ; elle respecte le verrou sauf si elle est forcée, et une fenêtre ouverte la bloque toujours.",
       offShort: "désactivée",
-      follows: (r, t) => (t ? `suit le ${r} (aujourd'hui ${t})` : `suit le ${r}`),
+      follows: (r, t) => (t ? `suit ${r} (aujourd'hui ${t})` : `suit ${r}`),
       grpCurve: "Courbe sur l'année", grpBounds: "Bornes en heure légale", grpFine: "Affiner",
       crossSum: (a, b) => `Croisements : printemps ${a} · automne ${b}`,
       no: "non",
@@ -1640,6 +1672,10 @@ const STYLE = `
         padding: 0; width: 100%; }
   .sf input[type=checkbox] { accent-color: var(--c); width: 16px; height: 16px; margin: 0; cursor: pointer; }
   .sf-info { font-size: var(--f-11-5); color: var(--secondary-text-color); }
+  .sf select { font: inherit; font-size: var(--f-15); font-weight: 600; border: 0; background: transparent;
+        color: var(--primary-text-color); padding: 0; width: 100%; min-width: 0; cursor: pointer; }
+  .sf select:focus-visible { outline: var(--fp-focus); outline-offset: var(--fp-focus-off); }
+  .spair.one.sref { margin: 0 0 var(--fp-s2); }
   .legend.sched-legend { margin: 0 0 var(--fp-s2); }
   .lg-line { width: 16px; height: 3px; border-radius: 2px; display: inline-block; }
   .lg-line.sw { height: 10px; background: var(--ce-band); }
@@ -2204,6 +2240,8 @@ const STYLE = `
  */
 const WS_SCHED_PREVIEW = `${DOMAIN}/schedule/preview`;
 const SCHED_KINDS = ["morning", "evening"];
+// The sun events a schedule can follow, from the horizon down (schedule.SUN_REFS).
+const SCHED_SUNS = ["horizon", "civil", "nautical", "astronomical"];
 const P_YEAR = 365.2425;
 const smod = (a, n) => ((a % n) + n) % n;
 const hmFmt = (m) => { m = Math.round(smod(m, 1440)); return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; };
@@ -2219,13 +2257,23 @@ const schedIsoToDay = (iso, year) => { const [, m, d] = iso.split("-").map(Numbe
 const schedDayLabel = (j, year, style) => new Intl.DateTimeFormat(LANG,
   { day: "numeric", month: style === "short" ? "short" : "long", timeZone: "UTC" }).format(schedDayDate(j, year));
 
-/* The hours each chart shows: morning 04:30–10:45, evening 15:30–23:30. A
-   floor or a ceiling is kept inside them, so its handle can always be seen
-   and grabbed; outside, it would never touch the curve anyway. */
+/* The hours each chart shows: morning 04:30–10:45, evening 15:30–23:30,
+   stretched to hold the sun event a quarter of an hour on each side (an
+   astronomical dawn comes before 04:30). A floor or a ceiling is kept inside
+   them, so its handle can always be seen and grabbed; outside, it would
+   never touch the curve anyway. */
 const SCHED_RANGE = { morning: [270, 645], evening: [930, 1410] };
+function schedRange(kind, pv) {
+  let [a, b] = SCHED_RANGE[kind];
+  if (pv?.sun?.length) {
+    a = Math.max(0, Math.min(a, Math.floor((Math.min(...pv.sun) - 15) / 15) * 15));
+    b = Math.min(1439, Math.max(b, Math.ceil((Math.max(...pv.sun) + 15) / 15) * 15));
+  }
+  return [a, b];
+}
 // Where a floor / ceiling starts when it is ticked on.
 const SCHED_CLAMP_START = { morning: { fl: 435, ce: 570 }, evening: { fl: 1020, ce: 1320 } };
-const schedInRange = (kind, m) => Math.min(SCHED_RANGE[kind][1], Math.max(SCHED_RANGE[kind][0], m));
+const schedInRange = (kind, m, pv) => { const [a, b] = schedRange(kind, pv); return Math.min(b, Math.max(a, m)); };
 
 /** Stored shape → the handles (minutes of the day, days of the year). */
 function schedFromCfg(cfg, kind) {
@@ -2236,10 +2284,10 @@ function schedFromCfg(cfg, kind) {
     hi: hmParse(fixed ? cfg.time : cfg.max), lo: hmParse(fixed ? cfg.time : cfg.min),
     x1: { on: !fixed && !!cfg.cross_spring, j: day(cfg.cross_spring, 79) },
     x2: { on: !fixed && !!cfg.cross_autumn, j: day(cfg.cross_autumn, 266) },
-    fl: { on: !!cfg.not_before,
-          m: schedInRange(kind, cfg.not_before ? hmParse(cfg.not_before) : SCHED_CLAMP_START[kind].fl) },
-    ce: { on: !!cfg.not_after,
-          m: schedInRange(kind, cfg.not_after ? hmParse(cfg.not_after) : SCHED_CLAMP_START[kind].ce) },
+    // A stored bound is kept as is: the chart stretches with the sun to show it.
+    fl: { on: !!cfg.not_before, m: cfg.not_before ? hmParse(cfg.not_before) : SCHED_CLAMP_START[kind].fl },
+    ce: { on: !!cfg.not_after, m: cfg.not_after ? hmParse(cfg.not_after) : SCHED_CLAMP_START[kind].ce },
+    sun: cfg.sun || "horizon",
   };
 }
 
@@ -2255,6 +2303,7 @@ function schedToCfg(s) {
     };
   out.not_before = s.fl.on ? hmFmt(s.fl.m) : null;
   out.not_after = s.ce.on ? hmFmt(s.ce.m) : null;
+  out.sun = s.sun || "horizon";
   return out;
 }
 
@@ -2263,7 +2312,7 @@ function schedToCfg(s) {
  *  floor or a ceiling also stays within the chart of *kind*. */
 function schedSetVal(pv, s, key, v, kind) {
   const W = T.sched, SNAP = 5, G = pv?.dst_gap || 0;
-  if (key === "fl" || key === "ce") v = schedInRange(kind, v);
+  if (key === "fl" || key === "ce") v = schedInRange(kind, v, pv);
   const FL = s.fl.on ? s.fl.m : -1e9, CE = s.ce.on ? s.ce.m : 1e9, want = v;
   let msg = "";
   if (key === "hi") {
@@ -5026,8 +5075,24 @@ class CoverExtenderPanel extends HTMLElement {
     const gCurve = group("mdi:chart-bell-curve-cumulative", W.grpCurve);
     const curveInfo = this._info(W.fixedHint);  // completed by the DST gap once the curve is known
     gCurve.querySelector("h4").append(curveInfo);
+    // The sun event the curve follows; one that cannot be followed here is
+    // greyed out, with the reason (the preview tells which).
+    const sunPair = el("div", "spair one sref");
+    const sunBox = el("div", "sf");
+    sunBox.style.setProperty("--c", "var(--ce-b-shade)");
+    const sunTop = el("div", "sf-top");
+    sunTop.append(el("label", "", W.sunLabel), this._info(W.sunHint));
+    const sunSel = document.createElement("select");
+    sunSel.setAttribute("aria-label", W.sunLabel);
+    for (const r of SCHED_SUNS) {
+      const o = document.createElement("option");
+      o.value = r;
+      sunSel.append(o);
+    }
+    sunBox.append(sunTop, sunSel);
+    sunPair.append(sunBox);
     const curvePair = el("div", "spair");
-    gCurve.append(curvePair);
+    gCurve.append(sunPair, curvePair);
     const gBounds = group("mdi:arrow-collapse-vertical", W.grpBounds);
     const boundsPair = el("div", "spair");
     gBounds.append(boundsPair);
@@ -5337,7 +5402,9 @@ class CoverExtenderPanel extends HTMLElement {
     // scales its text up with it. Redrawn when the card's width changes.
     let Wd = 940;
     const Hd = 300, M = { l: 52, r: 104, t: 30, b: 34 };
-    const [Y0, Y1] = SCHED_RANGE[kind];
+    let [Y0, Y1] = schedRange(kind, this._schedPv[kind]);
+    // The words for the sun event *k* follows (s, the, long, cap).
+    const sunW = (k = kind) => W.sun[k][draft.s[k].sun] || W.sun[k].horizon;
     const mk = (t, a, p = svg) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); p.appendChild(e); return e; };
     const xOf = (j) => M.l + (j - 1) / 364 * (Wd - M.l - M.r);
     const yOf = (m) => M.t + (Y1 - m) / (Y1 - Y0) * (Hd - M.t - M.b);
@@ -5381,6 +5448,7 @@ class CoverExtenderPanel extends HTMLElement {
       const pv = this._schedPv[kind];
       const sun = pv?.sun, pts = pv?.points;
       const fixed = s.hi === s.lo;
+      [Y0, Y1] = schedRange(kind, pv);
       svg.replaceChildren();
       for (let h = Math.ceil(Y0 / 60); h * 60 <= Y1; h++) {
         mk("line", { x1: M.l, x2: Wd - M.r, y1: yOf(h * 60), y2: yOf(h * 60), class: "grid" });
@@ -5399,7 +5467,7 @@ class CoverExtenderPanel extends HTMLElement {
       if (clampMsg) msgs.push(clampMsg);
       for (const [name, reason] of Object.entries(pv?.ignored || {})) {
         const j = name === "spring" ? s.x1.j : s.x2.j;
-        msgs.push(W.ignored[reason]?.(schedDayLabel(j, year, "long"), W.ref[kind],
+        msgs.push(W.ignored[reason]?.(schedDayLabel(j, year, "long"), sunW().the,
           sun ? hmFmt(sun[j - 1]) : "") || reason);
       }
       let st = [];
@@ -5431,15 +5499,15 @@ class CoverExtenderPanel extends HTMLElement {
         }
         const today = pv.today;
         mk("circle", { cx: xOf(today), cy: yOf(pts[today - 1]), r: 4.5, fill: "var(--primary-color)", stroke: "var(--card-background-color)", "stroke-width": 2 });
-        if (nX > 2) msgs.push(W.manyCross(W.ref[kind], nX));
+        if (nX > 2) msgs.push(W.manyCross(sunW().the, nX));
         // Three figures; the gaps to the sun are drawn on the curve itself,
         // and days ahead of the sun only get a word when there are some.
         st = [
-          [W.today, hmFmt(pts[today - 1]), `${W.ref[kind]} ${hmFmt(sun[today - 1])}`],
+          [W.today, hmFmt(pts[today - 1]), `${sunW().s} ${hmFmt(sun[today - 1])}`],
           [W.earliest, hmFmt(pts[eJ - 1]), W.onDate(schedDayLabel(eJ, year, "long"))],
           [W.latest, hmFmt(pts[lJ - 1]), W.onDate(schedDayLabel(lJ, year, "long"))],
         ];
-        beforeTxt = nBefore ? W.beforeRef(W.band[kind], nBefore, signedMin(-bMax), schedDayLabel(bJ, year, "long")) : "";
+        beforeTxt = nBefore ? W.beforeRef(W.band[kind](sunW().the), nBefore, signedMin(-bMax), schedDayLabel(bJ, year, "long")) : "";
       }
       warn.hidden = !msgs.length;
       warn.replaceChildren(...msgs.map((m) => el("div", "", m)));
@@ -5485,7 +5553,14 @@ class CoverExtenderPanel extends HTMLElement {
       fineSum.replaceChildren(icon("mdi:chevron-down", "chev-d"), el("span", "", W.crossSum(
         s.x1.on && !fixed ? schedDayLabel(s.x1.j, year, "short") : W.no,
         s.x2.on && !fixed ? schedDayLabel(s.x2.j, year, "short") : W.no)));
-      refText.textContent = W.follows(W.refLong[kind], sun && pv ? hmFmt(sun[pv.today - 1]) : null);
+      refText.textContent = W.follows(sunW().long, sun && pv ? hmFmt(sun[pv.today - 1]) : null);
+      const suns = pv?.suns || {};
+      for (const o of sunSel.options) {
+        const off = suns[o.value];
+        o.textContent = `${W.sun[kind][o.value].cap} (${W.sunDeg[o.value]})${off ? ` · ${W.sunOff[off] || off}` : ""}`;
+        o.disabled = !!off && o.value !== s.sun;
+      }
+      sunSel.value = s.sun;
       F.hi.lab.textContent = fixed ? W.hiFixed : W.hi;
       F.hi.input.value = hmFmt(s.hi); F.lo.input.value = hmFmt(s.lo);
       F.x1.input.value = schedDayToIso(s.x1.j, year); F.x2.input.value = schedDayToIso(s.x2.j, year);
@@ -5494,14 +5569,14 @@ class CoverExtenderPanel extends HTMLElement {
       F.fl.cb.checked = s.fl.on; F.ce.cb.checked = s.ce.on;
       if (sun && pv) {
         F.hi.info.textContent = fixed ? W.fixedAll
-          : `${schedDayLabel(pv.max_day, year, "short")} · ${signedMin(s.hi - sun[pv.max_day - 1])} / ${W.ref[kind]} ${hmFmt(sun[pv.max_day - 1])}`;
+          : `${schedDayLabel(pv.max_day, year, "short")} · ${signedMin(s.hi - sun[pv.max_day - 1])} / ${sunW().s} ${hmFmt(sun[pv.max_day - 1])}`;
         F.lo.info.textContent = fixed ? W.glued
-          : `${schedDayLabel(pv.min_day, year, "short")} · ${signedMin(s.lo - sun[pv.min_day - 1])} / ${W.ref[kind]} ${hmFmt(sun[pv.min_day - 1])}`;
+          : `${schedDayLabel(pv.min_day, year, "short")} · ${signedMin(s.lo - sun[pv.min_day - 1])} / ${sunW().s} ${hmFmt(sun[pv.min_day - 1])}`;
       }
       for (const k of ["x1", "x2"]) {
         const ko = pv?.ignored?.[k === "x1" ? "spring" : "autumn"];
         F[k].info.textContent = fixed ? W.unusedFixed
-          : s[k].on ? `${W.ref[kind]} ${sun ? hmFmt(sun[s[k].j - 1]) : ""}${ko ? W.ignoredShort : ""}` : W.offHalf;
+          : s[k].on ? `${sunW().s} ${sun ? hmFmt(sun[s[k].j - 1]) : ""}${ko ? W.ignoredShort : ""}` : W.offHalf;
         F[k].box.classList.toggle("off", fixed || !s[k].on);
         F[k].input.disabled = fixed || !s[k].on;
         F[k].cb.disabled = fixed;
@@ -5512,7 +5587,7 @@ class CoverExtenderPanel extends HTMLElement {
         F[k].input.disabled = !s[k].on;
       }
       legend.replaceChildren(...[
-        ["var(--primary-color)", W.kinds[kind], ""], ["var(--ce-b-shade)", W.refLongCap[kind], ""], ["", W.band[kind], "sw"],
+        ["var(--primary-color)", W.kinds[kind], ""], ["var(--ce-b-shade)", sunW().cap, ""], ["", W.band[kind](sunW().the), "sw"],
       ].map(([c, t, cls]) => { const sp = el("span"); const i = el("i", `lg-line ${cls}`); if (c) i.style.background = c; sp.append(i, document.createTextNode(t)); return sp; }));
 
       /* times of the day in the table head */
@@ -5523,7 +5598,7 @@ class CoverExtenderPanel extends HTMLElement {
         kTimes[k].textContent = !draft.enabled[k] ? W.offShort
           : p2?.points ? hmFmt(p2.points[p2.today - 1]) : "";
         kRefs[k].textContent = !draft.enabled[k] ? ""
-          : W.follows(W.refLong[k], p2?.sun ? hmFmt(p2.sun[p2.today - 1]) : null);
+          : W.follows(sunW(k).long, p2?.sun ? hmFmt(p2.sun[p2.today - 1]) : null);
       }
     };
 
@@ -5537,6 +5612,7 @@ class CoverExtenderPanel extends HTMLElement {
       changed();
     });
     ["hi", "lo", "fl", "ce"].forEach(onTime);
+    sunSel.addEventListener("change", () => { s.sun = sunSel.value; clampMsg = ""; changed(); });
     for (const k of ["x1", "x2"]) {
       F[k].input.addEventListener("change", (e) => {
         if (!e.target.value) return;
@@ -5586,7 +5662,7 @@ class CoverExtenderPanel extends HTMLElement {
       cross.setAttribute("x1", xOf(j)); cross.setAttribute("x2", xOf(j)); cross.setAttribute("visibility", "visible");
       tip.replaceChildren(el("div", "d", schedDayLabel(j, year, "long")));
       if (pv.points) tip.append(el("div", "", `${W.verb[kind]} ${hmFmt(pv.points[j - 1])} (${signedMin(pv.points[j - 1] - pv.sun[j - 1])})`));
-      tip.append(el("div", "", `${W.refCap[kind]} ${hmFmt(pv.sun[j - 1])}`));
+      tip.append(el("div", "", `${sunW().cap} ${hmFmt(pv.sun[j - 1])}`));
       tip.hidden = false;
       const px = xOf(j) / Wd * r.width, tw = tip.offsetWidth;
       tip.style.left = `${px + 12 + tw > r.width ? px - 12 - tw : px + 12}px`;
