@@ -32,6 +32,7 @@ from .const import (
     SECTION_TEMPLATE,
     WALL_TILT,
 )
+from .schedule import KINDS as SCHEDULE_KINDS, parse_action as parse_schedule_action
 from .shade import tilt_kind
 
 _LOGGER = logging.getLogger(__name__)
@@ -254,11 +255,20 @@ def _add_cover_profile(
         CONF_SOLAR_GAIN:     sg_cfg,
         CONF_EXCLUSION:      list(d.get("exclusion") or []),
         CONF_INHIBITION:     list(d.get("inhibition") or []),
-        CONF_SCHEDULE:       {
-            kind: (d.get("schedule") or {}).get(kind) or None
-            for kind in ("morning", "evening")
-        },
+        CONF_SCHEDULE:       _schedule_actions(entity_id, d.get("schedule") or {}),
     }
+
+
+def _schedule_actions(entity_id: str, sched: dict[str, Any]) -> dict[str, Any]:
+    """The cover's morning / evening action; one that cannot be read is dropped."""
+    actions: dict[str, Any] = {}
+    for kind in SCHEDULE_KINDS:
+        try:
+            actions[kind] = parse_schedule_action(sched.get(kind))
+        except ValueError:
+            _LOGGER.warning("%s: the %s schedule position cannot be read, ignored", entity_id, kind)
+            actions[kind] = None
+    return actions
 
 
 def build_profiles_from_options(

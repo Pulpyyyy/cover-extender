@@ -52,11 +52,17 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.loader import async_get_integration
 
 from .helpers import resolve_helper_entity
-from .schedule import DEFAULTS as SCHEDULE_DEFAULTS, KINDS as SCHEDULE_KINDS, validate_settings as validate_schedule
+from .schedule import (
+    DEFAULTS as SCHEDULE_DEFAULTS,
+    KINDS as SCHEDULE_KINDS,
+    parse_action as parse_schedule_action,
+    validate_settings as validate_schedule,
+)
 
 from .shade import tilt_kind
 from .const import (
     CONF_TILT,
+    DAY_UNIQUE_ID,
     CONF_WINDOW_KIND,
     WALL_TILT,
     WINDOW_KINDS,
@@ -797,6 +803,9 @@ async def ws_config_get(
         "global":    _global_data(hass),
         "schedule":  dict(_sections(hass).get(SECTION_SCHEDULE) or {}),
         "schedule_defaults": SCHEDULE_DEFAULTS,
+        # Today's times and the next one, read live by the cover cards.
+        "day_entity": er.async_get(hass).async_get_entity_id("binary_sensor", DOMAIN, DAY_UNIQUE_ID)
+                      or "binary_sensor.cx_day",
         "behavior":  _behavior_schema(),
         "weather_conditions": list(WEATHER_CONDITIONS),
         "defaults":  {"command_interval": DEFAULT_COMMAND_INTERVAL_MS},
@@ -811,7 +820,8 @@ def _timed_mode_names(hass: HomeAssistant, items: list[dict[str, Any]] | None = 
 
 
 def _validate_cover_schedule(hass: HomeAssistant, item: dict[str, Any], entity_id: str) -> str | None:
-    """A cover's morning / evening mode: linked to it, and without a duration.
+    """A cover's morning / evening action: a position from 0 to 100, or a
+    mode linked to it and without a duration.
 
     A mode unlinked from the cover in the matrix is dropped from its schedule
     rather than refused: the unlink is what the user asked for, and a schedule
@@ -820,9 +830,15 @@ def _validate_cover_schedule(hass: HomeAssistant, item: dict[str, Any], entity_i
     sched = item.get("schedule") or {}
     linked = item.get("modes") or {}
     timed = _timed_mode_names(hass)
-    clean: dict[str, str | None] = {}
+    clean: dict[str, Any] = {}
     for kind in SCHEDULE_KINDS:
-        mode = sched.get(kind) or None
+        try:
+            mode = parse_schedule_action(sched.get(kind))
+        except ValueError:
+            return f"schedule_position_invalid:{entity_id}"
+        if isinstance(mode, dict):
+            clean[kind] = mode
+            continue
         if mode is not None and mode not in linked:
             mode = None
         if mode is not None and mode in timed:
@@ -858,7 +874,8 @@ def _save_schedule(
     ONE write (see _persist): one reload, never half of it applied.
 
     data: {"house": {"morning": {...}, "evening": {...}},
-           "covers": {cover_entity_id: {"morning": mode|None, "evening": mode|None}}}
+           "covers": {cover_entity_id: {"morning": action, "evening": action}}}
+    where an action is a mode name, {"position": 0..100, "force": bool}, or None.
     """
     data = msg["data"]
     if not isinstance(data, dict):

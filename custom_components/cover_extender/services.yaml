@@ -10,6 +10,11 @@ set_cover_position:
           min: 0
           max: 100
           unit_of_measurement: "%"
+    force:
+      required: false
+      default: false
+      selector:
+        boolean:
 
 open_cover:
   target:

@@ -99,6 +99,8 @@ ATTR_RETURN_MODE  = "return_mode"
 SIGNAL_TIMED_MODE = f"{DOMAIN}_timed_mode"
 # The day's opening / closing times changed (new day, event, settings).
 SIGNAL_SCHEDULE   = f"{DOMAIN}_schedule"
+# binary_sensor.cx_day, found by this id once it may have been renamed.
+DAY_UNIQUE_ID     = f"{DOMAIN}_binary_sensor_cx_day"
 
 # Weather states accepted as "good conditions" for solar gain. Shared so the
 # config flow and the admin panel offer the same list (the panel receives it

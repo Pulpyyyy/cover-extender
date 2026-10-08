@@ -7,6 +7,10 @@
         "position": {
           "name": "Position",
           "description": "Position cible (0 = fermé, 100 = ouvert)."
+        },
+        "force": {
+          "name": "Forcer",
+          "description": "Déplace aussi les volets verrouillés (la position est aussi écrite en mémoire, pour que la sortie du mode verrouillé ne l'annule pas) et passe outre les inhibitions, jamais les exclusions de sécurité (une fenêtre ouverte). Le mode ne change pas."
         }
       }
     },

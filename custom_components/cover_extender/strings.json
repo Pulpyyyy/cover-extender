@@ -7,6 +7,10 @@
         "position": {
           "name": "Position",
           "description": "Target position (0 = closed, 100 = open)."
+        },
+        "force": {
+          "name": "Force",
+          "description": "Moves locked covers too (the position is also written to memory, so leaving the locked mode does not undo it) and passes the inhibitions, never the safety exclusions (an open window). The mode does not change."
         }
       }
     },

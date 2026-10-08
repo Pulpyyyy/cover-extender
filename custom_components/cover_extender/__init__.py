@@ -30,7 +30,7 @@ Module layout:
 
 Available services:
   - cover_extender.apply_mode(mode, entity_id)         apply a mode to one or more covers
-  - cover_extender.set_cover_position(entity_id, pos)  move cover(s), respecting the lock
+  - cover_extender.set_cover_position(entity_id, pos)  move cover(s), respecting the lock unless force
   - cover_extender.open_cover / close_cover             open/close cover(s), respecting lock
   - cover_extender.apply_memory(entity_id)             force-apply stored memory position
   - cover_extender.compute_shade_position(entity_id)   compute solar shade position
@@ -418,6 +418,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         schema=vol.Schema({
             **cv.TARGET_SERVICE_FIELDS,
             vol.Required("position"): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
+            vol.Optional("force", default=False): cv.boolean,
         }),
     )
     hass.services.async_register(

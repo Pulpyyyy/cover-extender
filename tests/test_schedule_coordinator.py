@@ -183,3 +183,72 @@ def test_a_scheduled_mode_cannot_get_a_duration(ws_hass):
     new = [{"name": "Day"}, {"name": "Night", "duration": 30}]
     assert ws._scheduled_mode_timed(ws_hass, new, old) == "schedule_mode_timed:Night"
     assert ws._scheduled_mode_timed(ws_hass, [{"name": "Day"}, {"name": "Night"}], old) is None
+
+
+# ── Scheduled positions ───────────────────────────────────────────────────────
+
+def _queued(c):
+    items = []
+    while not c._cover_queue.empty():
+        items.append(c._cover_queue.get_nowait())
+    return items
+
+
+def _evening_position(coord, force, lock="off"):
+    profile = coord.hass.data[DOMAIN][DATA_COVER_PROFILES][LIVING]
+    profile[CONF_SCHEDULE] = {"morning": None, "evening": {"position": 0, "force": force}}
+    coord.hass.data[DOMAIN][DATA_COVER_PROFILES][BEDROOM][CONF_SCHEDULE] = {"morning": None, "evening": None}
+    coord.hass.states.set("switch.living_room_cx_lock", lock)
+    return profile
+
+
+def test_a_scheduled_position_moves_a_free_cover_and_keeps_its_mode(coord):
+    _evening_position(coord, force=False)
+    asyncio.run(coord._run_schedule("evening", datetime(2026, 10, 6).date()))
+    assert _queued(coord) == [("set_cover_position", {"entity_id": LIVING, "position": 0})]
+    assert coord.hass.services.calls == []   # no select_option: the mode stays
+    assert coord._get_memory(LIVING) is None
+
+
+def test_a_locked_cover_keeps_the_scheduled_position_in_memory(coord):
+    _evening_position(coord, force=False, lock="on")
+    coord.hass.data[DOMAIN][DATA_MEMORY][LIVING] = 80
+    asyncio.run(coord._run_schedule("evening", datetime(2026, 10, 6).date()))
+    assert _queued(coord) == []
+    assert coord._get_memory(LIVING) == 0
+
+
+def test_a_forced_position_moves_a_locked_cover_and_updates_its_memory(coord):
+    _evening_position(coord, force=True, lock="on")
+    coord.hass.data[DOMAIN][DATA_MEMORY][LIVING] = 80
+    asyncio.run(coord._run_schedule("evening", datetime(2026, 10, 6).date()))
+    assert _queued(coord) == [("set_cover_position", {"entity_id": LIVING, "position": 0})]
+    # Leaving the locked mode must not reopen it to 80 %.
+    assert coord._get_memory(LIVING) == 0
+
+
+def test_a_forced_position_passes_the_inhibition_not_the_window(coord):
+    profile = _evening_position(coord, force=True, lock="on")
+    profile["inhibition"] = ["input_boolean.guest"]
+    profile["exclusion"] = ["binary_sensor.window"]
+    coord.hass.states.set("input_boolean.guest", "on")
+    coord.hass.states.set("binary_sensor.window", "off")
+    asyncio.run(coord._run_schedule("evening", datetime(2026, 10, 6).date()))
+    assert _queued(coord) == [("set_cover_position", {"entity_id": LIVING, "position": 0})]
+    coord.hass.states.set("binary_sensor.window", "on")
+    asyncio.run(coord._run_schedule("evening", datetime(2026, 10, 7).date()))
+    assert _queued(coord) == []
+    # Waits for the window, then moves even though the cover is still locked.
+    assert coord._exclusion_pending[LIVING] == (0, False, True)
+
+
+def test_cover_schedule_keeps_a_position(ws_hass):
+    item = {"modes": {"Night": {}}, "schedule": {"morning": {"position": 100, "force": True}, "evening": "Night"}}
+    assert ws._validate_cover_schedule(ws_hass, item, LIVING) is None
+    assert item["schedule"] == {"morning": {"position": 100, "force": True}, "evening": "Night"}
+
+
+@pytest.mark.parametrize("position", [101, -1, "50", None, True, 12.5])
+def test_cover_schedule_refuses_a_position_it_cannot_read(ws_hass, position):
+    item = {"modes": {}, "schedule": {"evening": {"position": position}}}
+    assert ws._validate_cover_schedule(ws_hass, item, LIVING) == f"schedule_position_invalid:{LIVING}"

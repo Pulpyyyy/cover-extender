@@ -90,6 +90,22 @@ def day_to_mmdd(day: int, year: int) -> str:
     return (date(year, 1, 1) + timedelta(days=day - 1)).strftime("%m-%d")
 
 
+def parse_action(value: Any) -> str | dict[str, Any] | None:
+    """A cover's morning or evening action: a mode name, a position, or None.
+
+    A position is {"position": 0..100, "force": bool}: forced, it moves a
+    locked cover too; otherwise a locked cover keeps it in memory. Anything
+    else that is not a mode name reads as no action. Raises ValueError on a
+    position that cannot be read, for the panel to refuse it.
+    """
+    if isinstance(value, dict):
+        pos = value.get("position")
+        if isinstance(pos, bool) or not isinstance(pos, int) or not 0 <= pos <= 100:
+            raise ValueError(pos)
+        return {"position": pos, "force": bool(value.get("force", False))}
+    return value if isinstance(value, str) and value else None
+
+
 def validate_settings(cfg: Any) -> str | None:
     """Shape of one stored schedule; an error code, or None.
 

@@ -214,7 +214,7 @@ This walk-through sets up one cover with two modes, *Day* (open) and *Night* (cl
 
 ### Next steps
 
-- Open and close at the right time with the [schedules](#schedules): a morning and an evening time that follow the sun, and a mode per cover.
+- Open and close at the right time with the [schedules](#schedules): a morning and an evening time that follow the sun, and a mode or a position per cover.
 - Or switch modes from your own automations with the [`cover_extender.apply_mode`](#cover_extenderapply_mode) action, e.g. *Night* at sunset:
 
   ```yaml
@@ -276,7 +276,14 @@ A *Shading* or *Solar gain* mode always locks the cover, so that its computed mo
 
 ### Schedules
 
-The **Schedules** tab holds the house's **morning opening** and **evening closing**, each switched on or off. At each, every cover applies the mode chosen for it in the table below the chart (or keeps its mode, with *None*). The table is grouped by facade; its *All covers* row sets every cover that offers the chosen mode at once, and a cover that does something different from the others is highlighted. It is a mode change like any other: the lock, the exclusions, the inhibitions and the timed modes apply.
+The **Schedules** tab holds the house's **morning opening** and **evening closing**, each switched on or off. At each, every cover applies the action chosen for it in the table below the chart: a **mode**, a **fixed position**, or *None* (the cover does nothing). The table is grouped by facade; its *All covers* row sets every cover that offers the chosen action at once, and a cover that does something different from the others is highlighted.
+
+- A **mode** is a mode change like any other: the lock, the exclusions, the inhibitions, the timed modes and [who replaces whom](#who-replaces-whom) apply.
+- A **position** (0 to 100 %) moves the cover without changing its mode. It either:
+  - **respects the lock**: a free cover moves; a locked cover does not, the position goes to its [memory](#lock-and-memory) and the cover takes it when it leaves the locked mode (for a mode without a fixed position). An inhibition holds it back until it ends.
+  - or **forces** it: the cover moves at once, even locked, and passes the inhibitions. The mode and the lock stay; the memory takes the position too, so leaving the locked mode does not undo it. On a cover in a shading or solar gain mode, the next computation can move it again (the panel flags it); for a state that lasts the evening, a mode is the better tool.
+
+  An open window (a safety exclusion) holds both back: the position is applied when it closes.
 
 Each time follows the sun over the year, within bounds you set:
 
@@ -435,7 +442,7 @@ All configuration lives in the panel at `/cover-extender`. Every value is checke
 
 | Tab | What it edits |
 |---|---|
-| **Covers** | The covers: entity, facade, template, [safety exclusions and inhibitions](#exclusions), geometry, shading and solar-gain settings, each with a one-line hint and a sketch of the window. Under a template, each value says whether it comes from the template or belongs to the cover, with an *Overrides only* filter. Each card shows what the cover is doing right now: its mode and position, then whatever holds it back (a [timed mode](#timed-modes) with its end time, the lock with the remembered position, an exclusion or an inhibition that is on). |
+| **Covers** | The covers: entity, facade, template, [safety exclusions and inhibitions](#exclusions), geometry, shading and solar-gain settings, each with a one-line hint and a sketch of the window. Under a template, each value says whether it comes from the template or belongs to the cover, with an *Overrides only* filter. Each card shows what the cover is doing right now: its mode and position, then whatever holds it back (a [timed mode](#timed-modes) with its end time, the lock with the remembered position, an exclusion or an inhibition that is on). A cover that follows a [schedule](#schedules) shows its morning and evening actions with today's times, the next one marked, and a line when its state changes that next one (locked: the position goes to memory; an open window: it waits). A click on that row opens the Schedules tab. The cover's editor shows the same row. |
 | **Matrix** | Modes × covers: link modes and set every per-cover position from one grid. |
 | **Modes** | Icon, color, lock, behavior, priority, fallback, [duration](#timed-modes) and what happens at its end, visibility. Drag the tiles to reorder: the order drives the mode selectors. Under **Applied to several covers**: the modes it leaves alone, and its fallback (see [who replaces whom](#who-replaces-whom)). |
 | **Schedules** | The [morning opening and evening closing](#schedules): the curve of each over the year, and each cover's morning and evening mode. |
@@ -507,7 +514,7 @@ All actions that take a `target` accept entities, devices, areas and labels.
 
 #### `cover_extender.set_cover_position`
 
-Moves the covers to `position` (0-100), or memorizes it when the cover is locked or excluded.
+Moves the covers to `position` (0-100), or memorizes it when the cover is locked or excluded. With `force: true` it moves locked covers too (writing the position to memory as well, so leaving the locked mode does not undo it) and passes the inhibitions, never the safety exclusions. The mode does not change.
 
 ```yaml
 action: cover_extender.set_cover_position
@@ -515,6 +522,7 @@ target:
   entity_id: cover.office
 data:
   position: 40
+  force: false
 ```
 
 #### `cover_extender.open_cover` / `cover_extender.close_cover`

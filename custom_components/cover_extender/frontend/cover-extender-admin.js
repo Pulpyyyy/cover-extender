@@ -114,8 +114,8 @@ const WORDS = {
       clampCeFl: (t) => `The ceiling stays above the floor (${t}).`,
       clampGap: "A curve needs at least 1 h between max and min: below that, the clock change would push it under the min in winter.",
       clampCross: (k, a, b) => `The ${k.toLowerCase()} stays between ${a} and ${b}.`,
-      introShort: "Morning and evening, each cover takes the mode chosen for it at the bottom of the page.",
-      introInfo: "A mode change like any other: exclusions, inhibitions, the lock and timed modes apply.",
+      introShort: "Morning and evening, each cover takes the action chosen for it at the bottom of the page: a mode or a position.",
+      introInfo: "A mode applies as a mode change like any other: exclusions, inhibitions, the lock and timed modes apply. A position leaves the mode alone; it respects the lock unless it is forced, and an open window always holds it back.",
       enabledLabel: "On",
       todayAt: (t) => `today ${t}`,
       offShort: "off",
@@ -125,9 +125,15 @@ const WORDS = {
       no: "no",
       dragHint: "Drag the handles on the chart, or double-click one to type its value.",
       allCovers: "All covers", mixed: "Several", differs: "differs from the other covers",
-      perCover: "Mode applied per cover",
-      perCoverSub: "“None”: the cover does not follow this schedule. Only the modes linked to the cover and without a duration are offered.",
+      perCover: "Action applied per cover",
+      perCoverSub: "“None”: the cover does not follow this schedule. A mode applies as a grouped mode change; only the modes linked to the cover and without a duration are offered. A position moves the cover without changing its mode.",
       cover: "Cover", noneOpt: "None",
+      grpMode: "Mode", grpPos: "Position", posOpt: "Fixed position…", posLabel: "Position in %",
+      lockedLabel: "If the cover is locked",
+      keepLock: "Respects the lock", forcePos: "Force",
+      keepLockHint: "Free cover: it moves. Locked cover: it does not move; the position goes to memory and the cover takes it when it leaves the locked mode.",
+      forceHint: "Moves at once, even locked, and passes the inhibitions. The mode and the lock stay; the memory takes this position too, so leaving the mode does not undo it. An open window still holds it back.",
+      forceComputes: "One of this cover's modes computes its position (shading, solar gain): its next computation can move the cover again.",
     },
     loading: "Loading the configuration…",
     loadError: "Could not load the configuration",
@@ -248,6 +254,14 @@ const WORDS = {
     timedChip: (n, r) => (r ? `${n} min, then ${r}` : `${n} min`),
     statusTimer: (m, t) => `back to ${m} at ${t}`,
     statusLocked: (p) => (p == null ? "locked" : `locked, ${p} % remembered`),
+    schedNext: "next", schedTomorrow: (t) => `tomorrow ${t}`,
+    schedOpen: "Open the Schedules tab", schedAria: (n) => `Schedules of ${n}, open the Schedules tab`,
+    fcSafety: (n) => `${n}: the cover moves once the exclusion clears.`,
+    fcInhib: (n) => `${n}: the cover moves when the inhibition ends.`,
+    fcMemory: (p) => `Locked: ${p} % goes to memory, taken when it leaves the mode.`,
+    fcRecompute: "Its current mode computes the position: the next computation can move it again.",
+    fcSpared: (cur, m) => `${m} does not replace ${cur}: the cover stays in ${cur}.`,
+    fcAfterTimed: (cur, m) => `${m} will apply when ${cur} ends.`,
     entitiesShow: "Show the entities",
     groupedTitle: "Applied to several covers",
     groupedHint: "Global selector, schedules, automations. A choice made on one cover's own selector always applies.",
@@ -359,7 +373,7 @@ const WORDS = {
     fig: {
       outside: "outside", room: "room", max: "max height", min: "min height",
       distance: "distance", left: "left", right: "right", view: "seen from inside",
-      top: "from above", side: "in profile", section: "cross-section", horizon: "horizon", behindWall: "behind the wall",
+      top: "from above", side: "in profile", section: "cross-section", horizon: "horizon",
       sectorSun: "solar gain, sensor and shading", sectorShade: "heights for shading", sunNow: "the sun now",
       behindRoof: "behind: only above the roof", wholeSky: "the whole sky, any direction", behind: "behind",
       length: "length",
@@ -436,6 +450,7 @@ const WORDS = {
       fallback_invalid: (n) => `“${n}”: the fallback mode must be another existing mode.`,
       schedule_mode_timed: (m) => `“${m}” is applied by a schedule: it cannot have a duration, and a mode with a duration cannot be scheduled.`,
       schedule_invalid: (k) => `The ${k} schedule cannot be read.`,
+      schedule_position_invalid: (e) => `${e}: a scheduled position goes from 0 to 100%.`,
       schedule_min_after_max: (k) => `The ${k} schedule: the min time is after the max time.`,
       schedule_floor_after_ceiling: (k) => `The ${k} schedule: the floor is not before the ceiling.`,
       return_mode_timed: (target, user) => `“${target}” is the mode “${user}” returns to: it cannot have a duration. Change the return of “${user}” first.`,
@@ -519,8 +534,8 @@ const WORDS = {
       clampCeFl: (t) => `Le plafond reste au-dessus du plancher (${t}).`,
       clampGap: "Entre l'heure fixe et la courbe, il faut au moins 1 h d'écart : en dessous, le changement d'heure ferait passer la courbe sous le min en hiver.",
       clampCross: (k, a, b) => `Le ${k.toLowerCase()} reste entre le ${a} et le ${b}.`,
-      introShort: "Matin et soir, chaque volet passe dans le mode choisi pour lui en bas de la page.",
-      introInfo: "C'est un changement de mode comme un autre : les exclusions, les inhibitions, le verrou et les modes minutés s'appliquent.",
+      introShort: "Matin et soir, chaque volet applique l'action choisie pour lui en bas de la page : un mode ou une position.",
+      introInfo: "Un mode s'applique comme tout changement de mode : les exclusions, les inhibitions, le verrou et les modes minutés s'appliquent. Une position ne change pas le mode ; elle respecte le verrou sauf si elle est forcée, et une fenêtre ouverte la bloque toujours.",
       enabledLabel: "Activée",
       todayAt: (t) => `aujourd'hui ${t}`,
       offShort: "désactivée",
@@ -530,9 +545,15 @@ const WORDS = {
       no: "non",
       dragHint: "Faire glisser les poignées sur le graphique, ou double-cliquer sur l'une d'elles pour taper sa valeur.",
       allCovers: "Tous les volets", mixed: "Plusieurs", differs: "diffère des autres volets",
-      perCover: "Mode appliqué par volet",
-      perCoverSub: "« Aucun » : le volet ne suit pas cet horaire. Seuls les modes liés au volet et sans durée sont proposés.",
-      cover: "Volet", noneOpt: "Aucun",
+      perCover: "Action appliquée par volet",
+      perCoverSub: "« Aucune » : le volet ne suit pas cet horaire. Un mode s'applique comme un changement de mode groupé ; seuls les modes liés au volet et sans durée sont proposés. Une position déplace le volet sans changer son mode.",
+      cover: "Volet", noneOpt: "Aucune",
+      grpMode: "Mode", grpPos: "Position", posOpt: "Position fixe…", posLabel: "Position en %",
+      lockedLabel: "Si le volet est verrouillé",
+      keepLock: "Respecte le verrou", forcePos: "Force",
+      keepLockHint: "Volet libre : il bouge. Volet verrouillé : il ne bouge pas, la position part en mémoire et il la prend en quittant le mode verrouillé.",
+      forceHint: "Bouge tout de suite, même verrouillé, et passe outre les inhibitions. Le mode et le verrou restent ; la mémoire prend aussi cette position, pour que la sortie du mode ne l'annule pas. Une fenêtre ouverte le bloque quand même.",
+      forceComputes: "Un mode de ce volet calcule sa position (ombrage, gain solaire) : son prochain calcul peut rebouger le volet.",
     },
     loading: "Chargement de la configuration…",
     loadError: "Impossible de charger la configuration",
@@ -648,6 +669,14 @@ const WORDS = {
     timedChip: (n, r) => (r ? `${n} min, puis ${r}` : `${n} min`),
     statusTimer: (m, t) => `retour à ${m} à ${t}`,
     statusLocked: (p) => (p == null ? "verrouillé" : `verrouillé, ${p} % mémorisé`),
+    schedNext: "prochain", schedTomorrow: (t) => `demain ${t}`,
+    schedOpen: "Ouvrir l'onglet Horaires", schedAria: (n) => `Horaires de ${n}, ouvrir l'onglet Horaires`,
+    fcSafety: (n) => `${n} : le volet bougera une fois l'exclusion levée.`,
+    fcInhib: (n) => `${n} : le volet bougera à la fin de l'inhibition.`,
+    fcMemory: (p) => `Verrouillé : ${p} % ira en mémoire, pris en quittant le mode.`,
+    fcRecompute: "Son mode actuel calcule la position : le calcul suivant peut le rebouger.",
+    fcSpared: (cur, m) => `${m} ne remplace pas ${cur} : le volet reste en ${cur}.`,
+    fcAfterTimed: (cur, m) => `${m} s'appliquera à la fin de ${cur}.`,
     entitiesShow: "Voir les entités",
     groupedTitle: "Lancé pour plusieurs volets",
     groupedHint: "Sélecteur global, horaires, automatisations. Un choix fait sur le sélecteur d'un volet passe toujours.",
@@ -758,7 +787,7 @@ const WORDS = {
     fig: {
       outside: "dehors", room: "pièce", max: "haut. maxi", min: "haut. mini",
       distance: "distance", left: "gauche", right: "droite", view: "vu de l'intérieur",
-      top: "vue de dessus", side: "de profil", section: "en coupe", horizon: "horizon", behindWall: "derrière le mur",
+      top: "vue de dessus", side: "de profil", section: "en coupe", horizon: "horizon",
       sectorSun: "héliotropie, capteur et ombrage", sectorShade: "hauteur pour l'ombrage", sunNow: "le soleil maintenant",
       behindRoof: "derrière : seulement au-dessus du toit", wholeSky: "tout le ciel, toutes directions", behind: "de dos",
       length: "longueur",
@@ -835,6 +864,7 @@ const WORDS = {
       fallback_invalid: (n) => `« ${n} » : le mode de repli doit être un autre mode existant.`,
       schedule_mode_timed: (m) => `« ${m} » est appliqué par un horaire : il ne peut pas avoir de durée, et un mode avec une durée ne peut pas être programmé.`,
       schedule_invalid: (k) => `L'horaire « ${k} » est illisible.`,
+      schedule_position_invalid: (e) => `${e} : une position programmée va de 0 à 100 %.`,
       schedule_min_after_max: (k) => `Horaire « ${k} » : l'heure min est après l'heure max.`,
       schedule_floor_after_ceiling: (k) => `Horaire « ${k} » : le plancher n'est pas avant le plafond.`,
       return_mode_timed: (target, user) => `« ${target} » est le mode de retour de « ${user} » : il ne peut pas avoir de durée. Changez d'abord le retour de « ${user} ».`,
@@ -1338,6 +1368,21 @@ const STYLE = `
 
   /* ---------- read-only tabs ---------- */
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: var(--fp-s3); }
+  /* Cover cards side by side keep each part on the same line: every card
+     spans the same six rows of the grid (head, state, schedules, forecast,
+     chips, features), so a card without schedules leaves that row empty
+     instead of moving its chips up. */
+  @supports (grid-template-rows: subgrid) {
+    .grid.covers { row-gap: 0; }
+    .grid.covers > .card { display: grid; grid-row: span 6; grid-template-rows: subgrid; row-gap: 0;
+                           align-content: start; margin-bottom: var(--fp-s3); }
+    .grid.covers > .card > .c-head { grid-row: 1; }
+    .grid.covers > .card > .status { grid-row: 2; }
+    .grid.covers > .card > .sched-row { grid-row: 3; }
+    .grid.covers > .card > .sched-hint { grid-row: 4; }
+    .grid.covers > .card > .chips { grid-row: 5; align-self: start; }
+    .grid.covers > .card > .feats { grid-row: 6; align-self: end; }
+  }
   .c-head { display: flex; align-items: center; gap: var(--fp-s3); margin-bottom: var(--fp-s3); }
   .c-head img, .c-head .pic { width: 38px; height: 38px; border-radius: var(--fp-ctl-r);
                               object-fit: cover; flex: none; }
@@ -1433,6 +1478,38 @@ const STYLE = `
                    border-radius: var(--fp-pill-r); padding: var(--fp-s0) var(--fp-s2); }
   .status .smode ha-icon { --mdc-icon-size: 14px; width: 14px; height: 14px; }
   .status .spos { color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
+  /* The cover's schedules: morning | evening, the next one marked. */
+  /* Two halves, each its own box: an empty half (no action, or its schedule
+     off) shows nothing at all. */
+  .sched-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--fp-s2); width: 100%;
+               margin: 0 0 var(--fp-s3); padding: 0; border: 0; border-radius: var(--fp-ctl-r);
+               background: none; font: inherit; font-size: var(--f-12-5);
+               color: var(--primary-text-color); text-align: left; cursor: pointer; }
+  .sched-row:focus-visible { outline: var(--fp-focus); outline-offset: var(--fp-focus-off); }
+  .sched-row .ev { display: grid; gap: 1px; padding: var(--fp-s2) 10px; min-width: 0; }
+  .sched-row .ev:not(.none) { background: var(--secondary-background-color); border: 1px solid transparent;
+                              border-radius: var(--fp-ctl-r); }
+  .sched-row:hover .ev:not(.none) { border-color: var(--primary-color); }
+  .sched-row .t { display: flex; align-items: center; gap: var(--fp-sh); color: var(--secondary-text-color);
+                  font-variant-numeric: tabular-nums; }
+  .sched-row .t b { font-weight: 500; }
+  .sched-row ha-icon { --mdc-icon-size: 14px; width: 14px; height: 14px; flex: none; }
+  .sched-row .a { display: flex; align-items: center; gap: var(--fp-sh); font-weight: 500; min-width: 0; }
+  .sched-row .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sched-row .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .sched-row .done .a { color: var(--secondary-text-color); font-weight: 400; }
+  .sched-row .next .t { color: var(--primary-color); }
+  .sched-row .tag { margin-left: auto; font-size: var(--f-11); font-weight: 700; letter-spacing: .04em;
+                    text-transform: uppercase; color: var(--primary-color); }
+  .sched-row .k-mem { color: var(--secondary-text-color); }
+  .sched-row .k-now { color: var(--primary-color); }
+  .sched-hint { display: flex; align-items: flex-start; gap: var(--fp-sh); margin: calc(var(--fp-s2) * -1) 0 var(--fp-s3);
+                font-size: var(--f-12); color: var(--secondary-text-color); }
+  .sched-hint ha-icon { --mdc-icon-size: 14px; width: 14px; height: 14px; flex: none; margin-top: 1px; }
+  .sched-hint.mem ha-icon { color: var(--primary-color); }
+  .sched-hint.warn { color: var(--fp-warn); }
+  .ed-sched { margin-top: var(--fp-s3); max-width: 520px; }
+  .ed-sched .sched-hint { margin-bottom: 0; }
   .chip.safety { color: var(--fp-bad); border-color: color-mix(in srgb, var(--fp-bad) 45%, transparent); }
   .chip.inhib { color: var(--fp-warn); border-color: color-mix(in srgb, var(--fp-warn) 45%, transparent); }
   details.ents summary { cursor: pointer; color: var(--primary-color); font-size: var(--f-13);
@@ -1935,8 +2012,22 @@ const STYLE = `
   table.assign tr.all td { background: color-mix(in srgb, var(--primary-color) 7%, transparent); }
   table.assign tr.all .nm { font-weight: 600; }
   table.assign .fselect.msel { width: auto; min-width: 180px; max-width: 260px; height: 34px; border-left-width: 4px; }
-  table.assign .fselect.msel.diff { border-color: color-mix(in srgb, var(--fp-warn) 60%, transparent);
+  table.assign .sact.diff .fselect.msel, table.assign .sact.diff .spos input {
+         border-color: color-mix(in srgb, var(--fp-warn) 60%, transparent);
          background: color-mix(in srgb, var(--fp-warn) 9%, var(--card-background-color)); }
+  /* A scheduled position: its value, then whether it respects the lock or forces it. */
+  table.assign .sact { display: flex; flex-wrap: wrap; align-items: center; gap: var(--fp-s1) var(--fp-s2); }
+  table.assign .spos { display: flex; align-items: center; gap: var(--fp-s1); }
+  table.assign .spos[hidden], table.assign .sflag[hidden] { display: none; }
+  table.assign .spos input { width: 64px; height: 34px; text-align: right; font: inherit; font-size: var(--f-13);
+         font-variant-numeric: tabular-nums; padding: 0 var(--fp-s2); border-radius: var(--fp-field-r);
+         border: 1px solid var(--divider-color); background: var(--secondary-background-color); color: var(--primary-text-color); }
+  table.assign .spct { font-size: var(--f-13); color: var(--secondary-text-color); }
+  .seg.spos-seg { margin: 0 0 0 var(--fp-s1); flex: none; }
+  .seg.spos-seg button { flex: none; display: flex; align-items: center; gap: var(--fp-sh); padding: 0 var(--fp-s3); white-space: nowrap; }
+  .seg.spos-seg button ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; }
+  .seg.spos-seg button:disabled { opacity: .5; cursor: default; }
+  table.assign .sflag { --mdc-icon-size: 18px; width: 18px; height: 18px; color: var(--fp-warn); cursor: help; }
   table.assign .fselect.msel.none { color: var(--secondary-text-color); font-style: italic; }
   .sched-diff-legend { display: inline-flex; align-items: center; gap: var(--fp-sh); font-size: var(--f-12); color: var(--secondary-text-color); }
   .sw-diff { display: inline-block; width: 22px; height: 12px; border-radius: 3px;
@@ -1974,6 +2065,9 @@ const STYLE = `
     table.assign .rowh { min-width: 0; }
     table.assign .rowh .pic, table.assign .rowh img { display: none; }
     table.assign .fselect.msel { min-width: 0; width: 100%; }
+    table.assign .sact { flex-direction: column; align-items: stretch; }
+    table.assign .spos { flex-wrap: wrap; }
+    .seg.spos-seg { margin-left: 0; }
     table.assign td, table.assign th { padding-left: var(--fp-s1); padding-right: var(--fp-s1); }
     table.assign th { white-space: normal; }
     .sched-en { margin-left: 0; }
@@ -3519,7 +3613,7 @@ class CoverExtenderPanel extends HTMLElement {
         : `<path d="${sector(-left, right, R)}" ${SHADE}/>`;
       // Behind a wall nothing; behind a roof, only a sun above it.
       s += `<rect x="-2.5" y="${cy}" width="225" height="${150 - cy}" fill="var(--card-background-color)" fill-opacity="${kind === "wall" ? ".55" : ".3"}"/>`;
-      s += text(cx, Math.min(146, cy + 20), kind === "wall" ? F.behindWall : F.behindRoof, "var(--secondary-text-color)");
+      s += text(cx, Math.min(146, cy + 20), kind === "wall" ? F.room : F.behindRoof, "var(--secondary-text-color)");
       s += `<line x1="8" y1="${cy}" x2="212" y2="${cy}" stroke="var(--secondary-text-color)" stroke-width="1.6"/>`;
       s += `<rect x="${wl}" y="${cy - 2.5}" width="${wr - wl}" height="5" fill="var(--primary-color)"/>`;
       for (const [edge, deg, v, side] of [[wl, -left, left, -1], [wr, right, right, 1]]) {
@@ -4119,7 +4213,7 @@ class CoverExtenderPanel extends HTMLElement {
     bar.append(add);
     wrap.append(bar);
 
-    const grid = el("div", "grid");
+    const grid = el("div", "grid covers");
     for (const [facade, covers] of this._grouped()) {
       for (const c of covers) {
         const idx = this._cfg.covers.indexOf(c);
@@ -4143,6 +4237,7 @@ class CoverExtenderPanel extends HTMLElement {
         card.append(head);
         const status = this._statusLine(c);
         if (status) card.append(status);
+        card.append(...this._schedLine(c));
 
         const chips = el("div", "chips");
         const fchip = el("span", "chip");
@@ -4180,7 +4275,8 @@ class CoverExtenderPanel extends HTMLElement {
   /** Every state the cover cards show, as one string: the redraw trigger. */
   _statusSignature() {
     const st = this._hass?.states || {};
-    const parts = [];
+    const day = st[this._cfg?.day_entity]?.attributes;
+    const parts = [day?.opening, day?.closing, day?.next_change];
     for (const c of this._cfg?.covers || []) {
       const ids = this._cfg.helpers?.[c.entity_id] || {};
       const sel = st[ids.select];
@@ -4242,6 +4338,104 @@ class CoverExtenderPanel extends HTMLElement {
     return line;
   }
 
+  /** The cover's morning and evening actions with today's times, the next
+   *  one marked, then how the cover's state now changes that next one.
+   *  Empty when the cover follows no schedule that is on. */
+  _schedLine(c) {
+    const house = this._cfg.schedule || {};
+    const acts = c.schedule || {};
+    // Morning on the left, evening on the right, always: a schedule that is
+    // off, or has no action for this cover, leaves its half empty. None of
+    // the schedules that are on acting on this cover: no row.
+    const action = (k) => (house[k] ? acts[k] ?? null : null);
+    if (!SCHED_KINDS.some((k) => action(k) != null)) return [];
+    const day = this._hass.states[this._cfg.day_entity]?.attributes || {};
+    const at = { morning: day.opening, evening: day.closing };
+    const next = day.next_change;
+    // next_change is today's opening, today's closing, or tomorrow's opening.
+    const nextKind = !next ? null : next === day.closing ? "evening" : "morning";
+    const tomorrow = !!next && next !== day.opening && next !== day.closing;
+    // In the house's time zone, like the schedules (computed by the server).
+    const hm = (iso) => new Date(iso).toLocaleTimeString(LANG, {
+      hour: "2-digit", minute: "2-digit", timeZone: this._hass.config?.time_zone || undefined,
+    });
+
+    const row = el("button", "sched-row");
+    row.type = "button";
+    row.title = T.schedOpen;
+    row.setAttribute("aria-label", T.schedAria(this._coverName(c)));
+    // The rest of the card opens the cover's editor: this row opens the tab.
+    row.addEventListener("keydown", (e) => e.stopPropagation());
+    row.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!this._leaveEditor()) return;
+      this._tab = "horaires";
+      if (nextKind) this._schedKind = nextKind;
+      this._render();
+    });
+    for (const k of SCHED_KINDS) {
+      const a = action(k);
+      const isNext = a != null && nextKind === k;
+      const done = a != null && !isNext && !!at[k] && new Date(at[k]) <= new Date();
+      const cell = el("span", `ev${a == null ? " none" : isNext ? " next" : done ? " done" : ""}`);
+      row.append(cell);
+      // No action on that schedule: the cell keeps its place, empty.
+      if (a == null) continue;
+      const time = el("span", "t");
+      time.append(icon(k === "morning" ? "mdi:weather-sunset-up" : "mdi:weather-sunset-down"));
+      const when = isNext && tomorrow ? T.schedTomorrow(hm(next)) : at[k] ? hm(at[k]) : "";
+      if (when) time.append(el("b", "", when));
+      if (isNext) time.append(el("span", "tag", T.schedNext));
+      const act = el("span", "a");
+      if (typeof a === "object") {
+        const g = icon(a.force ? "mdi:flash" : "mdi:lock-outline", a.force ? "k-now" : "k-mem");
+        g.title = a.force ? T.sched.forcePos : T.sched.keepLock;
+        act.append(el("span", "lbl", `${a.position} %`), g);
+      } else {
+        const dot = el("span", "dot");
+        dot.style.background = this._cfg.modes.find((m) => m.name === a)?.color || "var(--secondary-text-color)";
+        act.append(dot, el("span", "lbl", a));
+      }
+      cell.append(time, act);
+    }
+    const hint = this._schedForecast(c, nextKind ? action(nextKind) : null);
+    return hint ? [row, hint] : [row];
+  }
+
+  /** What the cover's state now changes at its next schedule, or null:
+   *  the same rules as the server (see async_request_mode and
+   *  _set_cover_position_impl), read from the live states. */
+  _schedForecast(c, a) {
+    if (a == null) return null;
+    const st = this._hass.states;
+    const ids = this._cfg.helpers?.[c.entity_id] || {};
+    const cur = st[ids.select]?.state;
+    const curMode = this._cfg.modes.find((m) => m.name === cur);
+    const name = (e) => st[e]?.attributes?.friendly_name || e;
+    const isPos = typeof a === "object";
+    const target = isPos ? null : this._cfg.modes.find((m) => m.name === a);
+    if (!isPos && a === cur) return null;
+    const safety = (c.exclusion || []).find((e) => st[e]?.state === "on");
+    const inhib = (c.inhibition || []).find((e) => st[e]?.state === "on");
+    let kind, ico, text;
+    if (!isPos && cur && (target?.spares || []).includes(cur)) {
+      [kind, ico, text] = ["wait", "mdi:timer-sand", curMode?.duration ? T.fcAfterTimed(cur, a) : T.fcSpared(cur, a)];
+    } else if (safety) {
+      [kind, ico, text] = ["wait", "mdi:shield-alert-outline", T.fcSafety(name(safety))];
+    } else if (isPos && !a.force && st[ids.lock]?.state === "on") {
+      [kind, ico, text] = ["mem", "mdi:lock-outline", T.fcMemory(a.position)];
+    } else if (inhib && !(isPos ? a.force : target?.priority)) {
+      [kind, ico, text] = ["wait", "mdi:pause-circle-outline", T.fcInhib(name(inhib))];
+    } else if (isPos && a.force && curMode?.behavior) {
+      [kind, ico, text] = ["warn", "mdi:alert-outline", T.fcRecompute];
+    } else {
+      return null;
+    }
+    const p = el("p", `sched-hint ${kind}`);
+    p.append(icon(ico), el("span", "", text));
+    return p;
+  }
+
   /** Behavior keys the cover overrides — the amber count on its card.
    *  An override is a departure FROM something: without a template every value
    *  is stored locally by definition, so counting them would report the whole
@@ -4289,6 +4483,14 @@ class CoverExtenderPanel extends HTMLElement {
       this._templateField(draft, rerender),
       line2);
     idCard.append(grid);
+    if (!creating) {
+      const sched = this._schedLine(this._cfg.covers[idx]);
+      if (sched.length) {
+        const box = el("div", "ed-sched");
+        box.append(...sched);
+        idCard.append(box);
+      }
+    }
     // A template for another type of window than the facade's: the server refuses it.
     const facKind = tiltKind(facadeTilt(this._cfg.facades.find((f) => f.name === draft.facade)));
     if (tpl && templateKind(tpl) !== facKind) {
@@ -4584,42 +4786,125 @@ class CoverExtenderPanel extends HTMLElement {
     const offered = (c) => Object.keys(c.modes || {}).filter((m) => !timed.has(m));
     const colorOf = (n) => this._cfg.modes.find((m) => m.name === n)?.color;
     const tbody = el("tbody");
-    const sels = { morning: [], evening: [] };
-    const allSel = {};
+    // An action is a mode name, a position {position, force}, or null.
+    const POS = "\u0001position";
+    const akey = (v) => (v == null ? "" : typeof v === "object" ? `p:${v.position}:${v.force ? 1 : 0}` : `m:${v}`);
+    // A cover with a shading or solar gain mode: a forced position may be
+    // moved again by the next computation.
+    const computes = (c) => Object.keys(c.modes || {})
+      .some((n) => this._cfg.modes.find((m) => m.name === n)?.behavior);
+    const cells = { morning: [], evening: [] };
+    const allCell = {};
 
-    const mkSelect = (k, opts, value, label) => {
+    /** One schedule cell: the list (none, the modes, a position) and, for a
+     *  position, its value and whether it respects the lock or forces it.
+     *  get() returns undefined when the "all covers" row has several values. */
+    const mkCell = (k, modes, label, get, set, flagged, all = false) => {
+      const box = el("div", "sact");
       const sel = document.createElement("select");
       sel.className = "fselect msel";
       sel.setAttribute("aria-label", label);
-      for (const [val, text] of opts) {
+      const add = (parent, val, text) => {
         const o = document.createElement("option");
-        o.value = val ?? "";
+        o.value = val;
         o.textContent = text;
-        if ((value ?? "") === (val ?? "")) o.selected = true;
-        sel.append(o);
+        parent.append(o);
+        return o;
+      };
+      if (all) add(sel, "*", W.mixed).disabled = true;
+      add(sel, "", W.noneOpt);
+      if (modes.length) {
+        const g = document.createElement("optgroup");
+        g.label = W.grpMode;
+        for (const n of modes) add(g, n, n);
+        sel.append(g);
       }
-      sel.disabled = !draft.enabled[k];
-      return sel;
+      const gp = document.createElement("optgroup");
+      gp.label = W.grpPos;
+      add(gp, POS, W.posOpt);
+      sel.append(gp);
+
+      const pos = el("div", "spos");
+      const num = document.createElement("input");
+      num.type = "number";
+      num.min = "0";
+      num.max = "100";
+      num.step = "1";
+      num.setAttribute("aria-label", `${W.posLabel}, ${label}`);
+      const seg = el("div", "seg spos-seg");
+      seg.setAttribute("role", "group");
+      seg.setAttribute("aria-label", `${W.lockedLabel}, ${label}`);
+      const mkBtn = (force, iconName, text, hint) => {
+        const b = el("button");
+        b.type = "button";
+        b.title = hint;
+        b.append(icon(iconName), el("span", "", text));
+        b.addEventListener("click", () => { set({ ...get(), force }); refreshKind(k); touch(); });
+        seg.append(b);
+        return b;
+      };
+      const bKeep = mkBtn(false, "mdi:lock-outline", W.keepLock, W.keepLockHint);
+      const bForce = mkBtn(true, "mdi:flash", W.forcePos, W.forceHint);
+      const flag = icon("mdi:alert-outline", "sflag");
+      flag.title = W.forceComputes;
+      flag.setAttribute("role", "img");
+      flag.setAttribute("aria-label", W.forceComputes);
+      pos.append(num, el("span", "spct", "%"), seg, flag);
+      box.append(sel, pos);
+
+      const off = !draft.enabled[k];
+      for (const c of [sel, num, bKeep, bForce]) c.disabled = off;
+
+      const show = () => {
+        const v = get();
+        const p = v && typeof v === "object" ? v : null;
+        sel.value = v === undefined ? "*" : p ? POS : v ?? "";
+        // The mode's own colour on the edge of the list, as on the matrix.
+        sel.style.borderLeftColor = p ? "var(--secondary-text-color)" : (typeof v === "string" && colorOf(v)) || "";
+        sel.classList.toggle("none", v === null);
+        pos.hidden = !p;
+        if (!p) return;
+        if (document.activeElement !== num) num.value = String(p.position);
+        for (const [b, on] of [[bKeep, !p.force], [bForce, p.force]]) {
+          b.classList.toggle("on", on);
+          b.setAttribute("aria-pressed", String(on));
+        }
+        flag.hidden = !(p.force && flagged());
+      };
+      sel.addEventListener("change", () => {
+        const cur = get();
+        if (sel.value === POS) set(cur && typeof cur === "object" ? cur : { position: k === "morning" ? 100 : 0, force: false });
+        else set(sel.value || null);
+        refreshKind(k);
+        touch();
+      });
+      num.addEventListener("input", () => {
+        // An empty box is a transient state while typing, not a zero.
+        if (num.value === "") return;
+        const n = Math.max(0, Math.min(100, Math.round(Number(num.value))));
+        if (!Number.isFinite(n)) return;
+        set({ ...get(), position: n });
+        refreshKind(k);
+        touch();
+      });
+      // Leaving the box shows the value kept (clamped, or back from empty).
+      num.addEventListener("blur", show);
+      return { box, show };
     };
-    // The mode's own colour on the edge of the list, as on the matrix.
-    const paint = (sel) => {
-      const c = sel.value && sel.value !== "*" ? colorOf(sel.value) : null;
-      sel.style.borderLeftColor = c || "";
-      sel.classList.toggle("none", !sel.value);
-    };
+
     // What most covers do is the norm; a cover that does something else is marked.
-    const markDiff = (k) => {
+    const refreshKind = (k) => {
       const count = new Map();
       for (const c of this._cfg.covers) {
-        const v = draft.assign[c.entity_id][k] ?? null;
-        count.set(v, (count.get(v) || 0) + 1);
+        const key = akey(draft.assign[c.entity_id][k]);
+        count.set(key, (count.get(key) || 0) + 1);
       }
-      const norm = [...count].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-      for (const { sel, c } of sels[k]) sel.classList.toggle("diff", (draft.assign[c.entity_id][k] ?? null) !== norm);
-      const values = new Set(this._cfg.covers.map((c) => draft.assign[c.entity_id][k] ?? null));
-      const one = values.size === 1 ? [...values][0] : "*";
-      allSel[k].value = one ?? "";
-      paint(allSel[k]);
+      const norm = [...count].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
+      for (const { cell, c } of cells[k]) {
+        cell.box.classList.toggle("diff", akey(draft.assign[c.entity_id][k]) !== norm);
+        cell.show();
+      }
+      allCell[k].show();
     };
 
     /* the "all covers" row: one choice applied to every cover that offers it */
@@ -4635,22 +4920,19 @@ class CoverExtenderPanel extends HTMLElement {
       .filter((n) => this._cfg.covers.some((c) => offered(c).includes(n)));
     for (const k of SCHED_KINDS) {
       const td = el("td");
-      const sel = mkSelect(k, [["*", W.mixed], [null, W.noneOpt], ...union.map((n) => [n, n])], null,
-        `${W.kinds[k]}, ${W.allCovers}`);
-      sel.querySelector('option[value="*"]').disabled = true;
-      sel.addEventListener("change", () => {
-        const v = sel.value || null;
-        for (const { sel: one, c } of sels[k]) {
-          if (v !== null && !offered(c).includes(v)) continue;
-          draft.assign[c.entity_id][k] = v;
-          one.value = v ?? "";
-          paint(one);
+      const common = () => {
+        const keys = new Set(this._cfg.covers.map((c) => akey(draft.assign[c.entity_id][k])));
+        return keys.size === 1 ? draft.assign[this._cfg.covers[0].entity_id][k] ?? null : undefined;
+      };
+      const setAll = (v) => {
+        for (const c of this._cfg.covers) {
+          if (typeof v === "string" && !offered(c).includes(v)) continue;
+          draft.assign[c.entity_id][k] = v && typeof v === "object" ? { ...v } : v;
         }
-        markDiff(k);
-        touch();
-      });
-      allSel[k] = sel;
-      td.append(sel);
+      };
+      allCell[k] = mkCell(k, union, `${W.kinds[k]}, ${W.allCovers}`, common, setAll,
+        () => this._cfg.covers.some(computes), true);
+      td.append(allCell[k].box);
       allRow.append(td);
     }
     tbody.append(allRow);
@@ -4670,25 +4952,20 @@ class CoverExtenderPanel extends HTMLElement {
         rowh.append(this._coverPic(c), el("span", "nm", this._coverName(c)));
         th.append(rowh);
         tr.append(th);
-        const opts = [[null, W.noneOpt], ...offered(c).map((m) => [m, m])];
         for (const k of SCHED_KINDS) {
           const td = el("td");
-          const sel = mkSelect(k, opts, draft.assign[c.entity_id][k], `${W.kinds[k]}, ${this._coverName(c)}`);
-          sel.addEventListener("change", () => {
-            draft.assign[c.entity_id][k] = sel.value || null;
-            paint(sel);
-            markDiff(k);
-            touch();
-          });
-          paint(sel);
-          sels[k].push({ sel, c });
-          td.append(sel);
+          const cell = mkCell(k, offered(c), `${W.kinds[k]}, ${this._coverName(c)}`,
+            () => draft.assign[c.entity_id][k] ?? null,
+            (v) => { draft.assign[c.entity_id][k] = v; },
+            () => computes(c));
+          cells[k].push({ cell, c });
+          td.append(cell.box);
           tr.append(td);
         }
         tbody.append(tr);
       }
     }
-    for (const k of SCHED_KINDS) markDiff(k);
+    for (const k of SCHED_KINDS) refreshKind(k);
     table.append(tbody);
     scroll.append(table);
     tcard.append(scroll);

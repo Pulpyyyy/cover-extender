@@ -31,6 +31,7 @@ from .const import (
     ATTR_SUN_FACING,
     SIGNAL_COVER_RELOAD,
     SIGNAL_SCHEDULE,
+    DAY_UNIQUE_ID,
 )
 from .entity import attach_cover_helper, hub_device_info, sync_schedule_entities
 from .helpers import (
@@ -305,9 +306,6 @@ class CoverEnableSolarGainBinarySensor(_BaseSwitchMirrorBinarySensor):
     _uid_kind = "bs_solar_gain"
     _icon_on = "mdi:thermometer-check"
     _icon_off = "mdi:thermometer-off"
-
-
-DAY_UNIQUE_ID = f"{DOMAIN}_binary_sensor_cx_day"
 
 
 class CoverExtenderDaySensor(BinarySensorEntity):

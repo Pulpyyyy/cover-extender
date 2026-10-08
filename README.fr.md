@@ -195,7 +195,7 @@ Ce parcours configure un volet avec deux modes, *Jour* (ouvert) et *Nuit* (ferm�
 
 ### Ensuite
 
-- Ouvrez et fermez à la bonne heure avec les [horaires](#horaires) : une heure du matin et du soir qui suivent le soleil, et un mode par volet.
+- Ouvrez et fermez à la bonne heure avec les [horaires](#horaires) : une heure du matin et du soir qui suivent le soleil, et un mode ou une position par volet.
 - Ou changez de mode depuis vos propres automatisations avec l'action `cover_extender.apply_mode`, par exemple *Nuit* au coucher du soleil :
 
   ```yaml
@@ -257,7 +257,14 @@ Un mode *Ombrage* ou *Héliotropie* verrouille toujours le volet, pour que ses m
 
 ### Horaires
 
-L'onglet **Horaires** contient l'**ouverture du matin** et la **fermeture du soir** de la maison, chacune activable. À chacune, chaque volet applique le mode choisi pour lui dans le tableau sous le graphique (ou garde son mode, avec *Aucun*). Le tableau est groupé par façade ; sa ligne *Tous les volets* règle d'un coup tous les volets qui proposent le mode choisi, et un volet qui fait autre chose que les autres est mis en évidence. C'est un changement de mode comme un autre : le verrou, les exclusions, les inhibitions et les modes minutés s'appliquent.
+L'onglet **Horaires** contient l'**ouverture du matin** et la **fermeture du soir** de la maison, chacune activable. À chacune, chaque volet applique l'action choisie pour lui dans le tableau sous le graphique : un **mode**, une **position fixe**, ou *Aucune* (le volet ne fait rien). Le tableau est groupé par façade ; sa ligne *Tous les volets* règle d'un coup tous les volets qui proposent l'action choisie, et un volet qui fait autre chose que les autres est mis en évidence.
+
+- Un **mode** est un changement de mode comme un autre : le verrou, les exclusions, les inhibitions, les modes minutés et [qui remplace qui](#qui-remplace-qui) s'appliquent.
+- Une **position** (0 à 100 %) déplace le volet sans changer son mode. Au choix, elle :
+  - **respecte le verrou** : un volet libre bouge ; un volet verrouillé ne bouge pas, la position part dans sa [mémoire](#verrou-et-mémoire) et il la prend en quittant le mode verrouillé (vers un mode sans position fixe). Une inhibition la retient jusqu'à sa fin.
+  - ou **force** : le volet bouge tout de suite, même verrouillé, et passe outre les inhibitions. Le mode et le verrou restent ; la mémoire prend aussi la position, pour que la sortie du mode verrouillé ne l'annule pas. Sur un volet en mode ombrage ou héliotropie, le calcul suivant peut le rebouger (le panneau le signale) ; pour un état qui dure toute la soirée, un mode reste le bon outil.
+
+  Une fenêtre ouverte (exclusion de sécurité) retient les deux : la position est appliquée à sa fermeture.
 
 Chaque heure suit le soleil sur l'année, dans des bornes que vous fixez :
 
@@ -415,7 +422,7 @@ Toute la configuration se fait dans le panneau, à `/cover-extender`. Chaque val
 
 | Onglet | Ce qu'il règle |
 |---|---|
-| **Volets** | Les volets : entité, façade, gabarit, [exclusions de sécurité et inhibitions](#exclusions), géométrie, ombrage et héliotropie, chaque réglage avec une ligne d'explication et un schéma de la fenêtre. Sous un gabarit, chaque valeur dit si elle vient du gabarit ou si elle est propre au volet, avec un filtre *Écarts seulement*. Chaque carte montre ce que fait le volet en ce moment : son mode et sa position, puis ce qui le retient (un [mode minuté](#modes-minutés) et son heure de fin, le verrou et la position mémorisée, une exclusion ou une inhibition active). |
+| **Volets** | Les volets : entité, façade, gabarit, [exclusions de sécurité et inhibitions](#exclusions), géométrie, ombrage et héliotropie, chaque réglage avec une ligne d'explication et un schéma de la fenêtre. Sous un gabarit, chaque valeur dit si elle vient du gabarit ou si elle est propre au volet, avec un filtre *Écarts seulement*. Chaque carte montre ce que fait le volet en ce moment : son mode et sa position, puis ce qui le retient (un [mode minuté](#modes-minutés) et son heure de fin, le verrou et la position mémorisée, une exclusion ou une inhibition active). Un volet qui suit un [horaire](#horaires) montre ses actions du matin et du soir avec les heures du jour, la prochaine mise en évidence, et une ligne quand son état change cette prochaine action (verrouillé : la position ira en mémoire ; fenêtre ouverte : il attend). Un clic sur cette ligne ouvre l'onglet Horaires. L'éditeur du volet montre la même ligne. |
 | **Matrice** | Modes × volets : lier les modes et régler chaque position par volet depuis une seule grille. Une cellule vide lie le mode ; une cellule *auto* d'un mode d'ombrage ou d'héliotropie peut être remplacée par une position fixe pour ce seul volet. |
 | **Modes** | Icône, couleur, verrou, comportement, priorité, repli, [durée](#modes-minutés) et ce qui se passe à sa fin, visibilité. Faites glisser les tuiles pour les réordonner : l'ordre est celui des sélecteurs de mode. Sous **Lancé pour plusieurs volets** : les modes qu'il ne dérange pas, et son mode de repli (voir [qui remplace qui](#qui-remplace-qui)). |
 | **Horaires** | L'[ouverture du matin et la fermeture du soir](#horaires) : la courbe de chacune sur l'année, et le mode du matin et du soir de chaque volet. |

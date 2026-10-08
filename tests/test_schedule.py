@@ -155,3 +155,20 @@ def test_defaults_are_valid_and_build_a_curve(kind):
     assert sch.validate_settings(sch.DEFAULTS[kind]) is None
     curve = build_curve(SUN, sch.parse_settings(sch.DEFAULTS[kind], YEAR))
     assert curve.error is None and curve.points is not None
+
+
+@pytest.mark.parametrize("value, expected", [
+    ("Night", "Night"),
+    ("", None),
+    (None, None),
+    ({"position": 0}, {"position": 0, "force": False}),
+    ({"position": 100, "force": True}, {"position": 100, "force": True}),
+])
+def test_parse_action(value, expected):
+    assert sch.parse_action(value) == expected
+
+
+@pytest.mark.parametrize("position", [101, -5, "40", None, False])
+def test_parse_action_refuses_a_position_it_cannot_read(position):
+    with pytest.raises(ValueError):
+        sch.parse_action({"position": position})

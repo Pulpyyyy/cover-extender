@@ -612,15 +612,29 @@ class CoverExtenderCoordinator:
         self._plan_schedule("time")
 
     async def _run_schedule(self, kind: str, day: date) -> None:
-        """Every cover applies its *kind* mode, as a plain mode change."""
+        """Every cover applies its *kind* action: a mode, as a grouped mode
+        request, or a position, which leaves the mode alone.
+
+        A position respects the lock (a locked cover keeps it in memory for
+        when it leaves the mode) unless it is forced: then it moves a locked
+        cover and passes the inhibitions, never the safety exclusions.
+        """
         self._schedule_last[kind] = day.isoformat()
         self._schedule_store.async_delay_save(lambda: dict(self._schedule_last), _MEMORY_SAVE_DELAY)
         for entity_id, cfg in list(self._profiles.items()):
-            mode = (cfg.get(CONF_SCHEDULE) or {}).get(kind)
-            if not mode:
+            action = (cfg.get(CONF_SCHEDULE) or {}).get(kind)
+            if not action:
                 continue
-            reason = await self.async_request_mode(entity_id, mode)
-            _LOGGER.debug("schedule %s: %s → %s%s", kind, entity_id, mode, f" ({reason})" if reason else "")
+            if isinstance(action, dict):
+                force = bool(action.get("force", False))
+                _LOGGER.debug("schedule %s: %s → %s%%%s", kind, entity_id, action["position"],
+                              " (forced)" if force else "")
+                await self._set_cover_position_impl(
+                    [entity_id], int(action["position"]), force=force, past_lock=force
+                )
+                continue
+            reason = await self.async_request_mode(entity_id, action)
+            _LOGGER.debug("schedule %s: %s → %s%s", kind, entity_id, action, f" ({reason})" if reason else "")
 
     def schedule_preview(self, kind: str, cfg: dict[str, Any]) -> dict[str, Any]:
         """The curve the panel draws: the year's points, the sun, and what was ignored."""
@@ -1600,16 +1614,20 @@ class CoverExtenderCoordinator:
         return {"position": position, "should_update": should_update}
 
     async def _set_cover_position_impl(
-        self, entity_ids: list[str], position: int, force: bool = False
+        self, entity_ids: list[str], position: int, force: bool = False,
+        past_lock: bool = False,
     ) -> None:
         """Move, or store in memory when the lock or an exclusion blocks the move.
 
         A position blocked by an exclusion is also kept pending and applied when
         the exclusion clears (see _resume_after_exclusion). *force* lets the
-        move pass the inhibitions, never the safety exclusions.
+        move pass the inhibitions, never the safety exclusions. *past_lock*
+        moves a locked cover too, and stores the position in memory as well so
+        that leaving the locked mode does not undo the move.
         """
         for entity_id in entity_ids:
-            if self._is_locked(entity_id):
+            locked = self._is_locked(entity_id)
+            if locked and not past_lock:
                 _LOGGER.debug(
                     "set_cover_position %s: lock active → writing memory (%d%%)",
                     entity_id, position,
@@ -1621,17 +1639,29 @@ class CoverExtenderCoordinator:
                     "set_cover_position %s: %s → memory and pending (%d%%)",
                     entity_id, self._blocker(entity_id, force), position,
                 )
-                self._exclusion_pending[entity_id] = (position, True, force)
+                self._exclusion_pending[entity_id] = (position, not past_lock, force)
                 await self._set_memory(entity_id, position)
             else:
                 self._enqueue_cover(
                     "set_cover_position", {"entity_id": entity_id, "position": position}
                 )
+                if locked:
+                    _LOGGER.debug(
+                        "set_cover_position %s: lock active, forced → %d%%, also in memory",
+                        entity_id, position,
+                    )
+                    await self._set_memory(entity_id, position)
 
     async def service_set_cover_position(self, call: ServiceCall) -> None:
-        """Move one or more covers, respecting the lock."""
+        """Move one or more covers, respecting the lock unless force is set.
+
+        force: true moves a locked cover too and passes the inhibitions, never
+        the safety exclusions.
+        """
+        force: bool = call.data.get("force", False)
         await self._set_cover_position_impl(
-            await self._extract_cover_ids(call), call.data["position"]
+            await self._extract_cover_ids(call), call.data["position"],
+            force=force, past_lock=force,
         )
 
     async def service_open_cover(self, call: ServiceCall) -> None:
