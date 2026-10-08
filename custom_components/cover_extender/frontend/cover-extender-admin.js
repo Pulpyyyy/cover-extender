@@ -4470,16 +4470,35 @@ class CoverExtenderPanel extends HTMLElement {
     // A facade of two covers takes two columns, so facades flow side by side
     // and share the lines; one with more covers than columns takes the whole
     // width and wraps. Its rows: the title, then five per line of cards.
-    let cols = 0;
+    let width = -1;
     const spread = () => {
-      const n = getComputedStyle(groups).gridTemplateColumns.split(" ").filter(Boolean).length;
-      if (n === cols) return;
-      cols = n;
+      if (groups.clientWidth === width) return;
+      width = groups.clientWidth;
+      const cols = getComputedStyle(groups).gridTemplateColumns.split(" ").filter(Boolean).length;
+      const lines = []; // lines of cards under each title line
+      let used = cols;
       for (const g of groups.children) {
         const k = Number(g.dataset.n);
-        g.style.gridColumn = `span ${Math.min(k, cols)}`;
-        g.style.gridRow = `span ${1 + 5 * Math.ceil(k / cols)}`;
+        const span = Math.min(k, cols);
+        const deep = Math.ceil(k / cols);
+        g.style.gridColumn = `span ${span}`;
+        g.style.gridRow = `span ${1 + 5 * deep}`;
+        if (used + span > cols) { lines.push(deep); used = 0; }
+        used += span;
       }
+      // Every card as tall as the tallest: each of the five rows measured at
+      // its natural size, the largest of each kind then set on every line.
+      if (!CSS.supports("grid-template-rows", "subgrid")) return;
+      groups.style.gridTemplateRows = "";
+      const rows = getComputedStyle(groups).gridTemplateRows.split(" ").map(parseFloat);
+      const tall = [0, 0, 0, 0, 0];
+      let i = 0;
+      for (const deep of lines) {
+        i++; // the title
+        for (let r = 0; r < 5 * deep; r++) tall[r % 5] = Math.max(tall[r % 5], rows[i++] || 0);
+      }
+      const card = tall.map((h) => `${Math.ceil(h)}px`).join(" ");
+      groups.style.gridTemplateRows = lines.map((deep) => ["auto", ...Array(deep).fill(card)].join(" ")).join(" ");
     };
     const resized = new ResizeObserver(() => {
       if (!groups.isConnected) { resized.disconnect(); return; }
