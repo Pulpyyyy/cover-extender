@@ -206,10 +206,10 @@ Or go to **Settings → Devices & services → Add integration** and search for 
 This walk-through sets up one cover with two modes, *Day* (open) and *Night* (closed). It takes about five minutes.
 
 1. **Open the panel.** Click **Cover Extender** in the sidebar, or the button on the integration page, or go to `http://<your-ha>:8123/cover-extender`.
-2. **Create a facade.** In **Settings → Facades**, click **Add a facade**. Name it (e.g. *South*) and set its **azimuth**, the direction the windows face: 0° = north, 90° = east, 180° = south, 270° = west. A compass app held flat against the window, looking out, gives you the value. In the panel, type it, pick one of the eight directions, or drag the arrow on the compass.
+2. **Create a facade.** In **House → Facades**, click **Add a facade**. Name it (e.g. *South*) and set its **azimuth**, the direction the windows face: 0° = north, 90° = east, 180° = south, 270° = west. A compass app held flat against the window, looking out, gives you the value. In the panel, type it, pick one of the eight directions, or drag the arrow on the compass.
 3. **Create two modes.** In **Modes**, click **Add a mode** twice: *Day* and *Night*. Leave **Cover positions** on *Fixed* for both. Switch on **Lock the covers** on *Night* if you want remote commands made through Cover Extender to wait until morning.
 4. **Add your cover.** In **Covers**, click **Add a cover**, pick the `cover.*` entity and the *South* facade, then **Save**.
-5. **Set the positions.** In **Matrix**, click the empty *Day* cell on your cover: it links the mode. Choose **Fixed** and 100 %. Do the same for *Night* at 0 %, then **Save**. Positions follow Home Assistant's convention: **0 = closed, 100 = open**.
+5. **Set the positions.** In **Matrix**, click the empty *Day* cell on your cover: it adds the mode to it. Choose **Fixed** and 100 %. Do the same for *Night* at 0 %, then **Save**. Positions follow Home Assistant's convention: **0 = closed, 100 = open**.
 6. **Try it.** A new entity `select.<your_cover>_cx_mode` appeared. Change it from *Day* to *Night*: the cover closes.
 
 ### Next steps
@@ -409,7 +409,7 @@ It runs when the **Solar gain** switch is on in the cover editor (which creates 
 - otherwise, if the sun [faces](#facades-and-orientation) the cover and the weather is in the good conditions list, the cover goes to **Position in the sun** (default 100 %);
 - otherwise it goes to **Position when cold** (default 0 %).
 
-The temperature entity, threshold and weather entity are shared by all covers (**Settings → General settings**). Without a temperature entity, the temperature check is skipped; without a weather entity, the weather is considered good. The threshold is a number, or an `input_number` so that you can change it from a dashboard. Solar gain is re-evaluated at every change of the sun, the temperature, the threshold or the weather.
+The temperature entity, threshold and weather entity are shared by all covers (**Settings** tab). Without a temperature entity, the temperature check is skipped; without a weather entity, the weather is considered good. The threshold is a number, or an `input_number` so that you can change it from a dashboard. Solar gain is re-evaluated at every change of the sun, the temperature, the threshold or the weather.
 
 ### The global mode selector
 
@@ -440,25 +440,30 @@ A choice made on one cover's own selector always applies, and so does `apply_mod
 
 All configuration lives in the panel at `/cover-extender`. Every value is checked by the server before it is saved. The panel follows your Home Assistant theme ([dark version](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-matrix-dark.png)) and each administrator reads it in their own language (English and French).
 
+The four tabs on the left are the everyday ones, in the order of the work; the two after the rule are set once. The panel opens on **Covers**.
+
 | Tab | What it edits |
 |---|---|
-| **Covers** | The covers: entity, facade, template, [safety exclusions and inhibitions](#exclusions), geometry, shading and solar-gain settings, each with a one-line hint and a sketch of the window. Under a template, each value says whether it comes from the template or belongs to the cover, with an *Overrides only* filter. Each card shows what the cover is doing right now: its mode and position, then whatever holds it back (a [timed mode](#timed-modes) with its end time, the lock with the remembered position, an exclusion or an inhibition that is on). A cover that follows a [schedule](#schedules) shows its morning and evening actions with today's times, the next one marked, and a line when its state changes that next one (locked: the position goes to memory; an open window: it waits). A click on that row opens the Schedules tab. The cover's editor shows the same row. |
-| **Matrix** | Modes × covers: link modes and set every per-cover position from one grid. |
-| **Modes** | Icon, color, lock, behavior, priority, fallback, [duration](#timed-modes) and what happens at its end, visibility. Drag the tiles to reorder: the order drives the mode selectors. Under **Applied to several covers**: the modes it leaves alone, and its fallback (see [who replaces whom](#who-replaces-whom)). |
-| **Schedules** | The [morning opening and evening closing](#schedules): the curve of each over the year, and each cover's morning and evening mode. |
-| **Settings** | On the left the house: facades (way they face, set on a compass), templates, and the list of the entities the configuration produced. On the right the general settings: solar gain (temperature, threshold, weather and what counts as fine weather), pause between two covers, extra entities for each cover. |
+| **Covers** | The covers, grouped by facade as in the matrix. Each card shows what the cover is doing right now: its mode and position (drawn and written), then whatever holds it back (a [timed mode](#timed-modes) with its end time, the lock with the remembered position, an exclusion or an inhibition that is on). A cover that follows a [schedule](#schedules) shows its morning and evening actions on one line with today's times, the next one in the accent colour, and a line when its state changes that next one (locked: the position goes to memory; an open window: it waits); a click on that line opens the Schedules tab. Only what is on is listed at the bottom: shading, solar gain, and the overrides of its template. The cover's editor holds its entity, facade and template, its row of the matrix (each mode's position, changed with the matrix's own popover and saved with the cover), its schedules, its [safety exclusions and inhibitions](#exclusions), then the geometry, shading and solar-gain settings, each with a one-line hint and a sketch of the window. A bar at the top jumps to each section and marks those holding overrides. |
+| **Modes** | The modes, one row each in the order of the mode selectors: drag a row to reorder. Each row says how the mode places the covers and how many it is linked to, and shows its lock, duration, priority, the modes it spares, its fallback, its visibility. The editor reads top to bottom: icon, color, how it places the covers, lock and [duration](#timed-modes), then **Applied to several covers** as two sentences to complete: the modes it leaves alone, and the mode the covers without it switch to (see [who replaces whom](#who-replaces-whom)). |
+| **Matrix** | Modes × covers: add modes to covers and set every per-cover position from one grid. A header opens its mode. On a phone the matrix shows the covers one under the other, their modes two by two, with the table a tap away. |
+| **Schedules** | The [morning opening and evening closing](#schedules): first a card for each with its switch, today's time and what it does to the covers, then each cover's morning and evening action, then the curve over the year of the one picked above. |
+| **House** | Facades (way they face, set on a compass, and slope) and templates, each a list whose rows open their editor. A template names the facades of its window type. |
+| **Settings** | Solar gain (written as its rule: it is cool when this temperature is below this threshold, fine when this weather reports these conditions), pause between two covers, extra entities for each cover, and the list of the entities the configuration produced. |
+
+A page with something to save shows a save bar stuck to the bottom of the screen, and its tab gets a dot; with nothing to save, there is no bar.
 
 ### The matrix
 
-Each cell is the position of one mode on one cover. Click a cell to edit it, or an empty cell to link the mode. The popover offers **Fixed** (slider), **Entity** and **None**, plus a one-tick "apply to the other covers of the same facade". Deleting and renaming stay safe: a facade, template or mode still used by covers cannot be deleted, and renames follow everywhere.
+Each cell is the position of one mode on one cover. Click a cell to edit it, or an empty cell (a faint dot) to add the mode. The popover offers **Fixed** (slider), **Entity** and **None**, plus a one-tick "same for the other covers of the facade". Deleting and renaming stay safe: a facade, template or mode still used by covers cannot be deleted, and renames follow everywhere.
 
-On a *Shading* or *Solar gain* mode, cells show `auto`. The same popover can **override the computation for a single cover** with a Fixed or Entity position. Below, *Shade* computes everywhere except on *Office*, pinned at 30 %:
+On a *Shading* or *Solar gain* mode, cells show `auto`. The same popover can **override the computation for a single cover** with a Fixed or Entity position; the cell then gets an amber outline. Below, *Shade* computes everywhere except on *Office*, pinned at 30 %:
 
 ![Overriding an automatic mode for one cover](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/matrix-override.png)
 
 ### The editors
 
-The cover editor: what holds the cover back, then the computation in four cards. Under its template, *Distance* and *Minimum position* are this cover's own (amber), the rest is inherited (dashed).
+The cover editor: what holds the cover back, then the computation in four cards. Under its template, *Distance* and *Minimum position* are this cover's own (amber, with the template's value and a way back), the rest is inherited.
 
 ![Cover editor](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-cover-editor.png)
 
@@ -472,7 +477,9 @@ The cover editor: what holds the cover back, then the computation in four cards.
 |---|---|
 | ![Covers tab](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-covers.png) | ![Modes tab](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-modes.png) |
 
-![Settings tab](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-settings.png)
+| | |
+|---|---|
+| ![House tab](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-house.png) | ![Settings tab](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-settings.png) |
 
 ---
 

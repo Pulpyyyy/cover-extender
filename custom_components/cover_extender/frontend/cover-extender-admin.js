@@ -5,9 +5,11 @@
  * configuration_url, or at /cover-extender directly. It is the only way to
  * configure the integration: the config flow creates the entry and stops there.
  *
- * Four tabs, all editable: Covers, Matrix (modes × covers, the screen a config
- * flow cannot draw), Modes, Settings — facades, templates, the global settings
- * and a read-only count of what all this produced in Home Assistant.
+ * Six tabs, all editable. Four for every day, in the order of the work:
+ * Covers, Modes, Matrix (modes × covers, the screen a config flow cannot
+ * draw), Schedules. Two set once: House (facades, templates) and Settings
+ * (the global settings, and a read-only count of what all this produced in
+ * Home Assistant).
  *
  * All truth stays in Python: the panel talks to two WebSocket commands
  * (cover_extender/config/get · save) which validate through the integration's
@@ -61,7 +63,7 @@ const FOCUSABLE =
 const WORDS = {
   en: {
     title: "Cover Extender",
-    tabs: { matrice: "Matrix", volets: "Covers", modes: "Modes", horaires: "Schedules", reglages: "Settings" },
+    tabs: { matrice: "Matrix", volets: "Covers", modes: "Modes", horaires: "Schedules", maison: "House", reglages: "Settings" },
     sched: {
       kinds: { morning: "Morning opening", evening: "Evening closing" },
       enable: { morning: "Morning opening on", evening: "Evening closing on" },
@@ -77,7 +79,7 @@ const WORDS = {
       band: { morning: "Open before sunrise", evening: "Closed before sunset" },
       hi: "Max time", hiFixed: "Max time = min", lo: "Min time",
       x1: "Spring crossing", x2: "Autumn crossing",
-      fl: "Floor · not before", ce: "Ceiling · not after", flShort: "floor", ceShort: "ceiling",
+      fl: "Not before", ce: "Not after", flShort: "not before", ceShort: "not after",
       fixedHint: "For a fixed time all year round, drag the max and min handles together until they stick.",
       dstHint: (h) => ` Here they are either together or at least ${h} h apart, because of daylight saving time.`,
       legal: "legal time", off: "off", offHalf: "off · plain half-sine",
@@ -90,11 +92,11 @@ const WORDS = {
       editRange: (a, b) => `Choose a time between ${a} and ${b}.`,
       editBadDate: "Invalid date: type day, month and year.",
       today: "Today", earliest: "Earliest", latest: "Latest",
-      maxAfter: (r) => `Largest gap after ${r}`, daysBefore: (r) => `Days before ${r}`,
-      onDate: (d) => `on ${d}`, none: "none", upTo: (n, d) => `up to ${n}, on ${d}`,
+      onDate: (d) => `on ${d}`,
+      beforeRef: (band, n, gap, d) => `${band}: ${n} day${n > 1 ? "s" : ""} a year, up to ${gap} on ${d}.`,
       errors: {
         schedule_min_after_max: "The min time is after the max time. For a fixed time, enter the same time in both fields.",
-        schedule_floor_after_ceiling: "The floor is not before the ceiling.",
+        schedule_floor_after_ceiling: "“Not before” must come before “not after”.",
         schedule_invalid: "These settings cannot be read.",
         schedule_no_sun: "The sun does not rise or set every day at this latitude: no curve can follow it.",
       },
@@ -105,19 +107,20 @@ const WORDS = {
       },
       manyCross: (r, n) => `The curve crosses ${r} ${n} times a year. Check that this is intended.`,
       clampHiLo: "The max cannot go below the min: the handles stay together.",
-      clampHiFl: (t) => `The max cannot go below the floor (${t}).`,
+      clampHiFl: (t) => `The max cannot go below “not before” (${t}).`,
       clampLoHi: "The min cannot go above the max: the handles stay together.",
-      clampLoCe: (t) => `The min cannot go above the ceiling (${t}).`,
-      clampFlHi: (t) => `The floor cannot go above the max (${t}).`,
-      clampFlCe: (t) => `The floor stays below the ceiling (${t}).`,
-      clampCeLo: (t) => `The ceiling cannot go below the min (${t}).`,
-      clampCeFl: (t) => `The ceiling stays above the floor (${t}).`,
+      clampLoCe: (t) => `The min cannot go above “not after” (${t}).`,
+      clampFlHi: (t) => `“Not before” cannot go above the max (${t}).`,
+      clampFlCe: (t) => `“Not before” stays below “not after” (${t}).`,
+      clampCeLo: (t) => `“Not after” cannot go below the min (${t}).`,
+      clampCeFl: (t) => `“Not after” stays above “not before” (${t}).`,
       clampGap: "A curve needs at least 1 h between max and min: below that, the clock change would push it under the min in winter.",
       clampCross: (k, a, b) => `The ${k.toLowerCase()} stays between ${a} and ${b}.`,
-      introShort: "Morning and evening, each cover takes the action chosen for it at the bottom of the page: a mode or a position.",
+      introShort: "Morning and evening, each cover takes the action chosen for it in the table: a mode or a position.",
+      curveTitle: { morning: "Morning opening time", evening: "Evening closing time" },
+      effNone: "nothing",
+      effPart: (label, n) => `${label}: ${n}`,
       introInfo: "A mode applies as a mode change like any other: exclusions, inhibitions, the lock and timed modes apply. A position leaves the mode alone; it respects the lock unless it is forced, and an open window always holds it back.",
-      enabledLabel: "On",
-      todayAt: (t) => `today ${t}`,
       offShort: "off",
       follows: (r, t) => (t ? `follows the ${r} (today ${t})` : `follows the ${r}`),
       grpCurve: "Curve over the year", grpBounds: "Bounds in legal time", grpFine: "Fine-tune",
@@ -147,10 +150,12 @@ const WORDS = {
       none: "No target", auto_shade: "Shading", solar_gain: "Solar gain",
     },
     legendEntity: "Entity",
-    legendEmpty: "Not linked",
     auto: "auto",
-    linkMode: "Link this mode",
-    matrixHint: "Click a cell to set the mode's position on that cover; an empty cell links the mode.",
+    noTarget: "none",
+    linkMode: "Add this mode",
+    matrixHint: "A cell says what the mode does on that cover. Click it to change it; click an empty cell to add the mode.",
+    viewList: "By cover", viewTable: "Table",
+    openMode: (m) => `Open the ${m} mode`,
     // Same in every language: written here only, reached through the fallback.
     posTitle: (m, c) => `${m} · ${c}`,
     posSub: "Position applied when this mode is turned on",
@@ -161,16 +166,17 @@ const WORDS = {
     segFixed: "Fixed",
     segEntity: "Entity",
     segNone: "None",
-    segAuto: "Auto",
+    segAuto: "Computed",
     noneHint: "No position forced: the cover stays where it is (locked if the mode locks).",
     entityHint: "The entity's value drives the position live.",
     autoHint: "Default: the position is computed for this cover.",
-    overrideHint: "Override: this cover ignores the computed position while in this mode.",
+    overrideHint: "Override: this cover ignores the computation while in this mode.",
     overrideTitle: "Overrides the computed position",
-    applyFacade: (n, f) => `Apply to the ${n} other covers on the ${f} facade too`,
-    applyFacadeOne: (f) => `Apply to the other cover on the ${f} facade too`,
-    unlink: "Unlink",
-    link: "Link",
+    applyFacade: (n, f) => `Same for the ${n} other covers on the ${f} facade`,
+    applyFacadeOne: (c, f) => `Same for ${c} (${f} facade)`,
+    unlink: "Remove",
+    link: "Add",
+    applyDraft: "Apply",
     cancel: "Cancel",
     save: "Save",
     saved: "Saved: configuration reloaded",
@@ -184,11 +190,6 @@ const WORDS = {
     modesCount: (n) => `${n} mode${n > 1 ? "s" : ""}`,
     shading: "Shading",
     solarGain: "Solar gain",
-    active: "on",
-    // French agrees the adjective with the noun; English has one word for both.
-    activeF: "on",
-    inactive: "off",
-    inactiveF: "off",
     lock: "lock",
     hidden: "hidden",
     facades: "Facades",
@@ -216,7 +217,8 @@ const WORDS = {
     },
     addMode: "Add a mode",
     addCover: "Add a cover",
-    dragHint: "Drag a tile to reorder: the order drives the mode selector's list.",
+    dragHint: "In the order of the mode selector: drag a row to change it.",
+    behaviorKind: { none: "Fixed position", auto_shade: "Follows shading", solar_gain: "Follows solar gain" },
     backToModes: "All modes",
     newMode: "New mode",
     name: "Name",
@@ -235,7 +237,7 @@ const WORDS = {
     },
     entityTotal: (n) => `${n} entit${n > 1 ? "ies" : "y"} in total`,
     delete: "Delete",
-    inUseTitle: (n) => `Used by ${n} cover${n > 1 ? "s" : ""}: unlink it in the matrix first.`,
+    inUseTitle: (n) => `Used by ${n} cover${n > 1 ? "s" : ""}: remove it from them in the matrix first.`,
     inUseItemTitle: (n) => (n > 1 ? `Used by ${n} covers: move them first.` : "Used by 1 cover: move it first."),
     backToCovers: "All covers",
     entity: "Cover entity",
@@ -254,7 +256,11 @@ const WORDS = {
     timedChip: (n, r) => (r ? `${n} min, then ${r}` : `${n} min`),
     statusTimer: (m, t) => `back to ${m} at ${t}`,
     statusLocked: (p) => (p == null ? "locked" : `locked, ${p} % remembered`),
-    schedNext: "next", schedTomorrow: (t) => `tomorrow ${t}`,
+    schedNext: "next", schedTomorrow: (t) => `tomorrow ${t}`, schedNone: "nothing",
+    schedTitle: "Schedules", schedEdit: "Change",
+    coverModesTitle: "Modes of this cover", seeMatrix: "See the matrix",
+    addPicture: "Add a picture",
+    nav: { cover: "Cover", modes: "Modes", block: "Holds back", detection: "Sun" },
     schedOpen: "Open the Schedules tab", schedAria: (n) => `Schedules of ${n}, open the Schedules tab`,
     fcSafety: (n) => `${n}: the cover moves once the exclusion clears.`,
     fcInhib: (n) => `${n}: the cover moves when the inhibition ends.`,
@@ -266,15 +272,15 @@ const WORDS = {
     groupedTitle: "Applied to several covers",
     groupedHint: "Global selector, schedules, automations. A choice made on one cover's own selector always applies.",
     groupedInfo: "The apply_mode action with force: true goes through as well.",
-    sparesField: "Leave alone the covers already in:",
+    sparesField: "Leave alone the covers in",
     sparesHint: "A cover in a timed mode is left alone too, and takes this mode when its time is up.",
-    sparesNone: "None: this mode replaces every other one.",
-    sparesCount: (n) => `${n} mode${n > 1 ? "s" : ""} left alone, the others are replaced.`,
-    sparesChip: (n) => `leaves ${n} mode${n > 1 ? "s" : ""} alone`,
-    fallbackChip: (m) => `fallback: ${m}`,
-    fallbackField: "Covers this mode is not linked to in the matrix:",
-    fallbackHint: "Or apply another mode to them instead (e.g. Away, then Automatic).",
-    fallbackNone: "Do nothing",
+    sparesNone: "No mode: this one replaces every other.",
+    sparesAdd: "+ mode",
+    sparesChip: (names) => (names.length <= 2 ? `spares ${names.join(", ")}` : `spares ${names.length} modes`),
+    fallbackChip: (m) => `else ${m}`,
+    fallbackField: "The covers without this mode in the matrix switch to",
+    fallbackHint: "E.g. Away, then Automatic on the covers that have no Away.",
+    fallbackNone: "nothing (they stay)",
     usedAsReturn: (names) => `This mode is the one ${names.map((n) => `“${n}”`).join(", ")} returns to: it cannot have a duration while it is.`,
     noTemplateOpt: "No template",
     overrides: (n) => `${n} override${n > 1 ? "s" : ""}`,
@@ -310,7 +316,6 @@ const WORDS = {
     timedThen: "min, then",
     advanced: "Advanced",
     advSummary: (prio, hidden) => `${prio ? "priority" : "not priority"} · ${hidden ? "hidden" : "visible"}`,
-    nowLabel: "Now:",
     picturePh: "/local/… (optional)",
     blockTitle: "What holds the cover back",
     blockSub: "What was asked meanwhile is applied once the entity turns off.",
@@ -323,8 +328,10 @@ const WORDS = {
     addEntity: "Add an entity",
     removeEntity: "Remove",
     calcTitle: "Position computation",
-    tplChip: (n) => `values of the ${n} template`,
-    noTplChip: "no template: every value is this cover's own",
+    calcFrom: "Values of the template",
+    calcExcept: ", except",
+    calcNoOwn: ", with no override",
+    noTplChip: "No template: every value belongs to this cover.",
     openTemplate: "Open the template",
     sectionTitles: {
       geometry: "Window geometry", detection: "When the sun faces it",
@@ -355,15 +362,12 @@ const WORDS = {
       shade_max_height: "Along the slope, from the bottom to the top of the glazing (cover open, 100 %).",
       shade_min_height: "Cover closed: 0 for most roof windows.",
     },
-    fromTemplate: (v) => `Template: ${v}.`,
-    backToTpl: "back to the template",
+    fromTemplate: (v) => `template: ${v}`,
+    ovrLabel: "Override",
+    backToTpl: "Back to the template",
     inheritedTitle: (n) => `Value of the ${n} template: change it to override it on this cover.`,
-    inheritedLegend: "from the template",
-    ownLegend: (n) => `this cover's own: ${n}`,
     filterAll: "All",
     filterOwn: (n) => `Overrides only (${n})`,
-    sectInherited: (n) => `${n} from the template`,
-    sectOwn: (n) => `${n} own`,
     noOwn: "No override: this cover follows its template everywhere.",
     elevationRange: "Sun height",
     elevationHint: "Outside this range the cover goes to its default position.",
@@ -383,7 +387,8 @@ const WORDS = {
     tplName: "Template name",
     usedBy: "Used by",
     noCoverYet: "No cover yet",
-    tplIdentityNote: "Each cover starts from these values and may depart from them on its own page.",
+    tplFacades: (list) => `Facades of this type: ${list}.`,
+    tplNoFacade: "No facade of this type yet.",
     facadeName: "Facade name",
     facadeCovers: "Covers on this facade",
     orientTitle: "Orientation",
@@ -399,8 +404,7 @@ const WORDS = {
     slopeSub: "The glass's angle with the horizontal.",
     slopeKinds: { wall: "Wall", roof: "Roof", flat: "Flat" },
     kindNoun: { wall: "a wall", roof: "a roof", flat: "a flat window" },
-    tplKind: "Window type",
-    tplKindNote: "A cover only takes a template of its facade's type: heights for a wall, glass lengths for a roof.",
+    tplKind: "For windows on",
     tplKindRef: (t, house) => `Drawn on a ${t}° roof${house ? ", the flattest of the house's roofs" : ""}.`,
     tplKindMismatch: (t, tk, fk) => `Template “${t}” is meant for ${tk}, not ${fk}: pick another one, or none.`,
     tplKindUsers: (list) => `Covers using it sit on a facade of another type: ${list}. Saving will be refused.`,
@@ -414,21 +418,20 @@ const WORDS = {
     },
     slopeShort: (t) => (t >= 90 ? "" : t < 10 ? "flat" : `roof ${t}°`),
     dirs: ["N", "NE", "E", "SE", "S", "SW", "W", "NW"],
-    houseTitle: "The house",
-    houseSub: "saved item by item",
-    globalTitle: "General settings",
-    globalNote: "one save, at the bottom",
     addShort: "Add",
     tplMeta: (kind, h, d) => (kind === "flat" ? "flat" : `${kind === "roof" ? "roof · length" : "height"} ${h} m · distance ${d} m`),
     sgTitle: "Solar gain",
     sgSub: "When is it cool and fine enough to let the sun in? Applies to every cover.",
-    sgTemp: "Temperature",
-    sgThreshold: "below the threshold",
+    sgThreshold: "Threshold",
     sgThrValue: "Value",
     sgThrEntity: "Entity",
-    sgWeather: "Weather",
-    sgGood: "Fine weather =",
-    sgNote: "Without a temperature the test is skipped; without weather it is always fine.",
+    sgCoolWhen: "It is cool when",
+    sgIsBelow: "is below",
+    sgFineWhen: "It is fine when",
+    sgReports: "reports:",
+    sgMore: (n) => `+ ${n} more`,
+    sgLess: "Show less",
+    sgNote: "Without a temperature the first test is skipped; without weather it is always fine.",
     sgTooWarm: (t, s) => `${t} ≥ ${s}: too warm, solar gain waits`,
     sgCool: (t, s) => `${t} < ${s}: cool enough`,
     cmdTitle: "Sending commands",
@@ -452,7 +455,7 @@ const WORDS = {
       schedule_invalid: (k) => `The ${k} schedule cannot be read.`,
       schedule_position_invalid: (e) => `${e}: a scheduled position goes from 0 to 100%.`,
       schedule_min_after_max: (k) => `The ${k} schedule: the min time is after the max time.`,
-      schedule_floor_after_ceiling: (k) => `The ${k} schedule: the floor is not before the ceiling.`,
+      schedule_floor_after_ceiling: (k) => `The ${k} schedule: “not before” must come before “not after”.`,
       return_mode_timed: (target, user) => `“${target}” is the mode “${user}” returns to: it cannot have a duration. Change the return of “${user}” first.`,
       in_use: (n, count, covers) => `“${n}” is still used by ${count} cover${Number(count) > 1 ? "s" : ""}: ${covers}`,
       entity_required: () => "A cover must point at an entity.",
@@ -481,7 +484,7 @@ const WORDS = {
   },
 
   fr: {
-    tabs: { matrice: "Matrice", volets: "Volets", modes: "Modes", horaires: "Horaires", reglages: "Réglages" },
+    tabs: { matrice: "Matrice", volets: "Volets", modes: "Modes", horaires: "Horaires", maison: "Maison", reglages: "Réglages" },
     sched: {
       kinds: { morning: "Ouverture du matin", evening: "Fermeture du soir" },
       enable: { morning: "Ouverture du matin activée", evening: "Fermeture du soir activée" },
@@ -497,7 +500,7 @@ const WORDS = {
       band: { morning: "Ouvert avant le lever", evening: "Fermé avant le coucher" },
       hi: "Heure max", hiFixed: "Heure max = min", lo: "Heure min",
       x1: "Croisement printemps", x2: "Croisement automne",
-      fl: "Plancher · pas avant", ce: "Plafond · pas après", flShort: "plancher", ceShort: "plafond",
+      fl: "Pas avant", ce: "Pas après", flShort: "pas avant", ceShort: "pas après",
       fixedHint: "Pour une heure fixe toute l'année, rapproche les poignées max et min jusqu'à ce qu'elles se collent.",
       dstHint: (h) => ` Ici, elles sont soit collées, soit écartées d'au moins ${h} h, à cause de l'heure d'été.`,
       legal: "heure légale", off: "désactivé", offHalf: "désactivé · demi-sinusoïde simple",
@@ -510,11 +513,11 @@ const WORDS = {
       editRange: (a, b) => `Choisis une heure entre ${a} et ${b}.`,
       editBadDate: "Date invalide : saisis jour, mois et année.",
       today: "Aujourd'hui", earliest: "Le plus tôt", latest: "Le plus tard",
-      maxAfter: (r) => `Plus grand écart après le ${r}`, daysBefore: (r) => `Jours avant le ${r}`,
-      onDate: (d) => `le ${d}`, none: "aucun", upTo: (n, d) => `jusqu'à ${n}, le ${d}`,
+      onDate: (d) => `le ${d}`,
+      beforeRef: (band, n, gap, d) => `${band} : ${n} jour${n > 1 ? "s" : ""} par an, jusqu'à ${gap} le ${d}.`,
       errors: {
         schedule_min_after_max: "L'heure min est après l'heure max. Pour une heure fixe, mets la même heure dans les deux champs.",
-        schedule_floor_after_ceiling: "Le plancher n'est pas avant le plafond.",
+        schedule_floor_after_ceiling: "« Pas avant » doit précéder « pas après ».",
         schedule_invalid: "Ces réglages sont illisibles.",
         schedule_no_sun: "À cette latitude, le soleil ne se lève pas ou ne se couche pas tous les jours : aucune courbe ne peut le suivre.",
       },
@@ -525,19 +528,20 @@ const WORDS = {
       },
       manyCross: (r, n) => `La courbe croise le ${r} ${n} fois dans l'année. Vérifie que c'est voulu.`,
       clampHiLo: "Le max ne descend pas sous le min : les poignées restent collées.",
-      clampHiFl: (t) => `Le max ne descend pas sous le plancher (${t}).`,
+      clampHiFl: (t) => `Le max ne descend pas sous « pas avant » (${t}).`,
       clampLoHi: "Le min ne monte pas au-dessus du max : les poignées restent collées.",
-      clampLoCe: (t) => `Le min ne monte pas au-dessus du plafond (${t}).`,
-      clampFlHi: (t) => `Le plancher ne monte pas au-dessus du max (${t}).`,
-      clampFlCe: (t) => `Le plancher reste sous le plafond (${t}).`,
-      clampCeLo: (t) => `Le plafond ne descend pas sous le min (${t}).`,
-      clampCeFl: (t) => `Le plafond reste au-dessus du plancher (${t}).`,
+      clampLoCe: (t) => `Le min ne monte pas au-dessus de « pas après » (${t}).`,
+      clampFlHi: (t) => `« Pas avant » ne monte pas au-dessus du max (${t}).`,
+      clampFlCe: (t) => `« Pas avant » reste sous « pas après » (${t}).`,
+      clampCeLo: (t) => `« Pas après » ne descend pas sous le min (${t}).`,
+      clampCeFl: (t) => `« Pas après » reste au-dessus de « pas avant » (${t}).`,
       clampGap: "Entre l'heure fixe et la courbe, il faut au moins 1 h d'écart : en dessous, le changement d'heure ferait passer la courbe sous le min en hiver.",
       clampCross: (k, a, b) => `Le ${k.toLowerCase()} reste entre le ${a} et le ${b}.`,
-      introShort: "Matin et soir, chaque volet applique l'action choisie pour lui en bas de la page : un mode ou une position.",
+      introShort: "Matin et soir, chaque volet applique l'action choisie pour lui dans le tableau : un mode ou une position.",
+      curveTitle: { morning: "Heure de l'ouverture du matin", evening: "Heure de la fermeture du soir" },
+      effNone: "rien",
+      effPart: (label, n) => `${label} : ${n}`,
       introInfo: "Un mode s'applique comme tout changement de mode : les exclusions, les inhibitions, le verrou et les modes minutés s'appliquent. Une position ne change pas le mode ; elle respecte le verrou sauf si elle est forcée, et une fenêtre ouverte la bloque toujours.",
-      enabledLabel: "Activée",
-      todayAt: (t) => `aujourd'hui ${t}`,
       offShort: "désactivée",
       follows: (r, t) => (t ? `suit le ${r} (aujourd'hui ${t})` : `suit le ${r}`),
       grpCurve: "Courbe sur l'année", grpBounds: "Bornes en heure légale", grpFine: "Affiner",
@@ -567,10 +571,12 @@ const WORDS = {
       none: "Aucune consigne", auto_shade: "Ombrage", solar_gain: "Héliotropie",
     },
     legendEntity: "Entité",
-    legendEmpty: "Non lié",
     auto: "auto",
-    linkMode: "Lier ce mode",
-    matrixHint: "Cliquer une cellule pour régler la position du mode sur ce volet ; une cellule vide lie le mode.",
+    noTarget: "aucune",
+    linkMode: "Ajouter ce mode",
+    matrixHint: "Une case dit ce que fait le mode sur ce volet. Cliquer pour la changer, ou sur une case vide pour ajouter le mode.",
+    viewList: "Par volet", viewTable: "Tableau",
+    openMode: (m) => `Ouvrir le mode ${m}`,
     posSub: "Position appliquée quand ce mode est activé",
     behaviorSub: {
       auto_shade: "Position calculée par l'ombrage automatique",
@@ -579,16 +585,17 @@ const WORDS = {
     segFixed: "Fixe",
     segEntity: "Entité",
     segNone: "Aucune",
-    segAuto: "Auto",
-    noneHint: "Pas de position forcée : le volet reste en place (verrouille si mode verrou).",
+    segAuto: "Calculée",
+    noneHint: "Pas de position forcée : le volet reste en place (verrouillé si le mode verrouille).",
     entityHint: "La valeur de l'entité pilote la position en direct.",
     autoHint: "Par défaut : la position est calculée pour ce volet.",
-    overrideHint: "Surcharge : ce volet ignore la position calculée dans ce mode.",
-    overrideTitle: "Surcharge la position calculée",
-    applyFacade: (n, f) => `Appliquer aussi aux ${n} autres volets de la façade ${f}`,
-    applyFacadeOne: (f) => `Appliquer aussi à l'autre volet de la façade ${f}`,
-    unlink: "Délier",
-    link: "Lier",
+    overrideHint: "Écart : ce volet ignore le calcul dans ce mode.",
+    overrideTitle: "Écart : remplace la position calculée",
+    applyFacade: (n, f) => `Pareil pour les ${n} autres volets de la façade ${f}`,
+    applyFacadeOne: (c, f) => `Pareil pour ${c} (façade ${f})`,
+    unlink: "Retirer",
+    link: "Ajouter",
+    applyDraft: "Appliquer",
     cancel: "Annuler",
     save: "Enregistrer",
     saved: "Enregistré : configuration rechargée",
@@ -600,10 +607,6 @@ const WORDS = {
     modesCount: (n) => `${n} mode${n > 1 ? "s" : ""}`,
     shading: "Ombrage",
     solarGain: "Héliotropie",
-    active: "actif",
-    activeF: "active",
-    inactive: "inactif",
-    inactiveF: "inactive",
     lock: "verrou",
     hidden: "masqué",
     facades: "Façades",
@@ -631,7 +634,8 @@ const WORDS = {
     },
     addMode: "Ajouter un mode",
     addCover: "Ajouter un volet",
-    dragHint: "Glisser une tuile pour réordonner : l'ordre pilote la liste du sélecteur de mode.",
+    dragHint: "Dans l'ordre du sélecteur de mode : glisser une ligne pour le changer.",
+    behaviorKind: { none: "Position fixe", auto_shade: "Suit l'ombrage", solar_gain: "Suit l'héliotropie" },
     backToModes: "Tous les modes",
     newMode: "Nouveau mode",
     name: "Nom",
@@ -650,7 +654,7 @@ const WORDS = {
     },
     entityTotal: (n) => `${n} entité${n > 1 ? "s" : ""} au total`,
     delete: "Supprimer",
-    inUseTitle: (n) => `Utilisé par ${n} volet${n > 1 ? "s" : ""} : le délier d'abord dans la matrice.`,
+    inUseTitle: (n) => `Utilisé par ${n} volet${n > 1 ? "s" : ""} : le retirer d'abord de ces volets dans la matrice.`,
     inUseItemTitle: (n) => (n > 1 ? `Utilisé par ${n} volets : les déplacer d'abord.` : "Utilisé par 1 volet : le déplacer d'abord."),
     backToCovers: "Tous les volets",
     entity: "Entité du volet",
@@ -669,7 +673,11 @@ const WORDS = {
     timedChip: (n, r) => (r ? `${n} min, puis ${r}` : `${n} min`),
     statusTimer: (m, t) => `retour à ${m} à ${t}`,
     statusLocked: (p) => (p == null ? "verrouillé" : `verrouillé, ${p} % mémorisé`),
-    schedNext: "prochain", schedTomorrow: (t) => `demain ${t}`,
+    schedNext: "prochain", schedTomorrow: (t) => `demain ${t}`, schedNone: "rien",
+    schedTitle: "Horaires", schedEdit: "Modifier",
+    coverModesTitle: "Modes de ce volet", seeMatrix: "Voir la matrice",
+    addPicture: "Ajouter une image",
+    nav: { cover: "Volet", modes: "Modes", block: "Blocages", detection: "Soleil" },
     schedOpen: "Ouvrir l'onglet Horaires", schedAria: (n) => `Horaires de ${n}, ouvrir l'onglet Horaires`,
     fcSafety: (n) => `${n} : le volet bougera une fois l'exclusion levée.`,
     fcInhib: (n) => `${n} : le volet bougera à la fin de l'inhibition.`,
@@ -678,18 +686,18 @@ const WORDS = {
     fcSpared: (cur, m) => `${m} ne remplace pas ${cur} : le volet reste en ${cur}.`,
     fcAfterTimed: (cur, m) => `${m} s'appliquera à la fin de ${cur}.`,
     entitiesShow: "Voir les entités",
-    groupedTitle: "Lancé pour plusieurs volets",
+    groupedTitle: "Appliqué à plusieurs volets",
     groupedHint: "Sélecteur global, horaires, automatisations. Un choix fait sur le sélecteur d'un volet passe toujours.",
     groupedInfo: "L'action apply_mode avec force: true passe aussi.",
-    sparesField: "Ne pas déranger les volets déjà en mode :",
+    sparesField: "Laisser tranquilles les volets en",
     sparesHint: "Un volet en mode minuté n'est pas dérangé non plus, et prend ce mode à la fin de son délai.",
-    sparesNone: "Aucun : ce mode remplace tous les autres.",
-    sparesCount: (n) => `${n} mode${n > 1 ? "s" : ""} protégé${n > 1 ? "s" : ""}, les autres sont remplacés.`,
-    sparesChip: (n) => `laisse ${n} mode${n > 1 ? "s" : ""}`,
-    fallbackChip: (m) => `repli : ${m}`,
-    fallbackField: "Volets qui n'ont pas ce mode dans la matrice :",
-    fallbackHint: "Ou leur appliquer un autre mode à la place (ex. Absence, puis Automatique).",
-    fallbackNone: "Ne rien faire",
+    sparesNone: "Aucun mode : celui-ci remplace tous les autres.",
+    sparesAdd: "+ mode",
+    sparesChip: (names) => (names.length <= 2 ? `épargne ${names.join(", ")}` : `épargne ${names.length} modes`),
+    fallbackChip: (m) => `sinon ${m}`,
+    fallbackField: "Les volets sans ce mode dans la matrice passent en",
+    fallbackHint: "Ex. : Absence, puis Automatique sur les volets qui n'ont pas Absence.",
+    fallbackNone: "rien (ils ne bougent pas)",
     usedAsReturn: (names) => `Ce mode est le mode de retour de ${names.map((n) => `« ${n} »`).join(", ")} : il ne peut pas avoir de durée tant qu'il l'est.`,
     noTemplateOpt: "Aucun gabarit",
     overrides: (n) => `${n} écart${n > 1 ? "s" : ""}`,
@@ -724,7 +732,6 @@ const WORDS = {
     timedThen: "min, puis",
     advanced: "Avancé",
     advSummary: (prio, hidden) => `${prio ? "prioritaire" : "non prioritaire"} · ${hidden ? "masqué" : "visible"}`,
-    nowLabel: "Maintenant :",
     picturePh: "/local/… (facultatif)",
     blockTitle: "Ce qui bloque le volet",
     blockSub: "Ce qui a été demandé pendant le blocage s'applique quand l'entité retombe.",
@@ -737,8 +744,10 @@ const WORDS = {
     addEntity: "Ajouter une entité",
     removeEntity: "Retirer",
     calcTitle: "Calcul de la position",
-    tplChip: (n) => `valeurs du gabarit ${n}`,
-    noTplChip: "sans gabarit : toutes les valeurs sont propres au volet",
+    calcFrom: "Valeurs du gabarit",
+    calcExcept: ", sauf",
+    calcNoOwn: ", sans écart",
+    noTplChip: "Sans gabarit : toutes les valeurs sont celles du volet.",
     openTemplate: "Ouvrir le gabarit",
     sectionTitles: {
       geometry: "Géométrie de la fenêtre", detection: "Quand le soleil fait face",
@@ -769,15 +778,12 @@ const WORDS = {
       shade_max_height: "Le long de la pente, du bas au haut du vitrage (volet ouvert, 100 %).",
       shade_min_height: "Volet fermé : 0 pour la plupart des fenêtres de toit.",
     },
-    fromTemplate: (v) => `Gabarit : ${v}.`,
-    backToTpl: "revenir au gabarit",
-    inheritedTitle: (n) => `Valeur du gabarit ${n} : la modifier pour la remplacer sur ce volet.`,
-    inheritedLegend: "du gabarit",
-    ownLegend: (n) => `propre au volet : ${n}`,
+    fromTemplate: (v) => `gabarit : ${v}`,
+    ovrLabel: "Écart",
+    backToTpl: "Revenir au gabarit",
+    inheritedTitle: (n) => `Valeur du gabarit ${n} : la modifier crée un écart sur ce volet.`,
     filterAll: "Tout",
     filterOwn: (n) => `Écarts seulement (${n})`,
-    sectInherited: (n) => `${n} du gabarit`,
-    sectOwn: (n) => `${n} propre${n > 1 ? "s" : ""}`,
     noOwn: "Aucun écart : ce volet suit son gabarit partout.",
     elevationRange: "Hauteur du soleil",
     elevationHint: "En dehors, le volet va à sa position par défaut.",
@@ -797,7 +803,8 @@ const WORDS = {
     tplName: "Nom du gabarit",
     usedBy: "Utilisé par",
     noCoverYet: "Aucun volet pour l'instant",
-    tplIdentityNote: "Chaque volet part de ces valeurs et peut s'en écarter dans sa propre fiche.",
+    tplFacades: (list) => `Façades de ce type : ${list}.`,
+    tplNoFacade: "Aucune façade de ce type pour l'instant.",
     facadeName: "Nom de la façade",
     facadeCovers: "Volets sur cette façade",
     orientTitle: "Orientation",
@@ -813,8 +820,7 @@ const WORDS = {
     slopeSub: "L'angle de la vitre avec l'horizontale.",
     slopeKinds: { wall: "Mur", roof: "Toit", flat: "À plat" },
     kindNoun: { wall: "un mur", roof: "un toit", flat: "une fenêtre à plat" },
-    tplKind: "Type de fenêtre",
-    tplKindNote: "Un volet ne prend qu'un gabarit du type de sa façade : des hauteurs pour un mur, des longueurs de vitre pour un toit.",
+    tplKind: "Pour les fenêtres",
     tplKindRef: (t, house) => `Dessiné sur un toit à ${t}°${house ? ", le moins pentu des toits de la maison" : ""}.`,
     tplKindMismatch: (t, tk, fk) => `Le gabarit « ${t} » est prévu pour ${tk}, pas pour ${fk} : en choisir un autre, ou aucun.`,
     tplKindUsers: (list) => `Des volets qui l'utilisent sont sur une façade d'un autre type : ${list}. L'enregistrement sera refusé.`,
@@ -828,21 +834,20 @@ const WORDS = {
     },
     slopeShort: (t) => (t >= 90 ? "" : t < 10 ? "à plat" : `toit ${t}°`),
     dirs: ["N", "NE", "E", "SE", "S", "SO", "O", "NO"],
-    houseTitle: "La maison",
-    houseSub: "enregistré élément par élément",
-    globalTitle: "Réglages globaux",
-    globalNote: "un seul enregistrement, en bas",
     addShort: "Ajouter",
     tplMeta: (kind, h, d) => (kind === "flat" ? "à plat" : `${kind === "roof" ? "toit · longueur" : "hauteur"} ${h} m · distance ${d} m`),
     sgTitle: "Héliotropie",
     sgSub: "Quand fait-il assez frais et beau pour laisser entrer le soleil ? Vaut pour tous les volets.",
-    sgTemp: "Température",
-    sgThreshold: "sous le seuil",
+    sgThreshold: "Seuil",
     sgThrValue: "Valeur",
     sgThrEntity: "Entité",
-    sgWeather: "Météo",
-    sgGood: "Beau temps =",
-    sgNote: "Sans température, le test est ignoré ; sans météo, il fait toujours beau.",
+    sgCoolWhen: "Il fait frais quand",
+    sgIsBelow: "est sous",
+    sgFineWhen: "Il fait beau quand",
+    sgReports: "annonce :",
+    sgMore: (n) => `+ ${n} autres`,
+    sgLess: "Replier",
+    sgNote: "Sans température, le premier test est ignoré ; sans météo, il fait toujours beau.",
     sgTooWarm: (t, s) => `${t} ≥ ${s} : trop chaud, l'héliotropie attend`,
     sgCool: (t, s) => `${t} < ${s} : assez frais`,
     cmdTitle: "Envoi des commandes",
@@ -866,7 +871,7 @@ const WORDS = {
       schedule_invalid: (k) => `L'horaire « ${k} » est illisible.`,
       schedule_position_invalid: (e) => `${e} : une position programmée va de 0 à 100 %.`,
       schedule_min_after_max: (k) => `Horaire « ${k} » : l'heure min est après l'heure max.`,
-      schedule_floor_after_ceiling: (k) => `Horaire « ${k} » : le plancher n'est pas avant le plafond.`,
+      schedule_floor_after_ceiling: (k) => `Horaire « ${k} » : « pas avant » doit précéder « pas après ».`,
       return_mode_timed: (target, user) => `« ${target} » est le mode de retour de « ${user} » : il ne peut pas avoir de durée. Changez d'abord le retour de « ${user} ».`,
       in_use: (n, count, covers) => `« ${n} » est encore utilisé par ${count} volet${Number(count) > 1 ? "s" : ""} : ${covers}`,
       entity_required: () => "Un volet doit désigner une entité.",
@@ -1121,6 +1126,13 @@ function facadeArrow(facade, cls = "round az") {
   return badge;
 }
 
+/** A slider's fill, drawn by the page's own CSS (--p) rather than the browser:
+ *  one look on every engine, a light track and the colour on the fill only. */
+function paintRange(range) {
+  const min = Number(range.min) || 0, max = Number(range.max) || 100;
+  range.style.setProperty("--p", `${((Number(range.value) - min) / ((max - min) || 1)) * 100}%`);
+}
+
 /* ---------- error helper ---------- */
 /** Turn a server error code ("in_use:Ombre:3:cover.a") into a sentence. */
 function wsError(err) {
@@ -1240,6 +1252,10 @@ const STYLE = `
     background: var(--card-background-color); color: var(--primary-text-color);
     font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.2);
   }
+  .tab-sep { width: 1px; flex: none; align-self: stretch; margin: var(--fp-s1); background: var(--divider-color); }
+  /* The tab holding unsaved changes. */
+  .tab.dirty::after { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+                      margin-left: var(--fp-sh); vertical-align: middle; background: var(--fp-warn); }
   .tab:focus-visible, button:focus-visible, .cv:focus-visible {
     outline: var(--fp-focus); outline-offset: var(--fp-focus-off);
   }
@@ -1259,14 +1275,16 @@ const STYLE = `
   }
 
   /* ---------- matrix ---------- */
-  .m-tools { display: flex; align-items: center; gap: var(--fp-s4); flex-wrap: wrap; margin: 0 0 var(--fp-s3); }
+  .m-tools { display: flex; align-items: center; gap: var(--fp-s2) var(--fp-s4); flex-wrap: wrap; margin: 0 0 var(--fp-s3); }
+  .m-hint { flex: 1 1 340px; display: flex; align-items: center; gap: var(--fp-sh); margin: 0;
+            font-size: var(--f-12-5); color: var(--secondary-text-color); }
+  .m-hint ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; flex: none; }
   .legend { display: flex; gap: var(--fp-s4); margin-left: auto; font-size: var(--f-12);
             color: var(--secondary-text-color); flex-wrap: wrap; }
   .legend span { display: inline-flex; align-items: center; gap: var(--fp-sh); }
   .legend ha-icon { --mdc-icon-size: 15px; width: 15px; height: 15px; }
   .lg { width: 22px; height: 15px; border-radius: var(--fp-field-r); display: inline-block; }
   .lg.fixed { background: var(--secondary-background-color); border: 1px solid var(--divider-color); }
-  .lg.empty { border: 1px dashed var(--divider-color); }
 
   .m-scroll { overflow: auto; border: 1px solid var(--divider-color);
               border-radius: var(--ha-card-border-radius, 12px); position: relative;
@@ -1279,23 +1297,24 @@ const STYLE = `
   .matrix tbody th { position: sticky; left: 0; z-index: 1; background: var(--card-background-color);
                      border-right: 1px solid var(--divider-color); text-align: left; font-weight: normal; }
   .matrix thead th.corner { left: 0; z-index: 3; }
-  .mh { display: flex; flex-direction: column; align-items: center; gap: var(--fp-s1);
-        padding: var(--fp-s3) var(--fp-s2) var(--fp-sh);
+  .mh { display: flex; flex-direction: column; align-items: center; gap: var(--fp-s1); width: 100%;
+        padding: var(--fp-s3) var(--fp-s2) var(--fp-sh); border: 0; background: none; font: inherit; cursor: pointer;
         min-width: 76px; font-weight: 500; font-size: var(--f-11-5); color: var(--secondary-text-color); }
+  .mh:hover { color: var(--primary-text-color); }
   .mh .mico { width: 27px; height: 27px; border-radius: var(--fp-ctl-r);
               display: flex; align-items: center; justify-content: center; }
   .mh .mico ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; }
-  .mh .flags { display: flex; gap: var(--fp-s1); min-height: 13px; }
-  .mh .flags ha-icon { --mdc-icon-size: 12px; width: 12px; height: 12px; color: var(--secondary-text-color); }
+  /* What sets the mode apart, in words, under its name. */
+  .mh .tags { min-height: 13px; font-size: var(--f-10-5); font-weight: 400; white-space: nowrap;
+              color: var(--secondary-text-color); }
   .rowh { display: flex; align-items: center; gap: var(--fp-s3);
-          padding: var(--fp-sh) var(--fp-s4) var(--fp-sh) var(--fp-s3); min-width: 200px; }
+          padding: var(--fp-s1) var(--fp-s4) var(--fp-s1) var(--fp-s3); min-width: 180px; }
   .rowh img, .rowh .pic { width: var(--fp-pill-h); height: var(--fp-pill-h);
                           border-radius: var(--fp-ctl-r); object-fit: cover; flex: none; }
   .rowh .pic { background: var(--secondary-background-color); border: 1px solid var(--divider-color);
                display: flex; align-items: center; justify-content: center; color: var(--secondary-text-color); }
   .rowh .pic ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; }
   .rowh .nm { font-weight: 600; font-size: var(--f-13); line-height: 1.25; }
-  .rowh .fx { font-size: var(--f-11); color: var(--secondary-text-color); }
   tr.facade th, tr.facade td { background: var(--secondary-background-color) !important; }
   tr.facade .fl { display: flex; align-items: center; gap: var(--fp-sh); padding: var(--fp-s1) var(--fp-s3);
                   font-size: var(--f-11); font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
@@ -1318,9 +1337,36 @@ const STYLE = `
   .bico ha-icon { --mdc-icon-size: 14px; width: 14px; height: 14px; }
   .cv.entity { background: color-mix(in srgb, var(--fp-warn) 16%, transparent); font-size: var(--f-11); }
   .cv.entity ha-icon { --mdc-icon-size: 13px; width: 13px; height: 13px; }
-  .cv.empty { border: 1px dashed var(--divider-color); color: transparent; }
-  .cv.empty:hover { color: var(--secondary-text-color); border-color: var(--secondary-text-color); }
-  .cv.empty ha-icon { --mdc-icon-size: 14px; width: 14px; height: 14px; }
+  /* An empty cell is a quiet dot; under the pointer or the focus it offers
+     to add the mode. */
+  .cv.empty { color: var(--primary-color); }
+  .cv.empty::before { content: ""; width: 4px; height: 4px; border-radius: 50%; background: var(--divider-color); }
+  .cv.empty ha-icon { display: none; --mdc-icon-size: 14px; width: 14px; height: 14px; }
+  .cv.empty:hover, .cv.empty:focus-visible { border: 1px dashed var(--primary-color); }
+  .cv.empty:hover::before, .cv.empty:focus-visible::before { display: none; }
+  .cv.empty:hover ha-icon, .cv.empty:focus-visible ha-icon { display: inline-block; }
+  /* A fixed position or an entity in a mode that computes: an override. */
+  .cv.ovr { box-shadow: inset 0 0 0 1px var(--fp-warn); }
+  /* The phone view: the covers one under the other, their modes two by two. */
+  .seg.m-view { display: none; margin: 0; flex: none; }
+  .seg.m-view button { flex: none; padding: 0 var(--fp-s3); }
+  .m-list { display: none; gap: var(--fp-s2); }
+  .m-list .grp-h { margin: var(--fp-s2) var(--fp-s1) 0; }
+  .m-card { padding: var(--fp-s3); }
+  .m-card > .nm { font-weight: 600; font-size: var(--f-14); margin-bottom: var(--fp-s2); }
+  .m-cells { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--fp-s2); }
+  .m-item { display: grid; gap: var(--fp-s0); min-width: 0; }
+  .m-lab { display: flex; align-items: center; gap: var(--fp-sh); min-width: 0; font-size: var(--f-11-5);
+           color: var(--secondary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .m-item .cv { min-width: 0; }
+  .m-cells .cv.empty { border: 1px dashed var(--divider-color); color: var(--secondary-text-color); }
+  .m-cells .cv.empty::before { display: none; }
+  .m-cells .cv.empty ha-icon { display: inline-block; }
+  @media (max-width: 600px) {
+    .seg.m-view { display: flex; }
+    .m-box:not(.as-table) .m-scroll { display: none; }
+    .m-box:not(.as-table) .m-list { display: grid; }
+  }
   .gauge { width: 26px; height: 5px; border-radius: var(--fp-field-r); background: var(--divider-color);
            overflow: hidden; flex: none; }
   .gauge i { display: block; height: 100%; background: var(--primary-color); }
@@ -1330,7 +1376,7 @@ const STYLE = `
   .backdrop { position: fixed; inset: 0; z-index: 8; }
   /* Fixed, not absolute: the popover lives OUTSIDE .m-scroll so it is never
      clipped by it and never grows its scroll area. Re-anchored on scroll. */
-  .pop { position: fixed; z-index: 9; width: 290px; max-width: calc(100vw - 16px);
+  .pop { position: fixed; z-index: 9; width: 320px; max-width: calc(100vw - 16px);
          background: var(--card-background-color);
          border: 1px solid var(--divider-color); border-radius: var(--ha-card-border-radius, 12px);
          padding: var(--fp-s4); box-shadow: 0 4px 24px rgba(0,0,0,.3);
@@ -1345,7 +1391,7 @@ const STYLE = `
   .seg button.on { background: var(--card-background-color); color: var(--primary-text-color);
                    font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
   .pos-slider { display: flex; align-items: center; gap: var(--fp-s3); margin-bottom: var(--fp-s3); }
-  .pos-slider input[type=range] { flex: 1; accent-color: var(--primary-color); }
+  .pos-slider input[type=range] { flex: 1; min-width: 0; }
   .pos-slider .val { font-weight: 700; font-size: var(--f-14); min-width: 44px; text-align: right;
                      font-variant-numeric: tabular-nums; }
   .hint { font-size: var(--f-11-5); color: var(--secondary-text-color); margin: 0 0 var(--fp-s3); }
@@ -1363,26 +1409,38 @@ const STYLE = `
                  color: var(--text-primary-color, #fff); }
   .btn.ghost { border-color: transparent; color: var(--secondary-text-color); }
   .btn.danger { border-color: transparent; color: var(--fp-bad); padding-left: 0; }
+  .btn ha-icon { --mdc-icon-size: 18px; width: 18px; height: 18px; }
+  .pop .btn { white-space: nowrap; }
   .btn[disabled] { opacity: .5; cursor: default; }
   ha-selector { display: block; margin-bottom: var(--fp-s3); }
 
   /* ---------- read-only tabs ---------- */
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: var(--fp-s3); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr)); gap: var(--fp-s3); }
   /* Cover cards side by side keep each part on the same line: every card
-     spans the same six rows of the grid (head, state, schedules, forecast,
-     chips, features), so a card without schedules leaves that row empty
-     instead of moving its chips up. */
+     spans the same five rows of the grid (head, state, schedules, forecast,
+     features), so a card without schedules leaves that row empty instead of
+     moving its features up. */
   @supports (grid-template-rows: subgrid) {
     .grid.covers { row-gap: 0; }
-    .grid.covers > .card { display: grid; grid-row: span 6; grid-template-rows: subgrid; row-gap: 0;
+    .grid.covers > .card { display: grid; grid-row: span 5; grid-template-rows: subgrid; row-gap: 0;
                            align-content: start; margin-bottom: var(--fp-s3); }
     .grid.covers > .card > .c-head { grid-row: 1; }
     .grid.covers > .card > .status { grid-row: 2; }
     .grid.covers > .card > .sched-row { grid-row: 3; }
     .grid.covers > .card > .sched-hint { grid-row: 4; }
-    .grid.covers > .card > .chips { grid-row: 5; align-self: start; }
-    .grid.covers > .card > .feats { grid-row: 6; align-self: end; }
+    .grid.covers > .card > .feats { grid-row: 5; align-self: end; }
   }
+  /* A list's title line: what it holds and how many, its Add on the right. */
+  .list-head { margin-bottom: var(--fp-s2); }
+  .list-head h2 { margin: 0; font-size: var(--f-16); font-weight: 600; }
+  .list-head .hint { margin: 0; }
+  /* The covers of one facade, under its name, as in the matrix. */
+  .fgroups { display: flex; flex-wrap: wrap; gap: var(--fp-s2) var(--fp-s3); }
+  .fgroup { flex: 1 1 calc(var(--n) * 290px + (var(--n) - 1) * var(--fp-s3)); min-width: 0; max-width: 100%; }
+  .grp-h { display: flex; align-items: baseline; gap: var(--fp-s2); margin: var(--fp-s2) var(--fp-s1);
+           font-size: var(--f-11); font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+           color: var(--secondary-text-color); }
+  .grp-h .az { font-weight: 500; letter-spacing: 0; text-transform: none; }
   .c-head { display: flex; align-items: center; gap: var(--fp-s3); margin-bottom: var(--fp-s3); }
   .c-head img, .c-head .pic { width: 38px; height: 38px; border-radius: var(--fp-ctl-r);
                               object-fit: cover; flex: none; }
@@ -1397,18 +1455,33 @@ const STYLE = `
           border: 1px solid var(--divider-color); border-radius: var(--fp-pill-r);
           padding: var(--fp-s0) var(--fp-s2); color: var(--secondary-text-color); }
   .chip ha-icon { --mdc-icon-size: 13px; width: 13px; height: 13px; }
-  .feats { display: flex; gap: var(--fp-s4); font-size: var(--f-12-5); color: var(--secondary-text-color);
-           border-top: 1px solid var(--divider-color); padding-top: var(--fp-s2); }
-  .feats ha-icon { --mdc-icon-size: 15px; width: 15px; height: 15px; }
-  .feats .on { color: var(--fp-ok); font-weight: 600; }
-  /* Mode tiles reuse the cover-card anatomy: .card > .c-head + .chips. */
+  /* What runs on its own on this cover, and its overrides: only what is on. */
+  .feats { display: flex; flex-wrap: wrap; gap: var(--fp-sh); border-top: 1px solid var(--divider-color);
+           padding-top: var(--fp-s2); }
+  /* The modes, one row each in the selector's order: grip, icon, name and
+     what it does, its chips, a chevron. */
   .mico { width: 38px; height: 38px; border-radius: var(--fp-ctl-r); flex: none;
           display: flex; align-items: center; justify-content: center; }
   .mico ha-icon { --mdc-icon-size: 20px; width: 20px; height: 20px; }
-  .m-ord { flex: none; min-width: 22px; height: 22px; padding: 0 var(--fp-s0); display: flex;
-           align-items: center; justify-content: center; border-radius: var(--fp-pill-r);
-           background: var(--secondary-background-color); color: var(--secondary-text-color);
-           font-size: var(--f-11); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .mlist { padding: 0; overflow: hidden; }
+  .mrow { display: grid; grid-template-columns: 18px 38px minmax(140px, 1fr) auto 20px; gap: var(--fp-s3);
+          align-items: center; padding: 10px var(--fp-s4); border-top: 1px solid var(--divider-color); cursor: pointer; }
+  .mrow:first-child { border-top: 0; }
+  .mrow:hover { background: color-mix(in srgb, var(--primary-color) 5%, transparent); }
+  .mrow:focus-visible { outline: var(--fp-focus); outline-offset: -2px; }
+  .mrow.drop { box-shadow: inset 0 2px 0 var(--primary-color); }
+  .mrow.dragging { opacity: .45; }
+  .mrow .grip { color: var(--secondary-text-color); cursor: grab; --mdc-icon-size: 18px; width: 18px; height: 18px; }
+  .mrow .mnames { display: grid; min-width: 0; }
+  .mrow .nm { font-weight: 600; font-size: var(--f-14); }
+  .mrow .meta { font-size: var(--f-12); color: var(--secondary-text-color); }
+  .mrow .chips { margin: 0; justify-content: flex-end; }
+  .mrow .chev { color: var(--secondary-text-color); --mdc-icon-size: 20px; width: 20px; height: 20px; }
+  @media (max-width: 600px) {
+    .mrow { grid-template-columns: 18px 38px minmax(0, 1fr) 20px; }
+    .mrow .chips { grid-column: 3; grid-row: 2; justify-content: flex-start; }
+    .mrow .chev { grid-column: 4; grid-row: 1; }
+  }
   .mini { font-size: var(--f-10-5); font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
           border-radius: var(--fp-field-r); padding: var(--fp-s0) var(--fp-sh);
           background: var(--secondary-background-color); color: var(--secondary-text-color); }
@@ -1426,7 +1499,7 @@ const STYLE = `
   /* Second and later blocks of the Réglages tab need air above them. */
   .toolbar.section-head { margin-top: var(--fp-s5); }
   .toolbar p.secsub { margin-bottom: 0; }
-  .toolbar .spacer, .actions .spacer, .c-head .spacer { flex: 1; }
+  .toolbar .spacer, .actions .spacer, .c-head .spacer, .sk-top .spacer, .ed-head .spacer { flex: 1; }
   .card.clickable { cursor: pointer; }
   .card.clickable:hover { border-color: var(--primary-color); }
   .card.drop { border-color: var(--primary-color); border-style: dashed; }
@@ -1434,8 +1507,6 @@ const STYLE = `
   /* A tile whose last row is the head or the chips must not keep their bottom gap. */
   .card > .c-head:last-child, .card > .chips:last-child { margin-bottom: 0; }
   .c-head .chev { color: var(--secondary-text-color); --mdc-icon-size: 20px; width: 20px; height: 20px; }
-  .c-head .grip { color: var(--secondary-text-color); cursor: grab; flex: none;
-                  --mdc-icon-size: 18px; width: 18px; height: 18px; }
 
   .field { display: flex; align-items: center; gap: var(--fp-s3); padding: var(--fp-s2) 0;
            border-top: 1px solid var(--divider-color); font-size: var(--f-13); }
@@ -1478,29 +1549,28 @@ const STYLE = `
                    border-radius: var(--fp-pill-r); padding: var(--fp-s0) var(--fp-s2); }
   .status .smode ha-icon { --mdc-icon-size: 14px; width: 14px; height: 14px; }
   .status .spos { color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
-  /* The cover's schedules: morning | evening, the next one marked. */
-  /* Two halves, each its own box: an empty half (no action, or its schedule
-     off) shows nothing at all. */
-  .sched-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--fp-s2); width: 100%;
-               margin: 0 0 var(--fp-s3); padding: 0; border: 0; border-radius: var(--fp-ctl-r);
+  .status .spos.big { color: var(--primary-text-color); font-weight: 600; }
+  .gauge.big { width: 48px; height: 6px; border-radius: 3px; }
+  /* The cover's schedules on one line: the time, then what the cover does,
+     morning then evening, the next one in the accent colour. The whole line
+     opens the Schedules tab. */
+  .sched-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--fp-s1) var(--fp-s4); width: 100%;
+               margin: 0 0 var(--fp-s3); padding: var(--fp-s0) 0; border: 0; border-radius: var(--fp-field-r);
                background: none; font: inherit; font-size: var(--f-12-5);
                color: var(--primary-text-color); text-align: left; cursor: pointer; }
   .sched-row:focus-visible { outline: var(--fp-focus); outline-offset: var(--fp-focus-off); }
-  .sched-row .ev { display: grid; gap: 1px; padding: var(--fp-s2) 10px; min-width: 0; }
-  .sched-row .ev:not(.none) { background: var(--secondary-background-color); border: 1px solid transparent;
-                              border-radius: var(--fp-ctl-r); }
-  .sched-row:hover .ev:not(.none) { border-color: var(--primary-color); }
-  .sched-row .t { display: flex; align-items: center; gap: var(--fp-sh); color: var(--secondary-text-color);
+  .sched-row:hover .lbl { text-decoration: underline; }
+  .sched-row .ev { display: inline-flex; align-items: center; gap: var(--fp-sh); min-width: 0; }
+  .sched-row .t { display: inline-flex; align-items: center; gap: var(--fp-s1); color: var(--secondary-text-color);
                   font-variant-numeric: tabular-nums; }
   .sched-row .t b { font-weight: 500; }
   .sched-row ha-icon { --mdc-icon-size: 14px; width: 14px; height: 14px; flex: none; }
-  .sched-row .a { display: flex; align-items: center; gap: var(--fp-sh); font-weight: 500; min-width: 0; }
+  .sched-row .a { display: inline-flex; align-items: center; gap: var(--fp-s1); font-weight: 500; min-width: 0; }
   .sched-row .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sched-row .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-  .sched-row .done .a { color: var(--secondary-text-color); font-weight: 400; }
+  .sched-row .none .a, .sched-row .done .a { color: var(--secondary-text-color); font-weight: 400; }
   .sched-row .next .t { color: var(--primary-color); }
-  .sched-row .tag { margin-left: auto; font-size: var(--f-11); font-weight: 700; letter-spacing: .04em;
-                    text-transform: uppercase; color: var(--primary-color); }
+  .sched-row .tag { font-size: var(--f-11); font-weight: 600; color: var(--primary-color); }
   .sched-row .k-mem { color: var(--secondary-text-color); }
   .sched-row .k-now { color: var(--primary-color); }
   .sched-hint { display: flex; align-items: flex-start; gap: var(--fp-sh); margin: calc(var(--fp-s2) * -1) 0 var(--fp-s3);
@@ -1508,7 +1578,6 @@ const STYLE = `
   .sched-hint ha-icon { --mdc-icon-size: 14px; width: 14px; height: 14px; flex: none; margin-top: 1px; }
   .sched-hint.mem ha-icon { color: var(--primary-color); }
   .sched-hint.warn { color: var(--fp-warn); }
-  .ed-sched { margin-top: var(--fp-s3); max-width: 520px; }
   .ed-sched .sched-hint { margin-bottom: 0; }
   .chip.safety { color: var(--fp-bad); border-color: color-mix(in srgb, var(--fp-bad) 45%, transparent); }
   .chip.inhib { color: var(--fp-warn); border-color: color-mix(in srgb, var(--fp-warn) 45%, transparent); }
@@ -1629,6 +1698,18 @@ const STYLE = `
             background: color-mix(in srgb, var(--primary-color) 12%, transparent); }
   .toggle .mdot { width: 8px; height: 8px; border-radius: 50%; }
   .grouped { border-top: 1px solid var(--divider-color); padding-top: var(--fp-s2); margin-top: var(--fp-s1); }
+  /* A rule written as a sentence to complete: words, then the controls. */
+  .sentence { display: flex; flex-wrap: wrap; align-items: center; gap: var(--fp-sh) var(--fp-s2);
+              margin: var(--fp-s2) 0; font-size: var(--f-13-5, var(--f-13)); }
+  .sentence .chipline { display: inline-flex; flex-wrap: wrap; gap: var(--fp-sh); }
+  .sentence .ed-select.inline { height: 34px; min-width: 160px; }
+  .addsel { height: 28px; padding: 0 var(--fp-s2); border-radius: var(--fp-pill-r); cursor: pointer;
+            border: 1px dashed var(--divider-color); background: transparent; color: var(--secondary-text-color);
+            font: inherit; font-size: var(--f-12-5); }
+  .addsel[hidden], .ed-sub[hidden] { display: none; }
+  .toggle .x { --mdc-icon-size: 14px; width: 14px; height: 14px; color: var(--secondary-text-color); }
+  .toggle[aria-pressed="true"] .mdot { display: inline-block; }
+  .ed-sub.inline { margin: 0 0 var(--fp-s2); }
   .grouped h4 { margin: 0; font-size: var(--f-13); }
 
   /* ---------- editors, 4.0 layout ----------
@@ -1782,11 +1863,25 @@ const STYLE = `
           color: var(--primary-text-color); padding: 0 var(--fp-sh); }
   .numf .u { font-size: var(--f-12-5); color: var(--secondary-text-color); min-width: 24px; }
   .numf .from { font-size: var(--f-11-5); font-weight: 400; color: var(--secondary-text-color); }
-  .numf input[type=range] { grid-column: 1 / -1; width: 100%; margin: var(--fp-sh) 0 0; accent-color: var(--primary-color); }
+  /* The slider: a light track, the colour on the fill alone (--p, see
+     paintRange), the thumb a ring of that colour. Amber on an override. */
+  .numf .rwrap input[type=range], .pos-slider input[type=range] { width: 100%; height: 4px; margin: 8px 0 4px; border-radius: 2px;
+         -webkit-appearance: none; appearance: none; cursor: pointer;
+         background: linear-gradient(to right, var(--rc, var(--primary-color)) var(--p, 0%),
+                     color-mix(in srgb, var(--secondary-text-color) 28%, transparent) var(--p, 0%)); }
+  .numf .rwrap input[type=range]::-webkit-slider-thumb, .pos-slider input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
+         border-radius: 50%; background: var(--card-background-color); border: 2px solid var(--rc, var(--primary-color)); }
+  .numf .rwrap input[type=range]::-moz-range-thumb, .pos-slider input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%;
+         background: var(--card-background-color); border: 2px solid var(--rc, var(--primary-color)); }
+  .numf .rwrap input[type=range]::-moz-range-track, .pos-slider input[type=range]::-moz-range-track { background: transparent; }
+  .numf.ovr { --rc: var(--fp-warn); }
+  .numf .oline { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: var(--fp-s1) var(--fp-s2);
+                 margin-top: var(--fp-s1); font-size: var(--f-11-5); color: var(--secondary-text-color); }
+  .numf .oline .olab { color: var(--fp-warn); font-weight: 600; }
+  .numf:not(.ovr) .oline { display: none; }
   .numf.ovr { background: color-mix(in srgb, var(--fp-warn) 9%, transparent); border-radius: var(--fp-field-r);
               margin: 0 calc(var(--fp-s2) * -1); padding-left: var(--fp-s2); padding-right: var(--fp-s2); }
   .numf.ovr input[type=number] { border-color: color-mix(in srgb, var(--fp-warn) 60%, transparent); color: var(--fp-warn); }
-  .numf.ovr input[type=range] { accent-color: var(--fp-warn); }
   .numf:not(.ovr) .from { display: none; }
   /* Two thumbs on one track: the ranges overlap, only their thumbs catch the pointer. */
   .dual { grid-column: 1 / -1; position: relative; height: 20px; margin-top: var(--fp-sh); }
@@ -1875,11 +1970,11 @@ const STYLE = `
                  border-color: color-mix(in srgb, var(--primary-color) 60%, transparent);
                  background: color-mix(in srgb, var(--primary-color) 14%, transparent); }
 
-  /* Réglages: two columns, lists as rows. */
-  .set-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: var(--fp-s4); align-items: start; }
-  .colhead { display: flex; align-items: baseline; gap: var(--fp-s2); flex-wrap: wrap; margin: 0 var(--fp-s0) var(--fp-s1); }
-  .colhead h2 { margin: 0; font-size: var(--f-16); font-weight: 600; }
-  .colhead span { font-size: var(--f-12-5); color: var(--secondary-text-color); }
+  /* Maison: two lists side by side. Réglages and the mode editor: one
+     column, read top to bottom. */
+  .house-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+                gap: var(--fp-s4); align-items: start; }
+  .form-col { max-width: 880px; margin: 0 auto; }
   .ed-card > h3 .btn { margin-left: auto; height: 32px; padding: 0 var(--fp-s3); font-size: var(--f-12-5); }
   .ed-card > h3 .btn ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; color: inherit; }
   .lrow { display: flex; align-items: center; gap: var(--fp-s3); padding: 10px var(--fp-s1); width: 100%;
@@ -1897,12 +1992,13 @@ const STYLE = `
   .narrow { display: inline-flex; width: 14px; height: 14px; align-items: center; justify-content: center;
             color: inherit; flex: none; vertical-align: -2px; margin: 0 2px; }
   .narrow ha-icon { --mdc-icon-size: 13px; width: 13px; height: 13px; }
-  .sline { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: var(--fp-s3); align-items: center; padding: var(--fp-sh) 0; }
-  .sline > .k { font-size: var(--f-12-5); color: var(--secondary-text-color); }
-  .sline ha-selector { margin: 0; }
-  .sline.top { align-items: start; }
-  .sline.top > .k { padding-top: var(--fp-sh); }
-  .verdict { grid-column: 2; justify-self: start; }
+  .verdict { justify-self: start; margin: 0 0 var(--fp-s1); }
+  .sg-line ha-selector { flex: 1 1 220px; min-width: 200px; margin: 0; }
+  .sg-line .thr { flex: 0 1 auto; }
+  .sg-line .thr-body { flex: 0 1 auto; }
+  .wx-list { margin: 0 0 var(--fp-s1); }
+  .toggle[hidden] { display: none; }
+  .toggle.more { border-style: dashed; }
   .thr { display: flex; align-items: center; gap: var(--fp-s3); flex-wrap: wrap; }
   .seg.thr-seg { margin: 0; flex: none; }
   .seg.kind-seg { margin: 0; flex: none; }
@@ -1921,6 +2017,11 @@ const STYLE = `
                      padding: 10px var(--fp-s4); }
   .actions.savebar.dirty { border-color: color-mix(in srgb, var(--primary-color) 50%, transparent);
                            box-shadow: 0 -6px 24px rgba(0,0,0,.35); }
+  /* Nothing to save: no Cancel, no Save, and the bar stays at the end of the
+     page with Delete alone, or goes when there is no Delete either. */
+  .actions.savebar:not(.dirty) { position: static; }
+  .actions.savebar:not(.dirty) > .btn.primary, .actions.savebar:not(.dirty) > .btn.ghost { display: none; }
+  .actions.savebar.bare:not(.dirty) { display: none; }
   .actions .pending { display: inline-flex; align-items: center; gap: var(--fp-sh); font-size: var(--f-12-5);
                       color: var(--primary-text-color); margin-right: var(--fp-s2); }
   .actions .pending[hidden] { display: none; }
@@ -1931,32 +2032,42 @@ const STYLE = `
   /* Inherited from the template vs the cover's own: a dashed grey box with a
      link, or amber with a bar, the template's value and a way back. */
   .numf { position: relative; }
-  .numf .lnk { --mdc-icon-size: 15px; width: 15px; height: 15px; color: var(--secondary-text-color); }
-  .numf.ovr .lnk { color: var(--fp-warn); }
-  .numf.inh input[type=number] { border-style: dashed; background: transparent; font-weight: 500;
-         border-color: color-mix(in srgb, var(--secondary-text-color) 60%, transparent); color: var(--secondary-text-color); }
-  .numf.inh input[type=range] { accent-color: color-mix(in srgb, var(--secondary-text-color) 75%, transparent); }
-  .numf.inh .dual .track i { background: color-mix(in srgb, var(--secondary-text-color) 60%, transparent); }
-  .numf.inh .dual input[type=range]::-webkit-slider-thumb { background: var(--secondary-text-color); }
-  .numf.inh .dual input[type=range]::-moz-range-thumb { background: var(--secondary-text-color); }
+  /* Inherited: a value at rest, its box only drawn under the pointer or the focus. */
+  .numf.inh input[type=number] { background: transparent; border-color: transparent; }
+  .numf.inh input[type=number]:hover, .numf.inh input[type=number]:focus { border-color: var(--divider-color); }
   .numf.ovr { padding-left: var(--fp-s3); }
   .numf.ovr::before { content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px;
                       border-radius: 2px; background: var(--fp-warn); }
   .rwrap { grid-column: 1 / -1; position: relative; }
-  .rwrap .ghost { position: absolute; top: 9px; width: 2px; height: 12px; margin-left: -1px; display: none;
+  .rwrap .ghost { position: absolute; top: 4px; width: 2px; height: 12px; margin-left: -1px; display: none;
                   background: var(--secondary-text-color); pointer-events: none; }
   .numf.ovr .rwrap .ghost { display: block; }
   .revert.backtpl { width: auto; height: auto; margin: 0; padding: 1px 7px; gap: 3px; border-radius: 10px;
          font: inherit; font-size: var(--f-11-5); font-weight: 500;
          border: 1px solid color-mix(in srgb, var(--fp-warn) 45%, transparent); }
   .revert.backtpl ha-icon { --mdc-icon-size: 13px; width: 13px; height: 13px; }
-  .sect h3 .cnt { margin-left: auto; font-size: var(--f-11-5); font-weight: 500; color: var(--secondary-text-color); }
-  .sect h3 .cnt b { color: var(--fp-warn); font-weight: 600; }
-  .inh-legend { display: inline-flex; align-items: center; gap: var(--fp-s4); font-size: var(--f-12); color: var(--secondary-text-color); }
-  .inh-legend span { display: inline-flex; align-items: center; gap: var(--fp-sh); }
-  .sw-inh, .sw-own { display: inline-block; width: 22px; height: 14px; border-radius: var(--fp-field-r); }
-  .sw-inh { border: 1px dashed color-mix(in srgb, var(--secondary-text-color) 70%, transparent); }
-  .sw-own { border: 1px solid var(--fp-warn); background: color-mix(in srgb, var(--fp-warn) 18%, transparent); }
+  .sect h3 .cnt { margin-left: auto; font-size: var(--f-11-5); font-weight: 600; color: var(--fp-warn); }
+  /* The cover editor's bar: back, then a stop per section, amber dot where
+     the cover overrides its template. Stays on top while the page scrolls. */
+  .ed-nav { position: sticky; top: 0; z-index: 4; display: flex; align-items: center; gap: var(--fp-s2);
+            margin: 0 calc(var(--fp-s4) * -1) var(--fp-s3); padding: var(--fp-s2) var(--fp-s4);
+            background: var(--primary-background-color); border-bottom: 1px solid var(--divider-color); }
+  .ed-nav .btn { height: 34px; flex: none; }
+  .ed-nav .stops { display: flex; gap: var(--fp-s0); padding: var(--fp-s1); overflow-x: auto; scrollbar-width: none;
+                   background: var(--secondary-background-color); border-radius: var(--fp-ctl-r); min-width: 0; }
+  .ed-nav .stops button { flex: none; height: 28px; padding: 0 var(--fp-s3); border: 0; border-radius: var(--fp-field-r);
+                          background: transparent; font: inherit; font-size: var(--f-12-5); font-weight: 500;
+                          color: var(--secondary-text-color); cursor: pointer; white-space: nowrap; }
+  .ed-nav .stops button:hover { background: var(--card-background-color); color: var(--primary-text-color); }
+  .ed-nav .stops button.has-own::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: var(--fp-sh);
+                                         border-radius: 50%; vertical-align: middle; background: var(--fp-warn); }
+  .ed-anchor { scroll-margin-top: 64px; }
+  .calc-from { margin: var(--fp-s1) 0 0; font-size: var(--f-13); color: var(--secondary-text-color);
+               display: flex; align-items: center; flex-wrap: wrap; gap: var(--fp-s1); }
+  .calc-from .linkbtn { font-size: var(--f-13); }
+  .ed-cells { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  .ed-sched { margin-top: var(--fp-s3); padding-top: var(--fp-s2); border-top: 1px solid var(--divider-color); }
+  .ed-sched .ed-lbl { margin-bottom: var(--fp-s1); }
   .seg.own-filter { margin: 0; flex: none; }
   .seg.own-filter button { flex: none; padding: 0 var(--fp-s3); }
   .ed-cols.own-only .numf.inh, .ed-cols.own-only .sect.no-own, .ed-cols.own-only .fig { display: none; }
@@ -1968,21 +2079,27 @@ const STYLE = `
   /* ---------- schedules, 4.0 layout ---------- */
   .sched-lead { margin: 0 var(--fp-s0) var(--fp-s3); font-size: var(--f-13); }
   .sched-head { display: flex; align-items: center; gap: var(--fp-s3) var(--fp-s4); flex-wrap: wrap; }
-  .kseg { display: flex; padding: var(--fp-s1); gap: var(--fp-s0); background: var(--secondary-background-color); border-radius: 10px; }
-  .kseg button { display: flex; align-items: center; gap: var(--fp-s2); padding: var(--fp-s2) var(--fp-s3); border: 0;
-                 border-radius: 7px; background: transparent; font: inherit; font-size: var(--f-13); font-weight: 500;
-                 color: var(--secondary-text-color); cursor: pointer; text-align: left; }
-  .kseg button ha-icon { --mdc-icon-size: 20px; width: 20px; height: 20px; }
-  .kseg .kt { display: grid; }
-  .kseg small { font-size: var(--f-11-5); font-weight: 400; }
-  .kseg button[aria-selected="true"] { background: var(--card-background-color); color: var(--primary-text-color);
-                 font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
-  .kdot { width: 8px; height: 8px; border-radius: 50%; flex: none;
-          background: color-mix(in srgb, var(--secondary-text-color) 45%, transparent); }
-  .kdot.on { background: var(--fp-ok); }
+  /* The two schedules at a glance; the chosen one is outlined. */
+  .sched-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+               gap: var(--fp-s3); margin-bottom: var(--fp-s3); }
+  .sched-k { display: grid; gap: var(--fp-s1); cursor: pointer; }
+  .sched-k:hover { border-color: var(--primary-color); }
+  .sched-k.on { border-color: var(--primary-color); box-shadow: inset 0 0 0 1px var(--primary-color); }
+  .sched-k:focus-visible { outline: var(--fp-focus); outline-offset: var(--fp-focus-off); }
+  .sk-top { display: flex; align-items: center; gap: var(--fp-s2); }
+  .sk-top ha-icon { --mdc-icon-size: 20px; width: 20px; height: 20px; color: var(--secondary-text-color); }
+  .sk-title { font-weight: 600; font-size: var(--f-14); }
+  .sk-when { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--fp-s1) var(--fp-s2); }
+  .sk-time { font-size: var(--f-24); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .sk-ref { font-size: var(--f-12-5); color: var(--secondary-text-color); }
+  .sched-k.off .sk-time { font-size: var(--f-16); color: var(--secondary-text-color); font-weight: 500; }
+  .sk-eff { display: flex; flex-wrap: wrap; gap: var(--fp-s1) var(--fp-s3); font-size: var(--f-12-5); }
+  .sk-eff span { display: inline-flex; align-items: center; gap: var(--fp-sh); }
+  .sched-k.off .sk-eff { color: var(--secondary-text-color); }
+  .mdot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .sched-hint[hidden] { display: none; }
   .sched-ref { display: inline-flex; align-items: center; gap: var(--fp-sh); font-size: var(--f-12-5); color: var(--secondary-text-color); }
   .sched-ref ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; }
-  .sched-en { margin-left: auto; display: flex; align-items: center; gap: var(--fp-s2); font-size: var(--f-13); font-weight: 500; }
   .sched-groups { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, .8fr);
                   gap: var(--fp-s3); margin: var(--fp-s4) 0 var(--fp-s1); align-items: start; }
   .sgrp { border: 1px solid var(--divider-color); border-radius: 10px; padding: 10px var(--fp-s3); }
@@ -2034,9 +2151,6 @@ const STYLE = `
              border: 1px solid color-mix(in srgb, var(--fp-warn) 60%, transparent);
              background: color-mix(in srgb, var(--fp-warn) 9%, transparent); }
 
-  @media (max-width: 900px) {
-    .set-cols { grid-template-columns: minmax(0, 1fr); }
-  }
   @media (max-width: 720px) {
     /* The tabs take their own full row and share it; on the narrowest phones
        they scroll rather than push the page, the current one kept in view. */
@@ -2057,8 +2171,6 @@ const STYLE = `
     .fig2 .figv:nth-child(2) svg { max-width: 260px; }
     .orient { grid-template-columns: 1fr; justify-items: center; }
     .slope { grid-template-columns: 1fr; }
-    .sline { grid-template-columns: minmax(0, 1fr); gap: var(--fp-s1); }
-    .verdict { grid-column: 1; }
     .opt-more { margin-left: 0; }
     .sched-groups { grid-template-columns: minmax(0, 1fr); }
     /* The cover table fits a phone: lists shrink, the picture goes. */
@@ -2066,11 +2178,12 @@ const STYLE = `
     table.assign .rowh .pic, table.assign .rowh img { display: none; }
     table.assign .fselect.msel { min-width: 0; width: 100%; }
     table.assign .sact { flex-direction: column; align-items: stretch; }
+    /* In a column, the list's 200px basis would become its height. */
+    table.assign .sact .fselect { flex: none; }
     table.assign .spos { flex-wrap: wrap; }
     .seg.spos-seg { margin-left: 0; }
     table.assign td, table.assign th { padding-left: var(--fp-s1); padding-right: var(--fp-s1); }
     table.assign th { white-space: normal; }
-    .sched-en { margin-left: 0; }
     .actions .why, .actions .ptext { display: none; }
   }
 
@@ -2203,7 +2316,7 @@ class CoverExtenderPanel extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-    this._tab = "matrice";
+    this._tab = "volets";
     this._cfg = null;
     this._state = "loading"; // loading | ready | error
     this._pop = null;        // open popover state
@@ -2305,10 +2418,19 @@ class CoverExtenderPanel extends HTMLElement {
     bar.append(logo, titleBox);
     const tabs = el("nav", "tabs");
     tabs.setAttribute("role", "tablist");
-    for (const key of ["volets", "matrice", "modes", "horaires", "reglages"]) {
+    // Everyday tabs in the order of the work (covers, their modes, the link
+    // between the two, the schedules); then, past a rule, the two set once.
+    for (const key of ["volets", "modes", "matrice", "horaires", "|", "maison", "reglages"]) {
+      if (key === "|") {
+        const sep = el("span", "tab-sep");
+        sep.setAttribute("role", "presentation");
+        tabs.append(sep);
+        continue;
+      }
       const b = el("button", "tab", T.tabs[key]);
       b.setAttribute("role", "tab");
       b.setAttribute("aria-selected", String(this._tab === key));
+      if (this._tab === key) this._tabBtn = b;
       // Leaving by a tab discards the draft exactly like the "← back" button
       // does. Keeping it alive would restore it silently on the way back, so
       // the two exits from an editor would mean opposite things.
@@ -2354,6 +2476,7 @@ class CoverExtenderPanel extends HTMLElement {
     else if (this._tab === "volets") this._renderCovers(wrap);
     else if (this._tab === "modes") this._renderModes(wrap);
     else if (this._tab === "horaires") this._renderSchedules(wrap);
+    else if (this._tab === "maison") this._renderHouse(wrap);
     else this._renderSettings(wrap);
 
     this._trackLiveNodes();
@@ -2366,6 +2489,7 @@ class CoverExtenderPanel extends HTMLElement {
   _openEditor(edit) {
     this._advOpen = undefined;
     this._ownOnly = false;
+    this._picOpen = false;
     this._edit = { ...edit, clean: JSON.stringify(edit.draft) };
   }
 
@@ -2433,11 +2557,11 @@ class CoverExtenderPanel extends HTMLElement {
   /* ---------- MATRICE ---------- */
 
   _renderMatrix(wrap) {
-    const note = el("p", "note");
-    note.textContent = T.matrixHint;
-    wrap.append(note);
-
+    // One line above the table: how to use it, what the cells look like and,
+    // on a phone, the choice between the table and the covers one by one.
     const tools = el("div", "m-tools");
+    const hint = el("p", "m-hint");
+    hint.append(icon("mdi:gesture-tap"), el("span", "", T.matrixHint));
     const legend = el("div", "legend");
     const lg = (cls, label) => {
       const s = el("span");
@@ -2445,15 +2569,34 @@ class CoverExtenderPanel extends HTMLElement {
       return s;
     };
     legend.append(lg("fixed", T.legendFixed));
-    for (const key of ["none", "auto_shade", "solar_gain"]) {
+    for (const key of ["auto_shade", "solar_gain", "none"]) {
       const b = el("span");
       b.append(behaviorBadge(key), document.createTextNode(T.legendBehavior[key]));
       legend.append(b);
     }
     const le = el("span");
     le.append(icon("mdi:link-variant"), document.createTextNode(T.legendEntity));
-    legend.append(le, lg("empty", T.legendEmpty));
-    tools.append(legend);
+    legend.append(le);
+    const box = el("div", `m-box${this._mxView === "table" ? " as-table" : ""}`);
+    const vseg = el("div", "seg m-view");
+    const vbtns = [];
+    for (const [k, label] of [["list", T.viewList], ["table", T.viewTable]]) {
+      const b = el("button", "", label);
+      b.type = "button";
+      vbtns.push([b, k]);
+      b.addEventListener("click", () => {
+        this._mxView = k;
+        box.classList.toggle("as-table", k === "table");
+        for (const [o, ok] of vbtns) { o.classList.toggle("on", ok === k); o.setAttribute("aria-pressed", String(ok === k)); }
+      });
+      vseg.append(b);
+    }
+    for (const [o, ok] of vbtns) {
+      const on = ok === (this._mxView || "list");
+      o.classList.toggle("on", on);
+      o.setAttribute("aria-pressed", String(on));
+    }
+    tools.append(hint, legend, vseg);
     wrap.append(tools);
 
     const scroll = el("div", "m-scroll");
@@ -2462,83 +2605,104 @@ class CoverExtenderPanel extends HTMLElement {
     const hr = el("tr");
     const corner = el("th", "corner");
     hr.append(corner);
-    for (const m of this._cfg.modes) {
+    this._cfg.modes.forEach((m, i) => {
       const th = el("th");
-      const mh = el("div", "mh");
+      // The header opens the mode: what it does is one click away.
+      const mh = el("button", "mh");
+      mh.type = "button";
+      mh.title = T.openMode(m.name);
+      mh.addEventListener("click", () => {
+        this._tab = "modes";
+        this._openEditor({ section: "mode", idx: i, draft: { ...m } });
+        this._render();
+      });
       const mico = el("span", "mico");
       mico.style.background = `${m.color || "#888888"}26`;
       mico.style.color = m.color || "var(--secondary-text-color)";
       mico.append(icon(m.icon || "mdi:help-circle"));
-      const flags = el("span", "flags");
-      if (BEHAVIORS[m.behavior]) {
-        const bf = icon(BEHAVIORS[m.behavior].icon);
-        bf.style.color = BEHAVIORS[m.behavior].color;
-        flags.append(bf);
-      }
-      if (m.lock) flags.append(icon("mdi:lock-outline"));
-      if (m.priority) flags.append(icon("mdi:alert-decagram-outline"));
-      if (m.duration) flags.append(icon("mdi:timer-outline"));
-      if (m.hidden) flags.append(icon("mdi:eye-off-outline"));
-      mh.append(mico, el("span", "", m.name), flags);
+      // What sets this mode apart, in words: the same as on its row in Modes.
+      const tags = [];
+      if (m.behavior) tags.push((m.behavior === "auto_shade" ? T.shading : T.solarGain).toLowerCase());
+      if (m.duration) tags.push(`${m.duration} min`);
+      if (m.lock) tags.push(T.lock);
+      if (m.priority) tags.push(T.priority);
+      if (m.hidden) tags.push(T.hidden);
+      mh.append(mico, el("span", "", m.name), el("span", "tags", tags.join(" · ")));
       th.append(mh);
       hr.append(th);
-    }
+    });
     thead.append(hr);
     table.append(thead);
 
     const tbody = el("tbody");
+    const list = el("div", "m-list");
     for (const [facade, covers] of this._grouped()) {
       if (!covers.length) continue;
+      const facName = facade ? `${T.facade} ${facade}` : T.noFacade;
       const fr = el("tr", "facade");
       const fth = el("th");
       const fl = el("div", "fl");
-      fl.append(icon("mdi:compass-outline"), document.createTextNode(
-        facade ? `${T.facade} ${facade}` : T.noFacade
-      ));
+      fl.append(icon("mdi:compass-outline"), document.createTextNode(facName));
       fth.append(fl);
       fr.append(fth);
       const fd = el("td");
       fd.colSpan = this._cfg.modes.length;
       fr.append(fd);
       tbody.append(fr);
+      list.append(el("div", "grp-h", facName));
 
       for (const cover of covers) {
+        // One line per cover: its template is on its own page, not here.
         const tr = el("tr");
         const th = el("th");
         const rowh = el("div", "rowh");
         rowh.append(this._coverPic(cover));
-        const names = el("span");
-        names.append(el("span", "nm", this._coverName(cover)), el("br"),
-          el("span", "fx", cover.template ? `${T.template} ${cover.template}` : T.noTemplate));
-        rowh.append(names);
+        const nm = el("span", "nm", this._coverName(cover));
+        nm.title = cover.template ? `${T.template} ${cover.template}` : T.noTemplate;
+        rowh.append(nm);
         th.append(rowh);
         tr.append(th);
-
+        // The same cover on a phone: its modes two by two, under its name.
+        const card = el("section", "card m-card");
+        card.append(el("div", "nm", this._coverName(cover)));
+        const items = el("div", "m-cells");
         for (const mode of this._cfg.modes) {
           const td = el("td", "cell");
           td.append(this._cellNode(cover, mode));
           tr.append(td);
+          const item = el("div", "m-item");
+          const lab = el("span", "m-lab");
+          const dot = el("span", "dot");
+          dot.style.background = mode.color || "#888888";
+          lab.append(dot, el("span", "", mode.name));
+          item.append(lab, this._cellNode(cover, mode));
+          items.append(item);
         }
         tbody.append(tr);
+        card.append(items);
+        list.append(card);
       }
     }
     table.append(tbody);
     scroll.append(table);
-    wrap.append(scroll);
+    box.append(scroll, list);
+    wrap.append(box);
     this._matrixScroll = scroll;
   }
 
-  _cellNode(cover, mode) {
+  _cellNode(cover, mode, onApply = null) {
     const cfg = (cover.modes || {})[mode.name];
     const linked = cfg !== undefined;
     const kind = cfgKind(cfg);
     let cv;
     if (!linked) {
+      // Empty stays quiet: a dot, and the "+" under the pointer or the focus.
       cv = el("div", "cv empty");
       cv.title = T.linkMode;
       cv.append(icon("mdi:plus"));
     } else if (kind === "fixed") {
-      cv = el("div", "cv fixed");
+      // A fixed position in a mode that computes is an override: marked so.
+      cv = el("div", `cv fixed${mode.behavior ? " ovr" : ""}`);
       const gauge = el("span", "gauge");
       const fill = el("i");
       fill.style.width = `${cfg.value}%`;
@@ -2546,7 +2710,7 @@ class CoverExtenderPanel extends HTMLElement {
       cv.append(gauge, document.createTextNode(String(cfg.value)), el("small", "pct", "%"));
       if (mode.behavior) cv.title = T.overrideTitle;
     } else if (kind === "entity") {
-      cv = el("div", "cv entity");
+      cv = el("div", `cv entity${mode.behavior ? " ovr" : ""}`);
       cv.append(icon("mdi:link-variant"),
         document.createTextNode(String(cfg.value).split(".").pop().slice(0, 12)));
       cv.title = mode.behavior ? `${T.overrideTitle}\n${cfg.value}` : cfg.value;
@@ -2556,15 +2720,16 @@ class CoverExtenderPanel extends HTMLElement {
       // now comes from the mode's own colour — the same one its header icon
       // already wears — so a column reads as one object top to bottom.
       // The label keeps --primary-text-color: a mode set to #FFFFFF would make
-      // its own text vanish on a light theme.
+      // its own text vanish on a light theme. It says "auto" only where a
+      // position is computed; a plain mode's cell says there is none.
       cv = el("div", "cv auto");
       const tint = mode.color || "var(--primary-color)";
       cv.style.background = `color-mix(in srgb, ${tint} 14%, transparent)`;
-      cv.append(behaviorBadge(mode.behavior), el("span", "", T.auto));
+      cv.append(behaviorBadge(mode.behavior), el("span", "", mode.behavior ? T.auto : T.noTarget));
     }
     cv.setAttribute("role", "button");
     cv.tabIndex = 0;
-    const open = () => this._openPopover(cv, cover, mode);
+    const open = () => this._openPopover(cv, cover, mode, onApply);
     cv.addEventListener("click", open);
     cv.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
     return cv;
@@ -2613,7 +2778,12 @@ class CoverExtenderPanel extends HTMLElement {
     pop.style.top = `${top}px`;
   }
 
-  async _openPopover(anchor, cover, mode) {
+  /**
+   * The editor of one cell. From the matrix it saves at once; from a cover's
+   * editor, *onApply* gets the value instead (null to remove the mode) and
+   * the cover's own save bar keeps the last word.
+   */
+  async _openPopover(anchor, cover, mode, onApply = null) {
     this._closePopover();
     const cfg = (cover.modes || {})[mode.name];
     const linked = cfg !== undefined;
@@ -2642,7 +2812,8 @@ class CoverExtenderPanel extends HTMLElement {
     const body = el("div");
     pop.append(body);
 
-    const facadeMates = this._cfg.covers.filter(
+    // In a cover's editor the draft is one cover: its neighbours are not in it.
+    const facadeMates = onApply ? [] : this._cfg.covers.filter(
       (c) => c !== cover && c.facade === cover.facade && cover.facade
     );
 
@@ -2671,10 +2842,12 @@ class CoverExtenderPanel extends HTMLElement {
         const row = el("div", "pos-slider");
         const range = document.createElement("input");
         range.type = "range"; range.min = "0"; range.max = "100"; range.value = String(state.fixed);
+        paintRange(range);
         const val = el("span", "val", `${state.fixed} %`);
         range.addEventListener("input", () => {
           state.fixed = Number(range.value);
           val.textContent = `${state.fixed} %`;
+          paintRange(range);
         });
         row.append(range, val);
         body.append(row);
@@ -2695,10 +2868,11 @@ class CoverExtenderPanel extends HTMLElement {
         const lbl = el("label", "apply-row");
         const cb = document.createElement("input");
         cb.type = "checkbox";
+        cb.checked = state.applyFacade;
         cb.addEventListener("change", () => { state.applyFacade = cb.checked; });
         lbl.append(cb, document.createTextNode(
           facadeMates.length === 1
-            ? T.applyFacadeOne(cover.facade)
+            ? T.applyFacadeOne(this._coverName(facadeMates[0]), cover.facade)
             : T.applyFacade(facadeMates.length, cover.facade)
         ));
         body.append(lbl);
@@ -2713,22 +2887,28 @@ class CoverExtenderPanel extends HTMLElement {
     renderBody();
 
     const actions = el("div", "actions");
+    const done = (value, btn) => {
+      if (!onApply) { this._commit(cover, mode, value, state, btn); return; }
+      this._closePopover();
+      onApply(value);
+    };
     if (linked) {
-      const unlink = el("button", "btn danger", T.unlink);
-      unlink.addEventListener("click", () => this._commit(cover, mode, null, state, unlink));
+      const unlink = el("button", "btn danger");
+      unlink.append(icon("mdi:link-variant-off"), document.createTextNode(T.unlink));
+      unlink.addEventListener("click", () => done(null, unlink));
       actions.append(unlink);
     }
     actions.append(el("span", "spacer"));
     const cancel = el("button", "btn ghost", T.cancel);
     cancel.addEventListener("click", () => this._closePopover());
-    const save = el("button", "btn primary", linked || !isBehavior ? T.save : T.link);
+    const save = el("button", "btn primary", onApply ? T.applyDraft : linked || !isBehavior ? T.save : T.link);
     save.addEventListener("click", () => {
       let value;
       if (state.choice === "none") value = { type: "auto" };
       else if (state.choice === "fixed") value = { type: "fixed", value: Math.round(state.fixed) };
       else if (state.entity) value = { type: "entity", value: state.entity };
       else value = { type: "auto" };
-      this._commit(cover, mode, value, state, save);
+      done(value, save);
     });
     actions.append(cancel, save);
     pop.append(actions);
@@ -2986,14 +3166,15 @@ class CoverExtenderPanel extends HTMLElement {
   }
 
   /**
-   * The one save bar of every editor, stuck to the bottom of the screen:
-   * Delete on the left when the item has one, then what is pending, Cancel and
-   * Save on the right. Cancel and Save wake up with the first change and fall
-   * asleep again when the last one is undone: _syncSaveBar compares the drafts
-   * with their snapshots after every edit, wherever it came from.
+   * The one save bar of every editor. Nothing to save, nothing to show: the
+   * bar keeps only Delete, at the end of the page, or disappears. The first
+   * change sticks it to the bottom of the screen with what is pending, Cancel
+   * and Save, and marks the tab; undoing the last one puts it away again.
+   * _syncSaveBar compares the drafts with their snapshots after every edit,
+   * wherever it came from.
    */
   _saveBar(onSave, del = null) {
-    const bar = el("div", "actions card savebar");
+    const bar = el("div", `actions card savebar${del ? "" : " bare"}`);
     if (del) bar.append(...this._deleteButton(del.used || 0, del.reason || "", del.onDelete));
     const pending = el("span", "pending");
     pending.append(el("span", "dot"), el("span", "ptext", T.unsaved));
@@ -3010,6 +3191,7 @@ class CoverExtenderPanel extends HTMLElement {
       cancel.disabled = !dirty;
       pending.hidden = !dirty;
       bar.classList.toggle("dirty", dirty);
+      this._tabBtn?.classList.toggle("dirty", dirty);
     };
     return bar;
   }
@@ -3024,18 +3206,16 @@ class CoverExtenderPanel extends HTMLElement {
     return this._labeled(T.facade, sel);
   }
 
-  /** The cover's template. Only those made for its facade's type of window can
-   *  be picked; the others show theirs, greyed out. */
+  /** The cover's template. Only those made for its facade's type of window are
+   *  offered; one of another type already chosen stays, named with its type,
+   *  for the warning under it to make sense. */
   _templateField(draft, rerender) {
     const facKind = tiltKind(facadeTilt(this._cfg.facades.find((f) => f.name === draft.facade)));
+    const offered = this._cfg.templates.filter((t) => templateKind(t) === facKind || t.name === draft.template);
     const sel = this._edSelect(draft.template,
-      [[null, T.noTemplateOpt], ...this._cfg.templates.map((t) => [t.name,
+      [[null, T.noTemplateOpt], ...offered.map((t) => [t.name,
         templateKind(t) === facKind ? t.name : `${t.name} (${T.slopeKinds[templateKind(t)].toLowerCase()})`])],
       (v) => { draft.template = v; rerender(); });
-    // Options follow the list above, after "no template".
-    this._cfg.templates.forEach((t, i) => {
-      sel.options[i + 1].disabled = templateKind(t) !== facKind && t.name !== draft.template;
-    });
     return this._labeled(T.templateTitle, sel);
   }
 
@@ -3118,8 +3298,6 @@ class CoverExtenderPanel extends HTMLElement {
     box.step = String(spec.step || 1);
     box.setAttribute("aria-label", label);
     const val = el("div", "val");
-    const lnk = icon("mdi:link-variant", "lnk");
-    if (tplName) val.append(lnk);
     val.append(box, el("span", "u", spec.unit || ""));
     row.append(val);
 
@@ -3140,30 +3318,26 @@ class CoverExtenderPanel extends HTMLElement {
     // affordance stays out of the way entirely.
     let reset = null;
     if (tplName) {
-      reset = el("button", "revert backtpl");
-      reset.type = "button";
-      reset.title = T.revertTitle;
-      reset.append(icon("mdi:link-variant"), document.createTextNode(T.backToTpl));
-      t.append(reset);
-      hint.append(el("span", "from", ` ${T.fromTemplate(fmt(baseline[name]))}`));
+      // Overridden: one line under the slider says so, recalls the template's
+      // value (also marked on the track) and offers the way back.
+      reset = this._overrideLine(row, fmt(baseline[name]));
       const ghost = el("span", "ghost");
       ghost.style.left = `${((baseline[name] - spec.min) / ((spec.max - spec.min) || 1)) * 100}%`;
       rwrap.append(ghost);
     }
 
-    const show = (v) => { box.value = String(v); range.value = String(v); };
+    const show = (v) => { box.value = String(v); range.value = String(v); paintRange(range); };
     const mark = (on) => {
       if (!tplName) return;
       row.classList.toggle("ovr", on);
       row.classList.toggle("inh", !on);
-      reset.hidden = !on;
-      lnk.setAttribute("icon", on ? "mdi:pencil" : "mdi:link-variant");
       box.title = on ? "" : T.inheritedTitle(tplName);
     };
     const set = (n, from) => {
       draft[name] = n;
       if (from !== box) box.value = String(n);
       if (from !== range) range.value = String(n);
+      paintRange(range);
       mark(true);
       onValue?.();
     };
@@ -3184,6 +3358,20 @@ class CoverExtenderPanel extends HTMLElement {
       onValue?.();
     });
     return row;
+  }
+
+  /** What an overridden value shows under its slider: the word, the
+   *  template's value and the way back. Hidden while the value is inherited.
+   *  Returns the way back. */
+  _overrideLine(row, tplText) {
+    const line = el("div", "oline");
+    const reset = el("button", "revert backtpl");
+    reset.type = "button";
+    reset.title = T.revertTitle;
+    reset.append(icon("mdi:undo-variant"), document.createTextNode(T.backToTpl));
+    line.append(el("span", "olab", T.ovrLabel), el("span", "from", T.fromTemplate(tplText)), reset);
+    row.append(line);
+    return reset;
   }
 
   /**
@@ -3239,15 +3427,6 @@ class CoverExtenderPanel extends HTMLElement {
     t.append(el("span", "", o.title));
     const hint = el("div", "h", o.hint);
     row.append(t, hint);
-    let reset = null;
-    if (tplName) {
-      reset = el("button", "revert backtpl");
-      reset.type = "button";
-      reset.title = T.revertTitle;
-      reset.append(icon("mdi:link-variant"), document.createTextNode(T.backToTpl));
-      t.append(reset);
-      hint.append(el("span", "from", ` ${T.fromTemplate(o.tpl)}`));
-    }
 
     const mkBox = (k) => {
       const b = document.createElement("input");
@@ -3260,8 +3439,6 @@ class CoverExtenderPanel extends HTMLElement {
     };
     const boxes = { [lo]: mkBox(lo), [hi]: mkBox(hi) };
     const val = el("div", "val");
-    const lnk = icon("mdi:link-variant", "lnk");
-    if (tplName) val.append(lnk);
     val.append(boxes[lo], el("span", "u", o.sep), boxes[hi], el("span", "u", spec.unit || ""));
     row.append(val);
 
@@ -3300,6 +3477,7 @@ class CoverExtenderPanel extends HTMLElement {
       }
       row.append(ends);
     }
+    const reset = tplName ? this._overrideLine(row, o.tpl) : null;
 
     const paint = () => {
       for (const k of [lo, hi]) { boxes[k].value = String(cur(k)); ranges[k].value = String(toPos(k, cur(k))); }
@@ -3313,8 +3491,6 @@ class CoverExtenderPanel extends HTMLElement {
       const on = has(lo) || has(hi);
       row.classList.toggle("ovr", on);
       row.classList.toggle("inh", !on);
-      reset.hidden = !on;
-      lnk.setAttribute("icon", on ? "mdi:pencil" : "mdi:link-variant");
       for (const k of [lo, hi]) boxes[k].title = on ? "" : T.inheritedTitle(tplName);
     };
     // A range's thumbs never cross: each one stops at the other. A sector's
@@ -3751,25 +3927,26 @@ class CoverExtenderPanel extends HTMLElement {
     const cards = [];
 
     // Counted off the rows themselves, so the numbers can never disagree with
-    // what the rows show.
+    // what the rows show. A card only speaks of its overrides, when it has any:
+    // following the template is the rule and needs no counting.
     const recount = () => {
       let total = 0;
-      for (const { card, cnt } of cards) {
+      const per = {};
+      for (const { card, cnt, key } of cards) {
         const own = card.querySelectorAll(".numf.ovr").length;
-        const inh = card.querySelectorAll(".numf.inh").length;
         total += own;
+        per[key] = own;
         card.classList.toggle("no-own", !own);
-        if (cnt) {
-          cnt.replaceChildren(document.createTextNode(`${T.sectInherited(inh)} · `), el("b", "", T.sectOwn(own)));
-        }
+        if (cnt) cnt.textContent = own ? T.overrides(own) : "";
       }
-      onCount?.(total);
+      onCount?.(total, per);
     };
 
     for (const { key, fields } of sections) {
       const card = this._edCard(SECTION_ICONS[key] || "mdi:tune",
         T.sectionTitles[key] || T.sections[key] || key, T.sectionSubs[key]);
       card.classList.add("sect");
+      card.dataset.key = key;
       const h3 = card.querySelector("h3");
       const cnt = tplName ? el("span", "cnt") : null;
       if (cnt) h3.append(cnt);
@@ -3820,7 +3997,7 @@ class CoverExtenderPanel extends HTMLElement {
         group("g-sun", T.detGroupSun, nums.filter((f) => sunSide.includes(f)));
         group("g-shade", T.detGroupShade, nums.filter((f) => !sunSide.includes(f)));
         card.append(body);
-        cards.push({ card, cnt });
+        cards.push({ card, cnt, key });
         (side[key] || right).append(card);
         continue;
       }
@@ -3842,7 +4019,7 @@ class CoverExtenderPanel extends HTMLElement {
         }
       }
       card.append(body);
-      cards.push({ card, cnt });
+      cards.push({ card, cnt, key });
       (side[key] || (left.childElementCount <= right.childElementCount ? left : right)).append(card);
     }
     recount();
@@ -3871,96 +4048,70 @@ class CoverExtenderPanel extends HTMLElement {
       });
       this._render();
     });
-    bar.append(add, el("span", "spacer"), el("span", "hint", T.dragHint));
+    bar.classList.add("list-head");
+    bar.append(el("h2", "", T.modesCount(this._cfg.modes.length)), el("span", "hint", T.dragHint),
+      el("span", "spacer"), add);
     wrap.append(bar);
 
-    const grid = el("div", "grid");
+    // A list, not a grid: the order is the selector's, and a list shows an
+    // order without numbers; dragging up or down is the gesture it asks for.
+    const list = el("div", "card mlist");
 
     this._cfg.modes.forEach((m, i) => {
-      const card = el("div", "card clickable");
-      card.tabIndex = 0;
-      card.draggable = true;
+      const row = el("div", "mrow");
+      row.tabIndex = 0;
+      row.draggable = true;
       const open = () => {
         this._openEditor({ section: "mode", idx: i, draft: { ...m } });
         this._render();
       };
-      card.addEventListener("click", open);
-      card.addEventListener("keydown", (e) => {
+      row.addEventListener("click", open);
+      row.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
       });
-      card.addEventListener("dragstart", (e) => {
+      row.addEventListener("dragstart", (e) => {
         this._dragFrom = i;
         e.dataTransfer.effectAllowed = "move";
-        card.classList.add("dragging");
+        row.classList.add("dragging");
       });
-      card.addEventListener("dragend", () => card.classList.remove("dragging"));
-      card.addEventListener("dragover", (e) => { e.preventDefault(); card.classList.add("drop"); });
-      card.addEventListener("dragleave", () => card.classList.remove("drop"));
-      card.addEventListener("drop", (e) => {
+      row.addEventListener("dragend", () => row.classList.remove("dragging"));
+      row.addEventListener("dragover", (e) => { e.preventDefault(); row.classList.add("drop"); });
+      row.addEventListener("dragleave", () => row.classList.remove("drop"));
+      row.addEventListener("drop", (e) => {
         e.preventDefault();
-        card.classList.remove("drop");
+        row.classList.remove("drop");
         this._reorderModes(this._dragFrom, i);
       });
 
-      const head = el("div", "c-head");
-      // The rank is spelled out: a wrapping grid reads left-to-right, which is
-      // the selector's order, but the number says so without relying on layout.
-      head.append(el("span", "m-ord", String(i + 1)));
       const mico = el("span", "mico");
       mico.style.background = `color-mix(in srgb, ${m.color || "#888888"} 16%, transparent)`;
       mico.style.color = m.color || "var(--secondary-text-color)";
       mico.append(icon(m.icon || "mdi:help-circle"));
-      const names = el("span");
-      names.append(el("span", "nm", m.name), el("br"),
-        el("span", "meta", T.covers(usage[m.name] || 0)));
-      head.append(mico, names, el("span", "spacer"),
-        icon("mdi:drag-horizontal-variant", "grip"), icon("mdi:chevron-right", "chev"));
-      card.append(head);
+      // How it places the covers, in words under its name; the chips keep to
+      // what changes its behaviour.
+      const names = el("span", "mnames");
+      names.append(el("span", "nm", m.name),
+        el("span", "meta", `${T.behaviorKind[m.behavior || "none"]} · ${T.covers(usage[m.name] || 0)}`));
 
       const chips = el("div", "chips");
-      if (m.behavior) {
-        const c = el("span", "chip auto");
-        c.append(icon(m.behavior === "auto_shade" ? "mdi:weather-sunny" : "mdi:thermometer"),
-          document.createTextNode(m.behavior === "auto_shade" ? T.shading : T.solarGain));
+      const chip = (cls, ico, text, title) => {
+        const c = el("span", `chip ${cls}`.trim());
+        c.append(icon(ico), document.createTextNode(text));
+        if (title) c.title = title;
         chips.append(c);
-      }
-      if (m.lock) {
-        const c = el("span", "chip lock");
-        c.append(icon("mdi:lock-outline"), document.createTextNode(T.lock));
-        chips.append(c);
-      }
-      if (m.duration) {
-        const c = el("span", "chip timer");
-        c.append(icon("mdi:timer-outline"), document.createTextNode(T.timedChip(m.duration, m.return_mode)));
-        chips.append(c);
-      }
-      if (m.spares?.length) {
-        const c = el("span", "chip");
-        c.title = m.spares.join(", ");
-        c.append(icon("mdi:shield-outline"), document.createTextNode(T.sparesChip(m.spares.length)));
-        chips.append(c);
-      }
-      if (m.fallback) {
-        const c = el("span", "chip");
-        c.append(icon("mdi:arrow-u-left-top"), document.createTextNode(T.fallbackChip(m.fallback)));
-        chips.append(c);
-      }
-      if (m.priority) {
-        const c = el("span", "chip prio");
-        c.append(icon("mdi:alert-decagram-outline"), document.createTextNode(T.priority));
-        chips.append(c);
-      }
-      if (m.hidden) {
-        const c = el("span", "chip");
-        c.append(icon("mdi:eye-off-outline"), document.createTextNode(T.hidden));
-        chips.append(c);
-      }
-      if (chips.childElementCount) card.append(chips);
+      };
+      if (m.lock) chip("lock", "mdi:lock-outline", T.lock);
+      if (m.duration) chip("timer", "mdi:timer-outline", T.timedChip(m.duration, m.return_mode));
+      if (m.priority) chip("prio", "mdi:alert-decagram-outline", T.priority);
+      if (m.spares?.length) chip("", "mdi:shield-outline", T.sparesChip(m.spares), m.spares.join(", "));
+      if (m.fallback) chip("", "mdi:arrow-u-left-top", T.fallbackChip(m.fallback));
+      if (m.hidden) chip("", "mdi:eye-off-outline", T.hidden);
 
-      grid.append(card);
+      row.append(icon("mdi:drag-vertical", "grip"), mico, names, chips, icon("mdi:chevron-right", "chev"));
+      list.append(row);
     });
 
-    wrap.append(grid);
+    wrap.append(list);
   }
 
   /** Drag reorder. The stored order drives the order of the select.*_cx_mode options. */
@@ -3976,6 +4127,12 @@ class CoverExtenderPanel extends HTMLElement {
     const { idx, draft } = this._edit;
     const creating = idx < 0;
     const rerender = () => { this._render(); };
+    // One column, in the order of the questions: what it is called, how it
+    // places the covers, what happens meanwhile, how it behaves when sent to
+    // the whole house, then the rest.
+    const page = el("div", "form-col");
+    wrap.append(page);
+    wrap = page;
 
     wrap.append(this._backBar(T.backToModes));
 
@@ -4045,10 +4202,10 @@ class CoverExtenderPanel extends HTMLElement {
     wrap.append(idCard);
     paint();
 
-    const cols = el("div", "ed-cols");
-    const left = el("div", "ed-stack");
-    const right = el("div", "ed-stack");
-    cols.append(left, right);
+    const cols = el("div", "ed-stack");
+    cols.style.marginTop = "var(--fp-s4)";
+    const left = cols;
+    const right = cols;
 
     /* how this mode places the covers */
     const beh = this._edCard("mdi:tune-variant", T.behaviorTitle, T.behaviorCardSub);
@@ -4115,46 +4272,62 @@ class CoverExtenderPanel extends HTMLElement {
     }
     left.append(during);
 
-    /* grouped requests: which modes this one leaves alone, and its fallback */
+    /* grouped requests: which modes this one leaves alone, and its fallback,
+       as two sentences to complete */
     const others = this._cfg.modes.filter((m) => m.name !== (creating ? draft.name : this._cfg.modes[idx].name));
     const grouped = this._edCard("mdi:home-group", T.groupedTitle, T.groupedHint);
     grouped.querySelector("h3").append(this._info(T.groupedInfo));
-    const q = el("div", "ed-q");
-    q.append(el("span", "", T.sparesField), this._info(T.sparesHint));
-    const toggles = el("div", "toggles");
-    const count = el("p", "ed-note");
     draft.spares = [...(draft.spares || [])];
-    const recount = () => {
-      count.textContent = draft.spares.length ? T.sparesCount(draft.spares.length) : T.sparesNone;
+    const colorOf = (n) => this._cfg.modes.find((m) => m.name === n)?.color || "#888888";
+    const sp = el("div", "sentence");
+    const spLabel = el("span", "", T.sparesField);
+    const chosen = el("span", "chipline");
+    const add = document.createElement("select");
+    add.className = "addsel";
+    add.setAttribute("aria-label", `${T.sparesField} ${T.sparesAdd}`);
+    const none = el("span", "ed-sub inline", T.sparesNone);
+    const paintSpares = () => {
+      chosen.replaceChildren();
+      for (const n of draft.spares) {
+        const b = el("button", "toggle");
+        b.type = "button";
+        b.setAttribute("aria-pressed", "true");
+        b.title = `${T.removeEntity} ${n}`;
+        const dot = el("span", "mdot");
+        dot.style.background = colorOf(n);
+        b.append(dot, document.createTextNode(n), icon("mdi:close", "x"));
+        b.addEventListener("click", () => { draft.spares = draft.spares.filter((x) => x !== n); paintSpares(); });
+        chosen.append(b);
+      }
+      add.replaceChildren();
+      const head = document.createElement("option");
+      head.value = "";
+      head.textContent = T.sparesAdd;
+      add.append(head);
+      for (const m of others) {
+        if (draft.spares.includes(m.name)) continue;
+        const o = document.createElement("option");
+        o.value = m.name;
+        o.textContent = m.name;
+        add.append(o);
+      }
+      add.hidden = add.options.length < 2;
+      none.hidden = draft.spares.length > 0;
     };
-    for (const m of others) {
-      const b = el("button", "toggle");
-      b.type = "button";
-      const dot = el("span", "mdot");
-      dot.style.background = m.color || "#888888";
-      b.append(dot, icon("mdi:check", "check"), document.createTextNode(m.name));
-      const sync = () => b.setAttribute("aria-pressed", String(draft.spares.includes(m.name)));
-      sync();
-      b.addEventListener("click", () => {
-        draft.spares = draft.spares.includes(m.name)
-          ? draft.spares.filter((n) => n !== m.name) : [...draft.spares, m.name];
-        sync();
-        recount();
-      });
-      toggles.append(b);
-    }
-    recount();
-    grouped.append(q, toggles, count, el("div", "ed-sep"));
-    const fq = el("div", "ed-q");
-    fq.append(el("span", "", T.fallbackField));
+    add.addEventListener("change", () => {
+      if (add.value) draft.spares = [...draft.spares, add.value];
+      paintSpares();
+      this._syncSaveBar?.();
+    });
+    paintSpares();
+    sp.append(spLabel, chosen, add, this._info(T.sparesHint));
+    const fb = el("div", "sentence");
     const fallback = this._edSelect(draft.fallback ?? null,
       [[null, T.fallbackNone], ...others.map((m) => [m.name, m.name])],
       (v) => { draft.fallback = v; }, "inline");
     fallback.setAttribute("aria-label", T.fallbackField);
-    const fbRow = el("div", "toolbar");
-    fbRow.style.margin = "0";
-    fbRow.append(fq, el("span", "spacer"), fallback);
-    grouped.append(fbRow, this._note(T.fallbackHint));
+    fb.append(el("span", "", T.fallbackField), fallback);
+    grouped.append(sp, none, fb, this._note(T.fallbackHint));
     right.append(grouped);
 
     /* rarely touched: open on its own only when something in it is on */
@@ -4210,11 +4383,27 @@ class CoverExtenderPanel extends HTMLElement {
       });
       this._render();
     });
-    bar.append(add);
+    bar.classList.add("list-head");
+    bar.append(el("h2", "", T.covers(this._cfg.covers.length)), el("span", "spacer"), add);
     wrap.append(bar);
 
-    const grid = el("div", "grid covers");
+    // One grid per facade, under its name: the order of the matrix and the
+    // schedules, so a cover sits among the same neighbours on every tab.
+    const groups = el("div", "fgroups");
+    wrap.append(groups);
     for (const [facade, covers] of this._grouped()) {
+      if (!covers.length) continue;
+      const fac = this._cfg.facades.find((f) => f.name === facade);
+      const gh = el("div", "grp-h");
+      gh.append(el("span", "", facade ? `${T.facade} ${facade}` : T.noFacade));
+      if (fac) gh.append(el("span", "az", [`${facadeAzimuth(fac)}°`, T.slopeShort(facadeTilt(fac))].filter(Boolean).join(" · ")));
+      const grid = el("div", "grid covers");
+      // A facade of two covers asks for two card widths; the groups then flow
+      // side by side and share the rows, instead of each taking a whole one.
+      const group = el("section", "fgroup");
+      group.style.setProperty("--n", String(covers.length));
+      group.append(gh, grid);
+      groups.append(group);
       for (const c of covers) {
         const idx = this._cfg.covers.indexOf(c);
         const card = el("div", "card clickable");
@@ -4228,10 +4417,15 @@ class CoverExtenderPanel extends HTMLElement {
           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
         });
 
+        // Who it is, then what it does now, then what comes next. The facade
+        // is the group's title; the entity id is on the name's tooltip.
         const head = el("div", "c-head");
         head.append(this._coverPic(c));
         const names = el("span");
-        names.append(el("span", "nm", this._coverName(c)), el("br"), el("span", "eid", c.entity_id));
+        const nm = el("span", "nm", this._coverName(c));
+        nm.title = c.entity_id;
+        const meta = [c.template, T.modesCount(Object.keys(c.modes || {}).length)].filter(Boolean).join(" · ");
+        names.append(nm, el("br"), el("span", "meta", meta));
         head.append(names);
         head.append(el("span", "spacer"), icon("mdi:chevron-right", "chev"));
         card.append(head);
@@ -4239,37 +4433,21 @@ class CoverExtenderPanel extends HTMLElement {
         if (status) card.append(status);
         card.append(...this._schedLine(c));
 
-        const chips = el("div", "chips");
-        const fchip = el("span", "chip");
-        const fac = this._cfg.facades.find((f) => f.name === facade);
-        fchip.append(fac ? facadeArrow(fac, "narrow") : icon("mdi:compass-outline"),
-          document.createTextNode(facade || T.noFacade));
-        chips.append(fchip);
-        if (c.template) {
-          const tchip = el("span", "chip");
-          tchip.append(icon("mdi:ruler-square"), document.createTextNode(c.template));
-          chips.append(tchip);
-        }
-        chips.append(el("span", "chip", T.modesCount(Object.keys(c.modes || {}).length)));
-        const overrides = this._overrideCount(c);
-        if (overrides) {
-          const ochip = el("span", "chip ovr");
-          ochip.append(icon("mdi:pencil-outline"), document.createTextNode(T.overrides(overrides)));
-          chips.append(ochip);
-        }
-        card.append(chips);
-
+        // Only what is on: a feature that is off says nothing.
         const feats = el("div", "feats");
-        const sh = el("span", c.shade_enable ? "on" : "");
-        sh.append(icon("mdi:weather-sunny"), document.createTextNode(` ${T.shading} ${c.shade_enable ? T.active : T.inactive}`));
-        const sg = el("span", c.solar_gain_enable ? "on" : "");
-        sg.append(icon("mdi:thermometer"), document.createTextNode(` ${T.solarGain} ${c.solar_gain_enable ? T.activeF : T.inactiveF}`));
-        feats.append(sh, sg);
-        card.append(feats);
+        const feat = (cls, ico, text) => {
+          const ch = el("span", `chip ${cls}`);
+          ch.append(icon(ico), document.createTextNode(text));
+          feats.append(ch);
+        };
+        if (c.shade_enable) feat("ok", "mdi:weather-sunny", T.shading);
+        if (c.solar_gain_enable) feat("ok", "mdi:thermometer", T.solarGain);
+        const overrides = this._overrideCount(c);
+        if (overrides) feat("ovr", "mdi:pencil-outline", T.overrides(overrides));
+        if (feats.childElementCount) card.append(feats);
         grid.append(card);
       }
     }
-    wrap.append(grid);
   }
 
   /** Every state the cover cards show, as one string: the redraw trigger. */
@@ -4308,8 +4486,15 @@ class CoverExtenderPanel extends HTMLElement {
     glyph.style.color = tint;
     pill.append(glyph, document.createTextNode(sel.state));
     line.append(pill);
+    // The position drawn as in the matrix, and written.
     const pos = st[c.entity_id]?.attributes?.current_position;
-    if (pos != null) line.append(el("span", "spos", `${pos} %`));
+    if (pos != null) {
+      const gauge = el("span", "gauge big");
+      const fill = el("i");
+      fill.style.width = `${pos}%`;
+      gauge.append(fill);
+      line.append(gauge, el("span", "spos big", `${pos} %`));
+    }
     const chip = (cls, ico, text, title) => {
       const ch = el("span", `chip ${cls}`);
       ch.append(icon(ico), document.createTextNode(text));
@@ -4344,9 +4529,9 @@ class CoverExtenderPanel extends HTMLElement {
   _schedLine(c) {
     const house = this._cfg.schedule || {};
     const acts = c.schedule || {};
-    // Morning on the left, evening on the right, always: a schedule that is
-    // off, or has no action for this cover, leaves its half empty. None of
-    // the schedules that are on acting on this cover: no row.
+    // Morning first, evening second. A schedule that is off is left out; one
+    // that is on but does nothing on this cover says so. None of the
+    // schedules that are on acting on this cover: no row.
     const action = (k) => (house[k] ? acts[k] ?? null : null);
     if (!SCHED_KINDS.some((k) => action(k) != null)) return [];
     const day = this._hass.states[this._cfg.day_entity]?.attributes || {};
@@ -4374,20 +4559,22 @@ class CoverExtenderPanel extends HTMLElement {
       this._render();
     });
     for (const k of SCHED_KINDS) {
+      if (!house[k]) continue;
       const a = action(k);
       const isNext = a != null && nextKind === k;
       const done = a != null && !isNext && !!at[k] && new Date(at[k]) <= new Date();
       const cell = el("span", `ev${a == null ? " none" : isNext ? " next" : done ? " done" : ""}`);
       row.append(cell);
-      // No action on that schedule: the cell keeps its place, empty.
-      if (a == null) continue;
       const time = el("span", "t");
       time.append(icon(k === "morning" ? "mdi:weather-sunset-up" : "mdi:weather-sunset-down"));
       const when = isNext && tomorrow ? T.schedTomorrow(hm(next)) : at[k] ? hm(at[k]) : "";
       if (when) time.append(el("b", "", when));
-      if (isNext) time.append(el("span", "tag", T.schedNext));
+      if (isNext) time.title = T.schedNext;
       const act = el("span", "a");
-      if (typeof a === "object") {
+      cell.append(time, act);
+      if (a == null) {
+        act.append(el("span", "lbl", T.schedNone));
+      } else if (typeof a === "object") {
         const g = icon(a.force ? "mdi:flash" : "mdi:lock-outline", a.force ? "k-now" : "k-mem");
         g.title = a.force ? T.sched.forcePos : T.sched.keepLock;
         act.append(el("span", "lbl", `${a.position} %`), g);
@@ -4396,7 +4583,6 @@ class CoverExtenderPanel extends HTMLElement {
         dot.style.background = this._cfg.modes.find((m) => m.name === a)?.color || "var(--secondary-text-color)";
         act.append(dot, el("span", "lbl", a));
       }
-      cell.append(time, act);
     }
     const hint = this._schedForecast(c, nextKind ? action(nextKind) : null);
     return hint ? [row, hint] : [row];
@@ -4454,28 +4640,52 @@ class CoverExtenderPanel extends HTMLElement {
     const creating = idx < 0;
     const rerender = () => { this._render(); };
 
-    wrap.append(this._backBar(T.backToCovers));
-
     const tpl = this._templateOf(draft);
     const baseline = this._baseline(draft);
 
-    /* identity: which cover, on which wall, from which template */
-    const idCard = el("section", "card");
+    /* A bar that stays on top of the long page: the way back, then one stop
+       per section, those holding overrides marked. */
+    const nav = el("nav", "ed-nav");
+    const back = el("button", "btn ghost");
+    back.type = "button";
+    back.append(icon("mdi:arrow-left"), document.createTextNode(T.backToCovers));
+    back.addEventListener("click", () => { if (this._leaveEditor()) this._render(); });
+    const stops = el("div", "stops");
+    nav.append(back, stops);
+    wrap.append(nav);
+    const navDots = {};
+    const stop = (key, label, target) => {
+      const b = el("button", "", label);
+      b.type = "button";
+      b.addEventListener("click", () => target.scrollIntoView({ behavior: "smooth", block: "start" }));
+      stops.append(b);
+      navDots[key] = b;
+    };
+
+    /* identity: which cover, on which wall, from which template, and what it
+       is doing right now */
+    const idCard = el("section", "card ed-anchor");
     const grid = el("div", "ed-ident");
     const plate = el("div", "ed-plate");
     plate.append(draft.entity_picture ? this._coverPic(draft) : icon("mdi:window-shutter"));
     const line2 = el("div", "line2");
-    const picLabel = el("span", "ed-lbl", T.picture);
-    picLabel.style.margin = "0";
-    line2.append(picLabel, this._edInput(draft.entity_picture,
-      (v) => { draft.entity_picture = v || undefined; }, "small", T.picturePh));
+    // The picture is set once: a link until there is one.
+    if (draft.entity_picture || this._picOpen) {
+      const picLabel = el("span", "ed-lbl", T.picture);
+      picLabel.style.margin = "0";
+      line2.append(picLabel, this._edInput(draft.entity_picture,
+        (v) => { draft.entity_picture = v || undefined; }, "small", T.picturePh));
+    } else {
+      const addPic = el("button", "linkbtn");
+      addPic.type = "button";
+      addPic.append(icon("mdi:image-plus-outline"), document.createTextNode(T.addPicture));
+      addPic.addEventListener("click", () => { this._picOpen = true; rerender(); });
+      line2.append(addPic);
+    }
     // The live state is read off the SAVED cover: its helper entities are the
     // ones that exist, whatever the draft now points at.
     const status = creating ? null : this._statusLine(this._cfg.covers[idx]);
-    if (status) {
-      status.prepend(el("span", "spos", T.nowLabel));
-      line2.append(status);
-    }
+    if (status) line2.append(status);
     grid.append(plate,
       this._labeled(T.entity, this._haSelector({ entity: { domain: ["cover"] } },
         draft.entity_id || undefined, (v) => { draft.entity_id = v || ""; }), "wide"),
@@ -4483,23 +4693,58 @@ class CoverExtenderPanel extends HTMLElement {
       this._templateField(draft, rerender),
       line2);
     idCard.append(grid);
-    if (!creating) {
-      const sched = this._schedLine(this._cfg.covers[idx]);
-      if (sched.length) {
-        const box = el("div", "ed-sched");
-        box.append(...sched);
-        idCard.append(box);
-      }
-    }
     // A template for another type of window than the facade's: the server refuses it.
     const facKind = tiltKind(facadeTilt(this._cfg.facades.find((f) => f.name === draft.facade)));
     if (tpl && templateKind(tpl) !== facKind) {
       idCard.append(this._warnNote(T.tplKindMismatch(tpl.name, T.kindNoun[templateKind(tpl)], T.kindNoun[facKind])));
     }
     wrap.append(idCard);
+    stop("cover", T.nav.cover, idCard);
+
+    /* its row of the matrix, and its schedules: what it does in each mode,
+       changed here with the matrix's own editor, saved with the cover */
+    const modesCard = this._edCard("mdi:view-grid-outline", T.coverModesTitle);
+    modesCard.classList.add("ed-anchor");
+    modesCard.style.marginTop = "var(--fp-s4)";
+    const see = el("button", "linkbtn end");
+    see.type = "button";
+    see.append(document.createTextNode(T.seeMatrix));
+    see.addEventListener("click", () => {
+      if (!this._leaveEditor()) return;
+      this._tab = "matrice";
+      this._render();
+    });
+    modesCard.querySelector("h3").append(see);
+    const cells = el("div", "m-cells ed-cells");
+    for (const mode of this._cfg.modes) {
+      const item = el("div", "m-item");
+      const lab = el("span", "m-lab");
+      const dot = el("span", "dot");
+      dot.style.background = mode.color || "#888888";
+      lab.append(dot, el("span", "", mode.name));
+      item.append(lab, this._cellNode(draft, mode, (value) => {
+        draft.modes = { ...(draft.modes || {}) };
+        if (value === null) delete draft.modes[mode.name];
+        else draft.modes[mode.name] = value;
+        rerender();
+      }));
+      cells.append(item);
+    }
+    modesCard.append(cells);
+    if (!creating) {
+      const sched = this._schedLine(this._cfg.covers[idx]);
+      if (sched.length) {
+        const box = el("div", "ed-sched");
+        box.append(el("span", "ed-lbl", T.schedTitle), ...sched);
+        modesCard.append(box);
+      }
+    }
+    wrap.append(modesCard);
+    stop("modes", T.nav.modes, modesCard);
 
     /* what holds it back: safety stops and pauses, side by side */
     const prot = this._edCard("mdi:shield-half-full", T.blockTitle, T.blockSub);
+    prot.classList.add("ed-anchor");
     prot.style.marginTop = "var(--fp-s4)";
     const both = el("div", "prot");
     const block = (cls, ico, title, sub, ex, key) => {
@@ -4518,68 +4763,89 @@ class CoverExtenderPanel extends HTMLElement {
       block("pause", "mdi:pause-circle-outline", T.pauseTitle, T.pauseSub, T.pauseEx, "inhibition"));
     prot.append(both);
     wrap.append(prot);
+    stop("block", T.nav.block, prot);
 
-    /* how the position is computed, section by section */
+    /* how the position is computed, section by section: one sentence says
+       where the values come from and how many this cover overrides */
     const schema = this._cfg.behavior;
     if (schema) {
       const head = el("div", "ed-head");
-      head.append(el("h2", "", T.calcTitle));
-      const from = el("span", "chip");
-      from.append(icon("mdi:ruler-square"), document.createTextNode(tpl ? T.tplChip(tpl.name) : T.noTplChip));
-      head.append(from);
-      let grid = null;
+      const titles = el("div");
+      titles.append(el("h2", "", T.calcTitle));
+      const from = el("p", "calc-from");
+      titles.append(from);
+      head.append(titles);
+      let cols = null;
       let onCount = null;
       if (tpl) {
-        // What the two looks mean, how many values are the cover's own, and a
-        // way to see only those.
-        const legend = el("span", "inh-legend");
-        const inh = el("span");
-        inh.append(el("i", "sw-inh"), document.createTextNode(T.inheritedLegend));
-        const own = el("span");
-        const ownText = document.createTextNode("");
-        own.append(el("i", "sw-own"), ownText);
-        legend.append(inh, own);
+        const go = el("button", "linkbtn");
+        go.type = "button";
+        go.title = T.openTemplate;
+        go.append(document.createTextNode(tpl.name));
+        go.addEventListener("click", () => {
+          if (!this._leaveEditor()) return;
+          const i = this._cfg.templates.findIndex((t) => t.name === tpl.name);
+          this._tab = "maison";
+          this._openEditor({ section: "template", idx: i, draft: { ...this._cfg.templates[i] } });
+          this._render();
+        });
+        const except = el("span");
+        from.append(document.createTextNode(`${T.calcFrom} `), go, except);
         const empty = this._note(T.noOwn);
         empty.hidden = true;
         const filter = el("div", "seg own-filter");
         const all = el("button", "", T.filterAll);
         const only = el("button");
         for (const b of [all, only]) b.type = "button";
+        let count = 0;
         const setFilter = (on) => {
           this._ownOnly = on;
           all.classList.toggle("on", !on);
           only.classList.toggle("on", on);
           all.setAttribute("aria-pressed", String(!on));
           only.setAttribute("aria-pressed", String(on));
-          grid?.classList.toggle("own-only", on);
+          cols?.classList.toggle("own-only", on);
           empty.hidden = !(on && count === 0);
         };
         all.addEventListener("click", () => setFilter(false));
         only.addEventListener("click", () => setFilter(true));
         filter.append(all, only);
-        let count = 0;
-        onCount = (n) => {
+        onCount = (n, per = {}) => {
           count = n;
-          ownText.textContent = T.ownLegend(n);
+          except.replaceChildren();
+          if (n) {
+            const chip = el("span", "chip ovr");
+            chip.append(icon("mdi:pencil-outline"), document.createTextNode(T.overrides(n)));
+            except.append(document.createTextNode(`${T.calcExcept} `), chip);
+          } else {
+            except.append(document.createTextNode(T.calcNoOwn));
+          }
           only.textContent = T.filterOwn(n);
           empty.hidden = !(this._ownOnly && n === 0);
+          for (const [k, b] of Object.entries(navDots)) b.classList.toggle("has-own", !!per[k]);
         };
-        const go = el("button", "linkbtn");
-        go.type = "button";
-        go.append(icon("mdi:open-in-new"), document.createTextNode(T.openTemplate));
-        go.addEventListener("click", () => {
-          if (!this._leaveEditor()) return;
-          const i = this._cfg.templates.findIndex((t) => t.name === tpl.name);
-          this._tab = "reglages";
-          this._openEditor({ section: "template", idx: i, draft: { ...this._cfg.templates[i] } });
-          this._render();
-        });
-        head.append(legend, el("span", "spacer"), go, filter);
-        grid = this._behaviorGrid(schema.sections, draft, baseline, tpl.name, onCount);
+        head.append(el("span", "spacer"), filter);
+        cols = this._behaviorGrid(schema.sections, draft, baseline, tpl.name, onCount);
         setFilter(!!this._ownOnly);
-        wrap.append(head, empty, grid);
+        wrap.append(head, empty, cols);
       } else {
-        wrap.append(head, this._behaviorGrid(schema.sections, draft, baseline, null));
+        from.textContent = T.noTplChip;
+        cols = this._behaviorGrid(schema.sections, draft, baseline, null);
+        wrap.append(head, cols);
+      }
+      // In the order the computation reads them, not the columns': the
+      // window, where the sun must be, then what is done with it.
+      for (const { key } of schema.sections) {
+        const card = cols.querySelector(`.sect[data-key="${key}"]`);
+        if (!card) continue;
+        card.classList.add("ed-anchor");
+        stop(key, T.nav[key] || T.sections[key] || key, card);
+      }
+      // The first count ran before the stops existed: mark them now.
+      if (tpl) {
+        for (const card of cols.querySelectorAll(".sect")) {
+          navDots[card.dataset.key]?.classList.toggle("has-own", !!card.querySelector(".numf.ovr"));
+        }
       }
     }
 
@@ -4644,35 +4910,47 @@ class CoverExtenderPanel extends HTMLElement {
     lead.append(icon("mdi:information-outline"), el("span", "", W.introShort), this._info(W.introInfo));
     wrap.append(lead);
 
-    /* ---- curve editor ---- */
+    /* ---- today, at a glance: one card per schedule, its switch, today's
+       time and what it does to the covers. A card picks the schedule whose
+       time is set further down. ---- */
+    const sum = el("div", "sched-sum");
+    const kTimes = {};
+    const kRefs = {};
+    const kEffects = {};
+    for (const k of SCHED_KINDS) {
+      const c = el("div", `card sched-k${k === kind ? " on" : ""}${draft.enabled[k] ? "" : " off"}`);
+      c.setAttribute("role", "button");
+      c.tabIndex = 0;
+      c.setAttribute("aria-pressed", String(k === kind));
+      const pick = () => { if (this._schedKind !== k) { this._schedKind = k; this._render(); } };
+      c.addEventListener("click", pick);
+      c.addEventListener("keydown", (e) => { if (e.target === c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); pick(); } });
+      const top = el("div", "sk-top");
+      const sw = this._switch(draft.enabled[k], (v) => { draft.enabled[k] = v; this._render(); }, W.enable[k]);
+      sw.addEventListener("click", (e) => e.stopPropagation());
+      top.append(icon(k === "morning" ? "mdi:weather-sunset-up" : "mdi:weather-sunset-down"),
+        el("span", "sk-title", W.kinds[k]), el("span", "spacer"), sw);
+      kTimes[k] = el("span", "sk-time");
+      kRefs[k] = el("span", "sk-ref");
+      const when = el("div", "sk-when");
+      when.append(kTimes[k], kRefs[k]);
+      kEffects[k] = el("div", "sk-eff");
+      c.append(top, when, kEffects[k]);
+      sum.append(c);
+    }
+    wrap.append(sum);
+
+    /* ---- the time of the chosen schedule ---- */
     const card = el("div", "card sched blk");
     const head = el("div", "sched-head");
-    // Each schedule says its time today and whether it is on, before it is opened.
-    const kseg = el("div", "kseg");
-    kseg.setAttribute("role", "tablist");
-    const kTimes = {};
-    for (const k of SCHED_KINDS) {
-      const b = el("button");
-      b.type = "button";
-      b.setAttribute("role", "tab");
-      b.setAttribute("aria-selected", String(k === kind));
-      const txt = el("span", "kt");
-      kTimes[k] = el("small");
-      txt.append(el("span", "", W.kinds[k]), kTimes[k]);
-      b.append(icon(k === "morning" ? "mdi:weather-sunset-up" : "mdi:weather-sunset-down"), txt,
-        el("span", `kdot${draft.enabled[k] ? " on" : ""}`));
-      b.addEventListener("click", () => { this._schedKind = k; this._render(); });
-      kseg.append(b);
-    }
-    const ref = el("span", "sched-ref");
     const refText = el("span");
+    const ref = el("span", "sched-ref");
     ref.append(icon("mdi:weather-sunset"), refText);
-    const en = el("div", "sched-en");
-    en.append(el("span", "", W.enabledLabel),
-      this._switch(draft.enabled[kind], (v) => { draft.enabled[kind] = v; this._render(); }, W.enable[kind]),
-      this._info(W.enableHint[kind]));
-    head.append(kseg, ref, en);
+    const ttl = el("h3", "sec", W.curveTitle[kind]);
+    ttl.style.margin = "0";
+    head.append(ttl, ref);
     card.append(head);
+    if (!draft.enabled[kind]) card.append(this._note(W.enableHint[kind]));
 
     const body = el("div", "sched-body");
     body.hidden = !draft.enabled[kind];
@@ -4754,8 +5032,9 @@ class CoverExtenderPanel extends HTMLElement {
     const warn = el("div", "sched-warn");
     body.append(warn);
     const stats = el("div", "sched-stats");
-    body.append(stats);
-    wrap.append(card);
+    // Shown only when the curve runs ahead of the sun on some days.
+    const before = el("p", "sched-hint warn");
+    body.append(stats, before);
 
     const bar = this._saveBar(() => {
       const house = {};
@@ -4892,6 +5171,29 @@ class CoverExtenderPanel extends HTMLElement {
       return { box, show };
     };
 
+    // What a schedule does to the covers, as its summary card tells it: the
+    // most common action first, with how many covers take it.
+    const paintEffects = (k) => {
+      if (!draft.enabled[k]) { kEffects[k].replaceChildren(el("span", "", W.enableHint[k])); return; }
+      const by = new Map();
+      for (const c of this._cfg.covers) {
+        const v = draft.assign[c.entity_id][k] ?? null;
+        const label = v == null ? W.effNone : typeof v === "object" ? `${v.position} %` : v;
+        by.set(label, (by.get(label) || 0) + 1);
+      }
+      kEffects[k].replaceChildren(...[...by].sort((x, y) => y[1] - x[1]).map(([label, n]) => {
+        const part = el("span");
+        const color = colorOf(label);
+        if (color) {
+          const dot = el("span", "mdot");
+          dot.style.background = color;
+          part.append(dot);
+        }
+        part.append(document.createTextNode(W.effPart(label, T.covers(n))));
+        return part;
+      }));
+    };
+
     // What most covers do is the norm; a cover that does something else is marked.
     const refreshKind = (k) => {
       const count = new Map();
@@ -4905,6 +5207,7 @@ class CoverExtenderPanel extends HTMLElement {
         cell.show();
       }
       allCell[k].show();
+      paintEffects(k);
     };
 
     /* the "all covers" row: one choice applied to every cover that offers it */
@@ -4969,7 +5272,7 @@ class CoverExtenderPanel extends HTMLElement {
     table.append(tbody);
     scroll.append(table);
     tcard.append(scroll);
-    wrap.append(tcard, bar);
+    wrap.append(tcard, card, bar);
 
     /* ---- drawing ---- */
     // Drawn at the size it is shown: the width follows the card, the height
@@ -5043,8 +5346,9 @@ class CoverExtenderPanel extends HTMLElement {
           sun ? hmFmt(sun[j - 1]) : "") || reason);
       }
       let st = [];
+      let beforeTxt = "";
       if (pts && sun) {
-        let seg2 = [], nBefore = 0, nX = 0, prev = null, aMax = -1e9, aJ = 1, bMax = -1e9, bJ = 1, eJ = 1, lJ = 1;
+        let seg2 = [], nBefore = 0, nX = 0, prev = null, bMax = -1e9, bJ = 1, eJ = 1, lJ = 1;
         const flush = () => {
           if (seg2.length > 1) mk("polygon", { points: seg2.map((j) => `${xOf(j)},${yOf(sun[j - 1])}`).concat(seg2.slice().reverse().map((j) => `${xOf(j)},${yOf(pts[j - 1])}`)).join(" "), class: "band" });
           seg2 = [];
@@ -5052,7 +5356,6 @@ class CoverExtenderPanel extends HTMLElement {
         for (let j = 1; j <= 365; j++) {
           const d = pts[j - 1] - sun[j - 1], before = d < 0;
           if (before) { seg2.push(j); nBefore++; } else flush();
-          if (d > aMax) { aMax = d; aJ = j; }
           if (-d > bMax) { bMax = -d; bJ = j; }
           if (pts[j - 1] < pts[eJ - 1]) eJ = j;
           if (pts[j - 1] > pts[lJ - 1]) lJ = j;
@@ -5072,16 +5375,19 @@ class CoverExtenderPanel extends HTMLElement {
         const today = pv.today;
         mk("circle", { cx: xOf(today), cy: yOf(pts[today - 1]), r: 4.5, fill: "var(--primary-color)", stroke: "var(--card-background-color)", "stroke-width": 2 });
         if (nX > 2) msgs.push(W.manyCross(W.ref[kind], nX));
+        // Three figures; the gaps to the sun are drawn on the curve itself,
+        // and days ahead of the sun only get a word when there are some.
         st = [
           [W.today, hmFmt(pts[today - 1]), `${W.ref[kind]} ${hmFmt(sun[today - 1])}`],
           [W.earliest, hmFmt(pts[eJ - 1]), W.onDate(schedDayLabel(eJ, year, "long"))],
           [W.latest, hmFmt(pts[lJ - 1]), W.onDate(schedDayLabel(lJ, year, "long"))],
-          [W.maxAfter(W.ref[kind]), signedMin(aMax), W.onDate(schedDayLabel(aJ, year, "long"))],
-          [W.daysBefore(W.ref[kind]), String(nBefore), nBefore ? W.upTo(signedMin(-bMax), schedDayLabel(bJ, year, "long")) : W.none],
         ];
+        beforeTxt = nBefore ? W.beforeRef(W.band[kind], nBefore, signedMin(-bMax), schedDayLabel(bJ, year, "long")) : "";
       }
       warn.hidden = !msgs.length;
       warn.replaceChildren(...msgs.map((m) => el("div", "", m)));
+      before.hidden = !beforeTxt;
+      before.replaceChildren(icon("mdi:alert-outline"), el("span", "", beforeTxt));
       stats.replaceChildren(...st.map(([k, v, t]) => {
         const d = el("div");
         d.append(el("span", "k", k), el("span", "v", v), el("span", "s", t));
@@ -5158,7 +5464,9 @@ class CoverExtenderPanel extends HTMLElement {
         timeCells[k].textContent = draft.enabled[k] && p2?.points
           ? `${W.kinds[k]} · ${hmFmt(p2.points[p2.today - 1])}` : W.kinds[k];
         kTimes[k].textContent = !draft.enabled[k] ? W.offShort
-          : p2?.points ? W.todayAt(hmFmt(p2.points[p2.today - 1])) : "";
+          : p2?.points ? hmFmt(p2.points[p2.today - 1]) : "";
+        kRefs[k].textContent = !draft.enabled[k] ? ""
+          : W.follows(W.refLong[k], p2?.sun ? hmFmt(p2.sun[p2.today - 1]) : null);
       }
     };
 
@@ -5316,32 +5624,29 @@ class CoverExtenderPanel extends HTMLElement {
   }
 
   /**
-   * Two columns, two ways of saving. On the left the house (facades,
-   * templates), where every item opens its own editor and saves on its own; on
-   * the right the general settings, a single item edited in place, whose save
-   * bar only shows up once something changed.
+   * The house: its facades and its templates. Lists of objects, each one
+   * opening its own editor that saves on its own.
    */
-  _renderSettings(wrap) {
+  _renderHouse(wrap) {
     if (this._edit?.section === "facade") { this._facadeEditor(wrap); return; }
     if (this._edit?.section === "template") { this._templateEditor(wrap); return; }
+    const cols = el("div", "house-cols");
+    this._renderFacadeList(cols);
+    this._renderTemplateList(cols);
+    wrap.append(cols);
+  }
 
-    const cols = el("div", "set-cols");
-    const left = el("div", "ed-stack");
-    const right = el("div", "ed-stack");
-    const head = (title, sub) => {
-      const h = el("div", "colhead");
-      h.append(el("h2", "", title), el("span", "", sub));
-      return h;
-    };
-    left.append(head(T.houseTitle, T.houseSub));
-    this._renderFacadeList(left);
-    this._renderTemplateList(left);
-    this._renderEntities(left);
-    right.append(head(T.globalTitle, T.globalNote));
-    // The save bar runs under both columns, the full width like on every page.
-    const bar = this._renderGlobal(right);
-    cols.append(left, right);
-    wrap.append(cols, bar);
+  /**
+   * The general settings: one form, one save. The generated entities come
+   * last, as a check of what the configuration produced.
+   */
+  _renderSettings(wrap) {
+    const page = el("div", "form-col");
+    const stack = el("div", "ed-stack");
+    const bar = this._renderGlobal(stack);
+    this._renderEntities(stack);
+    page.append(stack, bar);
+    wrap.append(page);
   }
 
   _entityCounts() {
@@ -5754,7 +6059,9 @@ class CoverExtenderPanel extends HTMLElement {
       this._labeled(T.tplName, this._edInput(draft.name, (v) => { draft.name = v; }, "big"), "wide"),
       this._labeled(T.usedBy, this._usersChips("template", saved)),
       line2);
-    idCard.append(grid, this._note(T.tplIdentityNote), this._note(T.tplKindNote));
+    // Which facades this template serves, named, rather than the general rule.
+    const fits = this._cfg.facades.filter((f) => tiltKind(facadeTilt(f)) === kind).map((f) => f.name);
+    idCard.append(grid, this._note(fits.length ? T.tplFacades(fits.join(", ")) : T.tplNoFacade));
     const geo = this._slope(draft);
     if (kind === "roof") idCard.append(this._note(T.tplKindRef(geo.tilt, geo.refFromHouse)));
     // Covers already on it from a facade of another type: the server refuses that.
@@ -5884,31 +6191,30 @@ class CoverExtenderPanel extends HTMLElement {
     const bar = this._saveBar(() => { this._saveSection("global", { ...draft }); });
     const touch = () => this._syncSaveBar?.();
 
-    /* solar gain: when is it cool and fine enough */
+    /* solar gain: when is it cool and fine enough, written as the rule reads */
     const sg = this._edCard("mdi:thermometer", T.sgTitle, T.sgSub);
-    const line = (label, control, cls = "") => {
-      const r = el("div", `sline ${cls}`.trim());
-      r.append(el("span", "k", label), control);
-      return r;
-    };
-    sg.append(line(T.sgTemp, this._haSelector(
+    const cool = el("div", "sentence sg-line");
+    cool.append(el("span", "", T.sgCoolWhen), this._haSelector(
       { entity: { domain: "sensor", device_class: "temperature" } },
       draft.sg_temperature_entity || undefined,
-      (v) => { draft.sg_temperature_entity = v || undefined; touch(); })));
-    sg.append(line(T.sgThreshold, this._thresholdControl(draft, touch)));
+      (v) => { draft.sg_temperature_entity = v || undefined; touch(); }),
+    el("span", "", T.sgIsBelow), this._thresholdControl(draft, touch));
+    sg.append(cool);
     const verdict = this._solarGainVerdict(draft);
-    if (verdict) {
-      const r = el("div", "sline");
-      r.append(el("span"), verdict);
-      sg.append(r);
-    }
-    sg.append(line(T.sgWeather, this._haSelector({ entity: { domain: "weather" } },
+    if (verdict) sg.append(verdict);
+    const fine = el("div", "sentence sg-line");
+    fine.append(el("span", "", T.sgFineWhen), this._haSelector({ entity: { domain: "weather" } },
       draft.sg_weather_entity || undefined,
-      (v) => { draft.sg_weather_entity = v || undefined; touch(); })));
-    const wx = el("div", "toggles");
-    wx.style.margin = "0";
+      (v) => { draft.sg_weather_entity = v || undefined; touch(); }), el("span", "", T.sgReports));
+    sg.append(fine);
+    // The chosen conditions first; the others fold behind "+ n more". The
+    // order is taken once, so a chip does not jump away when it is clicked.
+    const wx = el("div", "toggles wx-list");
     const good = () => draft.sg_good_conditions ?? ["sunny", "partlycloudy"];
-    for (const c of conditions) {
+    const picked = new Set(good());
+    const ordered = [...conditions.filter((c) => picked.has(c)), ...conditions.filter((c) => !picked.has(c))];
+    const extras = [];
+    for (const c of ordered) {
       const b = el("button", "toggle wx");
       b.type = "button";
       b.append(icon(WEATHER_ICONS[c] || "mdi:weather-cloudy"), document.createTextNode(T.weatherStates[c] || c));
@@ -5920,9 +6226,22 @@ class CoverExtenderPanel extends HTMLElement {
         sync();
         touch();
       });
+      if (!picked.has(c)) extras.push(b);
       wx.append(b);
     }
-    sg.append(line(T.sgGood, wx, "top"), this._note(T.sgNote));
+    if (extras.length) {
+      const more = el("button", "toggle more");
+      more.type = "button";
+      const fold = (open) => {
+        this._wxOpen = open;
+        for (const b of extras) b.hidden = !open;
+        more.textContent = open ? T.sgLess : T.sgMore(extras.length);
+      };
+      more.addEventListener("click", () => fold(!this._wxOpen));
+      wx.append(more);
+      fold(!!this._wxOpen);
+    }
+    sg.append(wx, this._note(T.sgNote));
 
     /* sending commands */
     const cmd = this._edCard("mdi:send-clock-outline", T.cmdTitle);

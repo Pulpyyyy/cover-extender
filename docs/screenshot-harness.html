@@ -8,8 +8,8 @@
   fake hass and demo data, for the README screenshots. Serve the repository
   root over HTTP (python -m http.server) and open
   docs/screenshot-harness.html?tab=<tab>[&edit=<section>:<index>][&pop=override|auto][&theme=dark][&lang=fr][&sun=<azimuth>,<elevation>]
-  tab: volets | matrice | modes | horaires | reglages
-  edit: cover:N | mode:N | facade:N | template:N opens that editor.
+  tab: volets | modes | matrice | horaires | maison | reglages
+  edit: cover:N | mode:N | facade:N | template:N opens that editor (facades and templates: tab=maison).
   sun: puts the sun there (sun.sun), for the sketches of the cover editor.
   The title turns to "READY <page height>" once drawn, or "JSERROR: ..." on an error.
 -->
@@ -284,8 +284,9 @@
   }
 
   const PANEL_CFG = {
-    version: "4.0.0b6",
+    version: "4.0.0b7",
     facades, modes, templates, covers, helpers,
+    day_entity: "binary_sensor.cx_day",
     global: {
       command_interval: 150,
       show_sun_facing: true, show_auto_shade: true, show_solar_gain: false,
@@ -375,6 +376,10 @@
     "sensor.outdoor_temperature": { state: "17.2", attributes: { friendly_name: FR ? "Température extérieure" : "Outdoor temperature", unit_of_measurement: "°C" } },
     "weather.home": { state: "sunny", attributes: { friendly_name: FR ? "Maison" : "Home" } },
   });
+  // Today's opening and closing, as binary_sensor.cx_day carries them; the
+  // next change is this evening's closing.
+  const at = (h, m) => { const d = new Date(); d.setHours(h, m, 0, 0); return d.toISOString(); };
+  states["binary_sensor.cx_day"] = { state: "on", attributes: { opening: at(8, 40), closing: at(19, 28), next_change: at(19, 28) } };
   if (params.get("sun")) {
     const [azimuth, elevation] = params.get("sun").split(",").map(Number);
     states["sun.sun"] = { state: elevation > 0 ? "above_horizon" : "below_horizon", attributes: { azimuth, elevation } };
@@ -411,10 +416,10 @@
     if (!document.title.startsWith("JSERROR")) document.title = `READY ${document.documentElement.scrollHeight}`;
   }, 1500);
 
-  const TABS = ["volets", "matrice", "modes", "horaires", "reglages"];
-  const tab = params.get("tab") || "matrice";
+  const TABS = ["volets", "modes", "matrice", "horaires", "maison", "reglages"];
+  const tab = params.get("tab") || "volets";
   until(() => panel._state === "ready" && panel.shadowRoot?.querySelector(".tabs"), () => {
-    if (tab !== "matrice") panel.shadowRoot.querySelectorAll(".tabs .tab")[Math.max(0, TABS.indexOf(tab))]?.click();
+    if (tab !== "volets") panel.shadowRoot.querySelectorAll(".tabs .tab")[Math.max(0, TABS.indexOf(tab))]?.click();
     // ?edit=cover:0 / mode:2 / facade:0 / template:0 : open that editor.
     const edit = params.get("edit");
     if (edit) {

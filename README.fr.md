@@ -187,10 +187,10 @@ Ou **Paramètres → Appareils et services → Ajouter une intégration**, puis 
 Ce parcours configure un volet avec deux modes, *Jour* (ouvert) et *Nuit* (fermé). Comptez cinq minutes.
 
 1. **Ouvrez le panneau.** Cliquez sur **Cover Extender** dans la barre latérale, ou sur le bouton de la page de l'intégration, ou allez sur `http://<votre-ha>:8123/cover-extender`.
-2. **Créez une façade.** Dans **Réglages → Façades**, cliquez sur **Ajouter une façade**. Nommez-la (par ex. *Sud*) et réglez son **azimut**, la direction vers laquelle regardent les fenêtres : 0° = nord, 90° = est, 180° = sud, 270° = ouest. Une application boussole posée à plat contre la fenêtre, en regardant dehors, donne la valeur. Dans le panneau, tapez-la, choisissez l'une des huit directions, ou faites glisser la flèche sur la boussole.
+2. **Créez une façade.** Dans **Maison → Façades**, cliquez sur **Ajouter une façade**. Nommez-la (par ex. *Sud*) et réglez son **azimut**, la direction vers laquelle regardent les fenêtres : 0° = nord, 90° = est, 180° = sud, 270° = ouest. Une application boussole posée à plat contre la fenêtre, en regardant dehors, donne la valeur. Dans le panneau, tapez-la, choisissez l'une des huit directions, ou faites glisser la flèche sur la boussole.
 3. **Créez deux modes.** Dans **Modes**, cliquez deux fois sur **Ajouter un mode** : *Jour* et *Nuit*. Laissez **Position des volets** sur *Fixe* pour les deux. Activez **Verrouiller les volets** sur *Nuit* si vous voulez que les commandes passées par Cover Extender attendent le matin.
 4. **Ajoutez votre volet.** Dans **Volets**, cliquez sur **Ajouter un volet**, choisissez l'entité `cover.*` et la façade *Sud*, puis **Enregistrer**.
-5. **Réglez les positions.** Dans **Matrice**, cliquez sur la cellule vide *Jour* de votre volet : cela lie le mode. Choisissez **Fixe** et 100 %. Faites de même pour *Nuit* à 0 %, puis **Enregistrer**. Les positions suivent la convention de Home Assistant : **0 = fermé, 100 = ouvert**.
+5. **Réglez les positions.** Dans **Matrice**, cliquez sur la cellule vide *Jour* de votre volet : cela ajoute le mode au volet. Choisissez **Fixe** et 100 %. Faites de même pour *Nuit* à 0 %, puis **Enregistrer**. Les positions suivent la convention de Home Assistant : **0 = fermé, 100 = ouvert**.
 6. **Essayez.** Une nouvelle entité `select.<votre_volet>_cx_mode` est apparue. Passez-la de *Jour* à *Nuit* : le volet se ferme.
 
 ### Ensuite
@@ -389,7 +389,7 @@ Elle fonctionne quand l'interrupteur **Héliotropie** est activé dans l'éditeu
 - sinon, si le soleil fait face au volet et que la météo est dans la liste des bonnes conditions, le volet va à la **Position au soleil** (100 % par défaut) ;
 - sinon il va à la **Position au froid** (0 % par défaut).
 
-L'entité de température, le seuil et l'entité météo sont communs à tous les volets (**Réglages → Réglages globaux**). Sans entité de température, le test de température est ignoré ; sans entité météo, la météo est considérée comme bonne. Le seuil est un nombre, ou un `input_number` pour le changer depuis un tableau de bord.
+L'entité de température, le seuil et l'entité météo sont communs à tous les volets (onglet **Réglages**). Sans entité de température, le test de température est ignoré ; sans entité météo, la météo est considérée comme bonne. Le seuil est un nombre, ou un `input_number` pour le changer depuis un tableau de bord.
 
 ### Le sélecteur global
 
@@ -420,17 +420,22 @@ Un choix fait sur le sélecteur d'un volet s'applique toujours, tout comme `appl
 
 Toute la configuration se fait dans le panneau, à `/cover-extender`. Chaque valeur est vérifiée par le serveur avant d'être enregistrée. Le panneau suit le thème de Home Assistant, et chaque administrateur le lit dans sa langue (français ou anglais).
 
+Les quatre onglets de gauche servent au quotidien, dans l'ordre du travail ; les deux après le trait se règlent une fois. Le panneau s'ouvre sur **Volets**.
+
 | Onglet | Ce qu'il règle |
 |---|---|
-| **Volets** | Les volets : entité, façade, gabarit, [exclusions de sécurité et inhibitions](#exclusions), géométrie, ombrage et héliotropie, chaque réglage avec une ligne d'explication et un schéma de la fenêtre. Sous un gabarit, chaque valeur dit si elle vient du gabarit ou si elle est propre au volet, avec un filtre *Écarts seulement*. Chaque carte montre ce que fait le volet en ce moment : son mode et sa position, puis ce qui le retient (un [mode minuté](#modes-minutés) et son heure de fin, le verrou et la position mémorisée, une exclusion ou une inhibition active). Un volet qui suit un [horaire](#horaires) montre ses actions du matin et du soir avec les heures du jour, la prochaine mise en évidence, et une ligne quand son état change cette prochaine action (verrouillé : la position ira en mémoire ; fenêtre ouverte : il attend). Un clic sur cette ligne ouvre l'onglet Horaires. L'éditeur du volet montre la même ligne. |
-| **Matrice** | Modes × volets : lier les modes et régler chaque position par volet depuis une seule grille. Une cellule vide lie le mode ; une cellule *auto* d'un mode d'ombrage ou d'héliotropie peut être remplacée par une position fixe pour ce seul volet. |
-| **Modes** | Icône, couleur, verrou, comportement, priorité, repli, [durée](#modes-minutés) et ce qui se passe à sa fin, visibilité. Faites glisser les tuiles pour les réordonner : l'ordre est celui des sélecteurs de mode. Sous **Lancé pour plusieurs volets** : les modes qu'il ne dérange pas, et son mode de repli (voir [qui remplace qui](#qui-remplace-qui)). |
-| **Horaires** | L'[ouverture du matin et la fermeture du soir](#horaires) : la courbe de chacune sur l'année, et le mode du matin et du soir de chaque volet. |
-| **Réglages** | À gauche la maison : façades (orientation réglée sur une boussole), gabarits, et la liste des entités que la configuration a créées. À droite les réglages globaux : héliotropie (température, seuil, météo et ce qui compte comme beau temps), pause entre deux volets, entités en plus pour chaque volet. |
+| **Volets** | Les volets, groupés par façade comme dans la matrice. Chaque carte montre ce que fait le volet en ce moment : son mode et sa position (dessinée et écrite), puis ce qui le retient (un [mode minuté](#modes-minutés) et son heure de fin, le verrou et la position mémorisée, une exclusion ou une inhibition active). Un volet qui suit un [horaire](#horaires) montre ses actions du matin et du soir sur une ligne avec les heures du jour, la prochaine dans la couleur d'accent, et une ligne quand son état change cette prochaine action (verrouillé : la position ira en mémoire ; fenêtre ouverte : il attend) ; un clic sur cette ligne ouvre l'onglet Horaires. En bas, seulement ce qui est actif : ombrage, héliotropie, et les écarts à son gabarit. L'éditeur du volet réunit son entité, sa façade et son gabarit, sa ligne de la matrice (la position de chaque mode, changée avec la fenêtre de la matrice et enregistrée avec le volet), ses horaires, ses [exclusions de sécurité et inhibitions](#exclusions), puis la géométrie, l'ombrage et l'héliotropie, chaque réglage avec une ligne d'explication et un schéma de la fenêtre. Une barre en haut mène à chaque section et marque celles qui ont des écarts. |
+| **Modes** | Les modes, une ligne chacun dans l'ordre des sélecteurs de mode : glissez une ligne pour réordonner. Chaque ligne dit comment le mode place les volets et à combien il est lié, et montre son verrou, sa durée, sa priorité, les modes qu'il épargne, son repli, sa visibilité. L'éditeur se lit de haut en bas : icône, couleur, comment il place les volets, verrou et [durée](#modes-minutés), puis **Appliqué à plusieurs volets** en deux phrases à compléter : les modes qu'il laisse tranquilles, et le mode que prennent les volets qui ne l'ont pas (voir [qui remplace qui](#qui-remplace-qui)). |
+| **Matrice** | Modes × volets : ajouter les modes aux volets et régler chaque position par volet depuis une seule grille. Un en-tête ouvre son mode. Une cellule *auto* d'un mode d'ombrage ou d'héliotropie peut être remplacée par une position fixe pour ce seul volet (contour ambre). Sur un téléphone, la matrice montre les volets l'un sous l'autre, leurs modes deux par deux, le tableau restant à portée. |
+| **Horaires** | L'[ouverture du matin et la fermeture du soir](#horaires) : d'abord une carte pour chacune avec son interrupteur, l'heure du jour et ce qu'elle fait aux volets, puis l'action du matin et du soir de chaque volet, puis la courbe sur l'année de celle choisie en haut. |
+| **Maison** | Les façades (orientation réglée sur une boussole, et pente) et les gabarits, deux listes dont chaque ligne ouvre son éditeur. Un gabarit nomme les façades de son type de fenêtre. |
+| **Réglages** | L'héliotropie (écrite comme sa règle : il fait frais quand cette température est sous ce seuil, beau quand cette météo annonce ces conditions), la pause entre deux volets, les entités en plus pour chaque volet, et la liste des entités que la configuration a créées. |
+
+Une page qui a quelque chose à enregistrer montre une barre d'enregistrement collée au bas de l'écran, et son onglet porte un point ; sans rien à enregistrer, pas de barre.
 
 ### En images
 
-L'éditeur de volet : ce qui bloque le volet, puis le calcul en quatre cartes. Sous son gabarit, *Distance* et *Position mini* sont propres à ce volet (ambre), le reste est hérité (pointillés). Les captures sont en anglais ; le panneau suit la langue de chaque administrateur.
+L'éditeur de volet : ce qui bloque le volet, puis le calcul en quatre cartes. Sous son gabarit, *Distance* et *Position mini* sont des écarts de ce volet (ambre, avec la valeur du gabarit et le moyen d'y revenir), le reste est hérité. Les captures sont en anglais ; le panneau suit la langue de chaque administrateur.
 
 ![Éditeur de volet](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-cover-editor.png)
 
@@ -442,7 +447,9 @@ L'éditeur de volet : ce qui bloque le volet, puis le calcul en quatre cartes. S
 |---|---|
 | ![Onglet Volets](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-covers.png) | ![Onglet Modes](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-modes.png) |
 
-![Onglet Réglages](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-settings.png)
+| | |
+|---|---|
+| ![Onglet Maison](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-house.png) | ![Onglet Réglages](https://raw.githubusercontent.com/Pulpyyyy/cover-extender/main/docs/panel-settings.png) |
 
 ## Questions fréquentes
 
