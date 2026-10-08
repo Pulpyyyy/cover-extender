@@ -1675,6 +1675,9 @@ const STYLE = `
   .sf select { font: inherit; font-size: var(--f-15); font-weight: 600; border: 0; background: transparent;
         color: var(--primary-text-color); padding: 0; width: 100%; min-width: 0; cursor: pointer; }
   .sf select:focus-visible { outline: var(--fp-focus); outline-offset: var(--fp-focus-off); }
+  /* The select is transparent on its field: its list takes the theme's colours, not the browser's white. */
+  .sf select option { background: var(--card-background-color); color: var(--primary-text-color); font-weight: 400; }
+  .sf select option:disabled { color: var(--disabled-text-color, var(--secondary-text-color)); }
   .spair.one.sref { margin: 0 0 var(--fp-s2); }
   .legend.sched-legend { margin: 0 0 var(--fp-s2); }
   .lg-line { width: 16px; height: 3px; border-radius: 2px; display: inline-block; }
