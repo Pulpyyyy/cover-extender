@@ -265,3 +265,149 @@ def test_cover_schedule_keeps_a_position(ws_hass):
 def test_cover_schedule_refuses_a_position_it_cannot_read(ws_hass, position):
     item = {"modes": {}, "schedule": {"evening": {"position": position}}}
     assert ws._validate_cover_schedule(ws_hass, item, LIVING) == f"schedule_position_invalid:{LIVING}"
+
+
+# ── Scheduled positions read from an entity ───────────────────────────────────
+
+SOURCE = "sensor.position_matin_amis"
+
+
+def _evening_entity(coord, force=False, lock="off", source=SOURCE):
+    profile = _evening_position(coord, force, lock)
+    profile[CONF_SCHEDULE]["evening"] = {"position": {"type": "entity", "value": source}, "force": force}
+    return profile
+
+
+def _run_evening(coord, day=6):
+    asyncio.run(coord._run_schedule("evening", datetime(2026, 10, day).date()))
+
+
+def test_an_entity_position_moves_a_free_cover_to_its_value(coord):
+    _evening_entity(coord)
+    coord.hass.states.set(SOURCE, "100")
+    _run_evening(coord)
+    assert _queued(coord) == [("set_cover_position", {"entity_id": LIVING, "position": 100})]
+    assert coord.hass.services.calls == []
+
+
+def test_an_entity_position_is_rounded(coord):
+    _evening_entity(coord)
+    coord.hass.states.set(SOURCE, "49.5")
+    _run_evening(coord)
+    assert _queued(coord) == [("set_cover_position", {"entity_id": LIVING, "position": 50})]
+
+
+def test_an_entity_position_is_read_when_the_schedule_runs(coord):
+    _evening_entity(coord)
+    coord.hass.states.set(SOURCE, "0")
+    _run_evening(coord, 6)
+    coord.hass.states.set(SOURCE, "100")
+    _run_evening(coord, 7)
+    assert [d["position"] for _s, d in _queued(coord)] == [0, 100]
+
+
+def test_a_locked_cover_keeps_the_entity_position_in_memory(coord):
+    _evening_entity(coord, lock="on")
+    coord.hass.data[DOMAIN][DATA_MEMORY][LIVING] = 80
+    coord.hass.states.set(SOURCE, "0")
+    _run_evening(coord)
+    assert _queued(coord) == []
+    assert coord._get_memory(LIVING) == 0
+
+
+def test_a_forced_entity_position_moves_a_locked_cover_and_updates_its_memory(coord):
+    _evening_entity(coord, force=True, lock="on")
+    coord.hass.data[DOMAIN][DATA_MEMORY][LIVING] = 80
+    coord.hass.states.set(SOURCE, "0")
+    _run_evening(coord)
+    assert _queued(coord) == [("set_cover_position", {"entity_id": LIVING, "position": 0})]
+    assert coord._get_memory(LIVING) == 0
+
+
+def test_an_entity_position_waits_for_the_window_then_applies(coord):
+    profile = _evening_entity(coord)
+    profile["exclusion"] = ["binary_sensor.window"]
+    coord.hass.states.set("binary_sensor.window", "on")
+    coord.hass.states.set(SOURCE, "100")
+    _run_evening(coord)
+    assert _queued(coord) == []
+    assert coord._exclusion_pending[LIVING][0] == 100
+    # The value read when the schedule ran is the one applied, not a later one.
+    coord.hass.states.set(SOURCE, "0")
+    coord.hass.states.set("binary_sensor.window", "off")
+    asyncio.run(coord._resume_after_exclusion(LIVING))
+    assert _queued(coord) == [("set_cover_position", {"entity_id": LIVING, "position": 100})]
+
+
+@pytest.mark.parametrize("state", [None, "unavailable", "unknown", "open", "", "nan", "101", "-1"])
+def test_an_unreadable_entity_leaves_the_cover_alone(coord, caplog, state):
+    _evening_entity(coord)
+    bedroom = coord.hass.data[DOMAIN][DATA_COVER_PROFILES][BEDROOM]
+    bedroom[CONF_SCHEDULE] = {"morning": None, "evening": {"position": 0, "force": False}}
+    if state is not None:
+        coord.hass.states.set(SOURCE, state)
+    with caplog.at_level("WARNING"):
+        _run_evening(coord)
+    # The other covers run, this one does not move, and the log says why.
+    assert _queued(coord) == [("set_cover_position", {"entity_id": BEDROOM, "position": 0})]
+    assert coord._get_memory(LIVING) is None and LIVING not in coord._exclusion_pending
+    warning = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warning) == 1 and LIVING in warning[0] and SOURCE in warning[0]
+    if state is not None:
+        assert repr(state) in warning[0]
+    # The schedule ran all the same: nothing to catch up at the next start.
+    assert coord._schedule_last["evening"] == "2026-10-06"
+
+
+def test_cover_schedule_keeps_an_entity_position(ws_hass):
+    action = {"position": {"type": "entity", "value": SOURCE}, "force": False}
+    item = {"modes": {"Night": {}}, "schedule": {"morning": action, "evening": "Night"}}
+    assert ws._validate_cover_schedule(ws_hass, item, LIVING) is None
+    assert item["schedule"] == {"morning": action, "evening": "Night"}
+
+
+@pytest.mark.parametrize("value", ["", None])
+def test_cover_schedule_wants_the_entity(ws_hass, value):
+    item = {"modes": {}, "schedule": {"morning": {"position": {"type": "entity", "value": value}}}}
+    assert ws._validate_cover_schedule(ws_hass, item, LIVING) == f"schedule_entity_required:{LIVING}"
+
+
+def test_cover_schedule_refuses_an_entity_that_is_not_a_number(ws_hass):
+    item = {"modes": {}, "schedule": {"morning": {"position": {"type": "entity", "value": "light.kitchen"}}}}
+    assert ws._validate_cover_schedule(ws_hass, item, LIVING) == f"schedule_position_invalid:{LIVING}"
+
+
+def test_a_mode_rename_leaves_an_entity_position_alone(ws_hass, monkeypatch):
+    action = {"position": {"type": "entity", "value": SOURCE}, "force": True}
+    covers = [{"entity_id": LIVING, "modes": {"Night": {}}, "schedule": {"morning": action, "evening": "Night"}}]
+    monkeypatch.setattr(ws, "_items", lambda h, section: covers)
+    out = ws._renamed_covers(ws_hass, "mode", [{"name": "Day"}, {"name": "Night"}], [{"name": "Day"}, {"name": "Nuit"}])
+    assert out[0]["schedule"] == {"morning": action, "evening": "Nuit"}
+
+
+def test_an_entity_position_survives_a_save_and_a_reload(hass):
+    """config/save, then what config/get returns and what the coordinator runs."""
+    from custom_components.cover_extender.const import CONF_SCHEDULE as SCHED
+    from custom_components.cover_extender.schemas import build_profiles_from_options
+
+    entry = types.SimpleNamespace(options={OPT_CONFIG: {
+        SECTION_MODE: [{"name": "Day"}, {"name": "Night"}],
+        SECTION_COVER: [{"entity_id": LIVING, "modes": {"Day": {"type": "fixed", "value": 100}}}],
+    }})
+
+    def update(e, options):
+        e.options = options
+
+    hass.config_entries = types.SimpleNamespace(async_entries=lambda domain: [entry], async_update_entry=update)
+    sent = []
+    connection = types.SimpleNamespace(
+        send_result=lambda i, r: sent.append(("ok", r)), send_error=lambda i, c, m: sent.append(("error", m)),
+    )
+    action = {"position": {"type": "entity", "value": SOURCE}, "force": True}
+    ws._save_schedule(hass, connection, {"id": 1, "data": {
+        "house": dict(HOUSE), "covers": {LIVING: {"morning": action, "evening": "Day"}},
+    }})
+    assert sent == [("ok", {"saved": True})]
+    assert ws._items(hass, SECTION_COVER)[0]["schedule"] == {"morning": action, "evening": "Day"}
+    profiles = build_profiles_from_options(entry, hass)[0]
+    assert profiles[LIVING][SCHED] == {"morning": action, "evening": "Day"}

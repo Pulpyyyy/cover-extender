@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import re
 from typing import Any
 
@@ -235,29 +236,50 @@ def effective_behavior(behavior: str | None, stored_position: Any) -> str | None
     return behavior
 
 
+def round_position(value: float) -> int:
+    """A position to the nearest whole percent, halves up (99.5 → 100)."""
+    return math.floor(value + 0.5)
+
+
+def read_position_entity(hass: HomeAssistant, entity_id: str) -> tuple[int | None, Any]:
+    """The numeric state of *entity_id*, rounded, and the raw state read.
+
+    (None, None) when the entity does not exist; (None, raw) when its state
+    is not a finite number (unknown, unavailable, text). The range is left
+    to the caller.
+    """
+    state = hass.states.get(entity_id)
+    if state is None:
+        return None, None
+    try:
+        value = float(state.state)
+    except (ValueError, TypeError):
+        return None, state.state
+    if not math.isfinite(value):
+        return None, state.state
+    return round_position(value), state.state
+
+
 def resolve_mode_position(hass: HomeAssistant, raw: Any) -> int | None:
     """Resolve a mode position value to an integer.
 
     - raw = None       → None (no fixed position, e.g. auto shade)
-    - raw = int/float  → int
-    - raw = str        → treated as entity_id; its numeric state is read at runtime
+    - raw = int/float  → int, rounded to the nearest whole percent
+    - raw = str        → treated as entity_id; its numeric state is read at
+                         runtime and rounded to the nearest whole percent
     """
     if raw is None:
         return None
     if isinstance(raw, str):
-        state = hass.states.get(raw)
-        if state is None:
+        value, state = read_position_entity(hass, raw)
+        if value is None and state is None:
             _LOGGER.warning("cover_extender: position entity '%s' not found", raw)
-            return None
-        try:
-            return int(float(state.state))
-        except (ValueError, TypeError):
+        elif value is None:
             _LOGGER.warning(
-                "cover_extender: position entity '%s' has a non-numeric state: %s",
-                raw, state.state,
+                "cover_extender: position entity '%s' has a non-numeric state: %s", raw, state,
             )
-            return None
-    return int(raw)
+        return value
+    return round_position(raw)
 
 
 def build_extra_attrs(cfg: dict[str, Any], memory: int | None = None) -> dict[str, Any]:

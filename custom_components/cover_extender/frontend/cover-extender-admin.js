@@ -149,6 +149,8 @@ const WORDS = {
       perCoverSub: "“None”: the cover does not follow this schedule. A mode applies as a grouped mode change; only the modes linked to the cover and without a duration are offered. A position moves the cover without changing its mode.",
       cover: "Cover", noneOpt: "None",
       grpMode: "Mode", grpPos: "Position", posOpt: "Fixed position…", posLabel: "Position in %",
+      posEntOpt: "Position from an entity…", posEntLabel: "Position entity",
+      posEntHint: "Read once, when the schedule runs: a number from 0 to 100 (a template sensor, a helper). If it cannot be read, the cover does not move.",
       lockedLabel: "If the cover is locked",
       keepLock: "Respects the lock", forcePos: "Force",
       keepLockHint: "Free cover: it moves. Locked cover: it does not move; the position goes to memory and the cover takes it when it leaves the locked mode.",
@@ -274,6 +276,7 @@ const WORDS = {
     statusTimer: (m, t) => `back to ${m} at ${t}`,
     statusLocked: (p) => (p == null ? "locked" : `locked, ${p} % remembered`),
     schedNext: "next", schedTomorrow: (t) => `tomorrow ${t}`, schedNone: "nothing",
+    schedEnt: (name) => `Position read from ${name} when the schedule runs`,
     schedTitle: "Schedules", schedEdit: "Change",
     coverModesTitle: "Modes of this cover", seeMatrix: "See the matrix",
     addPicture: "Add a picture",
@@ -281,7 +284,7 @@ const WORDS = {
     schedOpen: "Open the Schedules tab", schedAria: (n) => `Schedules of ${n}, open the Schedules tab`,
     fcSafety: (n) => `${n}: the cover moves once the exclusion clears.`,
     fcInhib: (n) => `${n}: the cover moves when the inhibition ends.`,
-    fcMemory: (p) => `Locked: ${p} % goes to memory, taken when it leaves the mode.`,
+    fcMemory: (p) => `Locked: ${p} % is in memory, applied when it leaves the mode.`,
     fcRecompute: "Its current mode computes the position: the next computation can move it again.",
     fcSpared: (cur, m) => `${m} does not replace ${cur}: the cover stays in ${cur}.`,
     fcAfterTimed: (cur, m) => `${m} will apply when ${cur} ends.`,
@@ -470,7 +473,8 @@ const WORDS = {
       fallback_invalid: (n) => `“${n}”: the fallback mode must be another existing mode.`,
       schedule_mode_timed: (m) => `“${m}” is applied by a schedule: it cannot have a duration, and a mode with a duration cannot be scheduled.`,
       schedule_invalid: (k) => `The ${k} schedule cannot be read.`,
-      schedule_position_invalid: (e) => `${e}: a scheduled position goes from 0 to 100%.`,
+      schedule_position_invalid: (e) => `${e}: a scheduled position goes from 0 to 100%, or is read from a sensor, input_number or number entity.`,
+      schedule_entity_required: (e) => `${e}: choose the entity the scheduled position is read from.`,
       schedule_min_after_max: (k) => `The ${k} schedule: the min time is after the max time.`,
       schedule_floor_after_ceiling: (k) => `The ${k} schedule: “not before” must come before “not after”.`,
       return_mode_timed: (target, user) => `“${target}” is the mode “${user}” returns to: it cannot have a duration. Change the return of “${user}” first.`,
@@ -585,6 +589,8 @@ const WORDS = {
       perCoverSub: "« Aucune » : le volet ne suit pas cet horaire. Un mode s'applique comme un changement de mode groupé ; seuls les modes liés au volet et sans durée sont proposés. Une position déplace le volet sans changer son mode.",
       cover: "Volet", noneOpt: "Aucune",
       grpMode: "Mode", grpPos: "Position", posOpt: "Position fixe…", posLabel: "Position en %",
+      posEntOpt: "Position lue sur une entité…", posEntLabel: "Entité de position",
+      posEntHint: "Lue une fois, quand l'horaire s'exécute : un nombre de 0 à 100 (un capteur template, une entrée). Si elle est illisible, le volet ne bouge pas.",
       lockedLabel: "Si le volet est verrouillé",
       keepLock: "Respecte le verrou", forcePos: "Force",
       keepLockHint: "Volet libre : il bouge. Volet verrouillé : il ne bouge pas, la position part en mémoire et il la prend en quittant le mode verrouillé.",
@@ -706,6 +712,7 @@ const WORDS = {
     statusTimer: (m, t) => `retour à ${m} à ${t}`,
     statusLocked: (p) => (p == null ? "verrouillé" : `verrouillé, ${p} % mémorisé`),
     schedNext: "prochain", schedTomorrow: (t) => `demain ${t}`, schedNone: "rien",
+    schedEnt: (name) => `Position lue sur ${name} quand l'horaire s'exécute`,
     schedTitle: "Horaires", schedEdit: "Modifier",
     coverModesTitle: "Modes de ce volet", seeMatrix: "Voir la matrice",
     addPicture: "Ajouter une image",
@@ -713,7 +720,7 @@ const WORDS = {
     schedOpen: "Ouvrir l'onglet Horaires", schedAria: (n) => `Horaires de ${n}, ouvrir l'onglet Horaires`,
     fcSafety: (n) => `${n} : le volet bougera une fois l'exclusion levée.`,
     fcInhib: (n) => `${n} : le volet bougera à la fin de l'inhibition.`,
-    fcMemory: (p) => `Verrouillé : ${p} % ira en mémoire, pris en quittant le mode.`,
+    fcMemory: (p) => `Verrouillé : ${p} % est en mémoire, s'appliquera en quittant le mode.`,
     fcRecompute: "Son mode actuel calcule la position : le calcul suivant peut le rebouger.",
     fcSpared: (cur, m) => `${m} ne remplace pas ${cur} : le volet reste en ${cur}.`,
     fcAfterTimed: (cur, m) => `${m} s'appliquera à la fin de ${cur}.`,
@@ -901,7 +908,8 @@ const WORDS = {
       fallback_invalid: (n) => `« ${n} » : le mode de repli doit être un autre mode existant.`,
       schedule_mode_timed: (m) => `« ${m} » est appliqué par un horaire : il ne peut pas avoir de durée, et un mode avec une durée ne peut pas être programmé.`,
       schedule_invalid: (k) => `L'horaire « ${k} » est illisible.`,
-      schedule_position_invalid: (e) => `${e} : une position programmée va de 0 à 100 %.`,
+      schedule_position_invalid: (e) => `${e} : une position programmée va de 0 à 100 %, ou se lit sur une entité sensor, input_number ou number.`,
+      schedule_entity_required: (e) => `${e} : choisis l'entité sur laquelle lire la position programmée.`,
       schedule_min_after_max: (k) => `Horaire « ${k} » : l'heure min est après l'heure max.`,
       schedule_floor_after_ceiling: (k) => `Horaire « ${k} » : « pas avant » doit précéder « pas après ».`,
       return_mode_timed: (target, user) => `« ${target} » est le mode de retour de « ${user} » : il ne peut pas avoir de durée. Changez d'abord le retour de « ${user} ».`,
@@ -1608,7 +1616,7 @@ const STYLE = `
   .sched-row .none .a, .sched-row .done .a { color: var(--secondary-text-color); font-weight: 400; }
   .sched-row .next .t { color: var(--primary-color); }
   .sched-row .tag { font-size: var(--f-11); font-weight: 600; color: var(--primary-color); }
-  .sched-row .k-mem { color: var(--secondary-text-color); }
+  .sched-row .k-mem, .sched-row .k-ent { color: var(--secondary-text-color); }
   .sched-row .k-now { color: var(--primary-color); }
   .sched-hint { display: flex; align-items: flex-start; gap: var(--fp-sh); margin: calc(var(--fp-s2) * -1) 0 var(--fp-s3);
                 font-size: var(--f-12); color: var(--secondary-text-color); }
@@ -2184,6 +2192,9 @@ const STYLE = `
          font-variant-numeric: tabular-nums; padding: 0 var(--fp-s2); border-radius: var(--fp-field-r);
          border: 1px solid var(--divider-color); background: var(--secondary-background-color); color: var(--primary-text-color); }
   table.assign .spct { font-size: var(--f-13); color: var(--secondary-text-color); }
+  table.assign .spos-ent { flex: 1 1 220px; min-width: 200px; max-width: 320px; }
+  table.assign .spos-ent[hidden], table.assign .spos-num[hidden] { display: none; }
+  table.assign .spos-num { display: flex; align-items: center; gap: var(--fp-s1); }
   .seg.spos-seg { margin: 0 0 0 var(--fp-s1); flex: none; }
   .seg.spos-seg button { flex: none; display: flex; align-items: center; gap: var(--fp-sh); padding: 0 var(--fp-s3); white-space: nowrap; }
   .seg.spos-seg button ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; }
@@ -4686,7 +4697,13 @@ class CoverExtenderPanel extends HTMLElement {
       } else if (typeof a === "object") {
         const g = icon(a.force ? "mdi:flash" : "mdi:lock-outline", a.force ? "k-now" : "k-mem");
         g.title = a.force ? T.sched.forcePos : T.sched.keepLock;
-        act.append(el("span", "lbl", `${a.position} %`), g);
+        const lbl = el("span", "lbl", `${this._schedPosNow(a) ?? "?"} %`);
+        if (typeof a.position === "object") {
+          const src = a.position.value;
+          lbl.title = T.schedEnt(this._hass.states[src]?.attributes?.friendly_name || src);
+          act.append(icon("mdi:link-variant", "k-ent"));
+        }
+        act.append(lbl, g);
       } else {
         const dot = el("span", "dot");
         dot.style.background = this._cfg.modes.find((m) => m.name === a)?.color || "var(--secondary-text-color)";
@@ -4695,6 +4712,19 @@ class CoverExtenderPanel extends HTMLElement {
     }
     const hint = this._schedForecast(c, nextKind ? action(nextKind) : null);
     return hint ? [row, hint] : [row];
+  }
+
+  /** A schedule position as it would be applied now: the fixed value, or
+   *  the entity's state rounded (the server reads it when the schedule
+   *  runs); null when the entity does not read as 0 to 100. */
+  _schedPosNow(a) {
+    if (typeof a.position !== "object") return a.position;
+    // Number(), not parseFloat(): "12 abc" is not a number for the server either.
+    const raw = String(this._hass.states[a.position.value]?.state ?? "").trim();
+    const v = raw ? Number(raw) : NaN;
+    if (!Number.isFinite(v)) return null;
+    const r = Math.floor(v + 0.5);
+    return r >= 0 && r <= 100 ? r : null;
   }
 
   /** What the cover's state now changes at its next schedule, or null:
@@ -4718,7 +4748,7 @@ class CoverExtenderPanel extends HTMLElement {
     } else if (safety) {
       [kind, ico, text] = ["wait", "mdi:shield-alert-outline", T.fcSafety(name(safety))];
     } else if (isPos && !a.force && st[ids.lock]?.state === "on") {
-      [kind, ico, text] = ["mem", "mdi:lock-outline", T.fcMemory(a.position)];
+      [kind, ico, text] = ["mem", "mdi:lock-outline", T.fcMemory(this._schedPosNow(a) ?? "?")];
     } else if (inhib && !(isPos ? a.force : target?.priority)) {
       [kind, ico, text] = ["wait", "mdi:pause-circle-outline", T.fcInhib(name(inhib))];
     } else if (isPos && a.force && curMode?.behavior) {
@@ -5190,11 +5220,15 @@ class CoverExtenderPanel extends HTMLElement {
     const offered = (c) => Object.keys(c.modes || {}).filter((m) => !timed.has(m));
     const colorOf = (n) => this._cfg.modes.find((m) => m.name === n)?.color;
     const tbody = el("tbody");
-    // An action is a mode name, a position {position, force}, or null.
-    const POS = "\u0001position";
-    const akey = (v) => (v == null ? "" : typeof v === "object" ? `p:${v.position}:${v.force ? 1 : 0}` : `m:${v}`);
+    // An action is a mode name, a position {position, force}, or null; the
+    // position is a number, or {type: "entity", value} read when it runs.
+    const POS = "\u0001position", POS_ENT = "\u0001entity";
+    const isEnt = (v) => !!v && typeof v === "object" && typeof v.position === "object";
+    const akey = (v) => (v == null ? "" : isEnt(v) ? `e:${v.position.value}:${v.force ? 1 : 0}`
+      : typeof v === "object" ? `p:${v.position}:${v.force ? 1 : 0}` : `m:${v}`);
     // A cover with a shading or solar gain mode: a forced position may be
     // moved again by the next computation.
+    const entName = (id) => this._hass.states[id]?.attributes?.friendly_name || id || W.posEntLabel;
     const computes = (c) => Object.keys(c.modes || {})
       .some((n) => this._cfg.modes.find((m) => m.name === n)?.behavior);
     const cells = { morning: [], evening: [] };
@@ -5226,6 +5260,7 @@ class CoverExtenderPanel extends HTMLElement {
       const gp = document.createElement("optgroup");
       gp.label = W.grpPos;
       add(gp, POS, W.posOpt);
+      add(gp, POS_ENT, W.posEntOpt);
       sel.append(gp);
 
       const pos = el("div", "spos");
@@ -5235,6 +5270,21 @@ class CoverExtenderPanel extends HTMLElement {
       num.max = "100";
       num.step = "1";
       num.setAttribute("aria-label", `${W.posLabel}, ${label}`);
+      const numBox = el("span", "spos-num");
+      numBox.append(num, el("span", "spct", "%"));
+      // The entity picker of the mode positions, open to sensors too: a
+      // template sensor is the usual way to compute a position.
+      const ent = document.createElement("ha-selector");
+      ent.className = "spos-ent";
+      ent.hass = this._hass;
+      ent.selector = { entity: { domain: ["sensor", "input_number", "number"] } };
+      ent.label = W.posEntLabel;
+      ent.title = W.posEntHint;
+      ent.addEventListener("value-changed", (e) => {
+        set({ ...get(), position: { type: "entity", value: e.detail.value || "" } });
+        refreshKind(k);
+        touch();
+      });
       const seg = el("div", "seg spos-seg");
       seg.setAttribute("role", "group");
       seg.setAttribute("aria-label", `${W.lockedLabel}, ${label}`);
@@ -5253,22 +5303,25 @@ class CoverExtenderPanel extends HTMLElement {
       flag.title = W.forceComputes;
       flag.setAttribute("role", "img");
       flag.setAttribute("aria-label", W.forceComputes);
-      pos.append(num, el("span", "spct", "%"), seg, flag);
+      pos.append(numBox, ent, seg, flag);
       box.append(sel, pos);
 
       const off = !draft.enabled[k];
-      for (const c of [sel, num, bKeep, bForce]) c.disabled = off;
+      for (const c of [sel, num, bKeep, bForce, ent]) c.disabled = off;
 
       const show = () => {
         const v = get();
         const p = v && typeof v === "object" ? v : null;
-        sel.value = v === undefined ? "*" : p ? POS : v ?? "";
+        sel.value = v === undefined ? "*" : isEnt(p) ? POS_ENT : p ? POS : v ?? "";
         // The mode's own colour on the edge of the list, as on the matrix.
         sel.style.borderLeftColor = p ? "var(--secondary-text-color)" : (typeof v === "string" && colorOf(v)) || "";
         sel.classList.toggle("none", v === null);
         pos.hidden = !p;
         if (!p) return;
-        if (document.activeElement !== num) num.value = String(p.position);
+        numBox.hidden = isEnt(p);
+        ent.hidden = !isEnt(p);
+        if (isEnt(p)) ent.value = p.position.value || undefined;
+        else if (document.activeElement !== num) num.value = String(p.position);
         for (const [b, on] of [[bKeep, !p.force], [bForce, p.force]]) {
           b.classList.toggle("on", on);
           b.setAttribute("aria-pressed", String(on));
@@ -5277,8 +5330,12 @@ class CoverExtenderPanel extends HTMLElement {
       };
       sel.addEventListener("change", () => {
         const cur = get();
-        if (sel.value === POS) set(cur && typeof cur === "object" ? cur : { position: k === "morning" ? 100 : 0, force: false });
-        else set(sel.value || null);
+        const force = !!(cur && typeof cur === "object" && cur.force);
+        if (sel.value === POS) {
+          set(cur && typeof cur === "object" && !isEnt(cur) ? cur : { position: k === "morning" ? 100 : 0, force });
+        } else if (sel.value === POS_ENT) {
+          set(isEnt(cur) ? cur : { position: { type: "entity", value: "" }, force });
+        } else set(sel.value || null);
         refreshKind(k);
         touch();
       });
@@ -5303,7 +5360,8 @@ class CoverExtenderPanel extends HTMLElement {
       const by = new Map();
       for (const c of this._cfg.covers) {
         const v = draft.assign[c.entity_id][k] ?? null;
-        const label = v == null ? W.effNone : typeof v === "object" ? `${v.position} %` : v;
+        const label = v == null ? W.effNone : isEnt(v) ? entName(v.position.value)
+          : typeof v === "object" ? `${v.position} %` : v;
         by.set(label, (by.get(label) || 0) + 1);
       }
       kEffects[k].replaceChildren(...[...by].sort((x, y) => y[1] - x[1]).map(([label, n]) => {
@@ -5355,7 +5413,7 @@ class CoverExtenderPanel extends HTMLElement {
       const setAll = (v) => {
         for (const c of this._cfg.covers) {
           if (typeof v === "string" && !offered(c).includes(v)) continue;
-          draft.assign[c.entity_id][k] = v && typeof v === "object" ? { ...v } : v;
+          draft.assign[c.entity_id][k] = v && typeof v === "object" ? JSON.parse(JSON.stringify(v)) : v;
         }
       };
       allCell[k] = mkCell(k, union, `${W.kinds[k]}, ${W.allCovers}`, common, setAll,

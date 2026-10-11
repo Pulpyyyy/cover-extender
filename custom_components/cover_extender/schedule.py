@@ -95,19 +95,43 @@ def day_to_mmdd(day: int, year: int) -> str:
     return (date(year, 1, 1) + timedelta(days=day - 1)).strftime("%m-%d")
 
 
+class PositionEntityMissing(ValueError):
+    """A position read from an entity, with no entity chosen."""
+
+
+# The entities a schedule can read its position from: a number, as a sensor
+# (a template, typically), a helper or a device's setting.
+POSITION_DOMAINS = ("sensor", "input_number", "number")
+_POSITION_ENTITY = re.compile(rf"^({'|'.join(POSITION_DOMAINS)})\.[a-z0-9_]+$")
+
+
 def parse_action(value: Any) -> str | dict[str, Any] | None:
     """A cover's morning or evening action: a mode name, a position, or None.
 
-    A position is {"position": 0..100, "force": bool}: forced, it moves a
-    locked cover too; otherwise a locked cover keeps it in memory. Anything
-    else that is not a mode name reads as no action. Raises ValueError on a
-    position that cannot be read, for the panel to refuse it.
+    A position is {"position": 0..100, "force": bool}, or reads its value
+    from an entity when the schedule runs: {"position": {"type": "entity",
+    "value": "sensor.x"}, "force": bool}. Forced, it moves a locked cover
+    too; otherwise a locked cover keeps it in memory. A string alone is
+    always a mode name; anything else reads as no action. Raises ValueError
+    on a position that cannot be read, for the panel to refuse it
+    (PositionEntityMissing when the entity is left empty). The entity's
+    state is not read here: only the shape is checked.
     """
     if isinstance(value, dict):
         pos = value.get("position")
+        force = bool(value.get("force", False))
+        if isinstance(pos, dict):
+            if pos.get("type") != "entity":
+                raise ValueError(pos)
+            source = str(pos.get("value") or "").strip()
+            if not source:
+                raise PositionEntityMissing(pos)
+            if not _POSITION_ENTITY.match(source):
+                raise ValueError(source)
+            return {"position": {"type": "entity", "value": source}, "force": force}
         if isinstance(pos, bool) or not isinstance(pos, int) or not 0 <= pos <= 100:
             raise ValueError(pos)
-        return {"position": pos, "force": bool(value.get("force", False))}
+        return {"position": pos, "force": force}
     return value if isinstance(value, str) and value else None
 
 

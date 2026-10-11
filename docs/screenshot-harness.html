@@ -236,6 +236,8 @@
     }),
     cover("bathroom", facades[3].name, {
       modes: { [M.day]: f(100), [M.night]: f(0) },
+      // A morning position read from a template sensor when the schedule runs.
+      schedule: { morning: { position: ent("sensor.bathroom_morning_position"), force: false }, evening: M.night },
     }),
     // A roof window on a north roof: the sun reaches it from behind once it
     // is higher than the slope.
@@ -286,7 +288,7 @@
   }
 
   const PANEL_CFG = {
-    version: "4.0.0b7",
+    version: "4.0.0b8",
     facades, modes, templates, covers, helpers,
     day_entity: "binary_sensor.cx_day",
     global: {
@@ -389,6 +391,9 @@
   // Today's opening and closing, as binary_sensor.cx_day carries them; the
   // next change is this evening's closing.
   const at = (h, m) => { const d = new Date(); d.setHours(h, m, 0, 0); return d.toISOString(); };
+  states["sensor.bathroom_morning_position"] = {
+    state: "100", attributes: { friendly_name: FR ? "Position matin SDB" : "Bathroom morning position", unit_of_measurement: "%" },
+  };
   states["binary_sensor.cx_day"] = { state: "on", attributes: { opening: at(8, 40), closing: at(19, 28), next_change: at(19, 28) } };
   if (params.get("sun")) {
     const [azimuth, elevation] = params.get("sun").split(",").map(Number);

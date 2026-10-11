@@ -252,7 +252,7 @@ A mode only applies to the covers it is linked to (a cell in the matrix). For ea
 | Choice | Effect |
 |---|---|
 | **Fixed** | The cover goes to this position (0-100). |
-| **Entity** | The cover follows the value of an `input_number` or `number` entity, live, as long as the mode is on. |
+| **Entity** | The cover follows the value of an `input_number` or `number` entity, live, as long as the mode is on, rounded to the nearest percent. |
 | **None** | The cover does not move. If the previous mode was locked and this one is not, the memorized position is restored. |
 | **Auto** (behavior modes only) | The position is computed by the behavior. Choosing Fixed or Entity instead overrides the computation for this cover only. |
 
@@ -276,7 +276,7 @@ A *Shading* or *Solar gain* mode always locks the cover, so that its computed mo
 
 ### Schedules
 
-The **Schedules** tab holds the house's **morning opening** and **evening closing**, each switched on or off. At each, every cover applies the action chosen for it in the table below the chart: a **mode**, a **fixed position**, or *None* (the cover does nothing). The table is grouped by facade; its *All covers* row sets every cover that offers the chosen action at once, and a cover that does something different from the others is highlighted.
+The **Schedules** tab holds the house's **morning opening** and **evening closing**, each switched on or off. At each, every cover applies the action chosen for it in the table below the chart: a **mode**, a **position** (fixed, or read from an entity), or *None* (the cover does nothing). The table is grouped by facade; its *All covers* row sets every cover that offers the chosen action at once, and a cover that does something different from the others is highlighted.
 
 - A **mode** is a mode change like any other: the lock, the exclusions, the inhibitions, the timed modes and [who replaces whom](#who-replaces-whom) apply.
 - A **position** (0 to 100 %) moves the cover without changing its mode. It either:
@@ -284,6 +284,17 @@ The **Schedules** tab holds the house's **morning opening** and **evening closin
   - or **forces** it: the cover moves at once, even locked, and passes the inhibitions. The mode and the lock stay; the memory takes the position too, so leaving the locked mode does not undo it. On a cover in a shading or solar gain mode, the next computation can move it again (the panel flags it); for a state that lasts the evening, a mode is the better tool.
 
   An open window (a safety exclusion) holds both back: the position is applied when it closes.
+
+- A **position read from an entity** works the same way, with its value read once, when the schedule runs: the state of a `sensor`, `input_number` or `number` entity, rounded to the nearest percent. It is not followed afterwards (that is what a mode with an *Entity* position does). If the entity is missing, `unknown`, `unavailable`, not a number or outside 0 to 100, that cover does nothing this time and the log says why; the other covers run as usual. A template sensor turns a condition into a position. For example, open in the morning only when the garden is at 15 °C or more, and stay closed otherwise:
+
+```yaml
+template:
+  - sensor:
+      - name: Position matin amis
+        unique_id: position_matin_amis
+        unit_of_measurement: "%"
+        state: "{{ 0 if states('sensor.global_jardin_temperature') | float(15) < 15 else 100 }}"
+```
 
 Each time follows the sun over the year, within bounds you set:
 

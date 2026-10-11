@@ -30,11 +30,14 @@ def test_resolve_mode_position_none(hass):
 
 def test_resolve_mode_position_numeric(hass):
     assert resolve_mode_position(hass, 42) == 42
-    assert resolve_mode_position(hass, 42.7) == 42
+    assert resolve_mode_position(hass, 42.7) == 43
 
 
 def test_resolve_mode_position_entity(hass):
+    # Rounded to the nearest percent, halves up, like a scheduled position.
     hass.states.set("input_number.pos", "37.5")
+    assert resolve_mode_position(hass, "input_number.pos") == 38
+    hass.states.set("input_number.pos", "37.4")
     assert resolve_mode_position(hass, "input_number.pos") == 37
 
 

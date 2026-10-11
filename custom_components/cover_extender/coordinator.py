@@ -78,6 +78,7 @@ from .const import (
 from .helpers import (
     build_extra_attrs,
     effective_behavior,
+    read_position_entity,
     resolve_helper_entity,
     resolve_mode_position,
     resolve_request,
@@ -624,7 +625,9 @@ class CoverExtenderCoordinator:
 
         A position respects the lock (a locked cover keeps it in memory for
         when it leaves the mode) unless it is forced: then it moves a locked
-        cover and passes the inhibitions, never the safety exclusions.
+        cover and passes the inhibitions, never the safety exclusions. A
+        position read from an entity is read now, once; an entity that
+        cannot be read leaves that cover alone.
         """
         self._schedule_last[kind] = day.isoformat()
         self._schedule_store.async_delay_save(lambda: dict(self._schedule_last), _MEMORY_SAVE_DELAY)
@@ -633,15 +636,34 @@ class CoverExtenderCoordinator:
             if not action:
                 continue
             if isinstance(action, dict):
+                position = self._schedule_position(kind, entity_id, action["position"])
+                if position is None:
+                    continue
                 force = bool(action.get("force", False))
-                _LOGGER.debug("schedule %s: %s → %s%%%s", kind, entity_id, action["position"],
+                _LOGGER.debug("schedule %s: %s → %s%%%s", kind, entity_id, position,
                               " (forced)" if force else "")
                 await self._set_cover_position_impl(
-                    [entity_id], int(action["position"]), force=force, past_lock=force
+                    [entity_id], position, force=force, past_lock=force
                 )
                 continue
             reason = await self.async_request_mode(entity_id, action)
             _LOGGER.debug("schedule %s: %s → %s%s", kind, entity_id, action, f" ({reason})" if reason else "")
+
+    def _schedule_position(self, kind: str, entity_id: str, position: Any) -> int | None:
+        """A schedule's position for *entity_id*: the fixed value, or the
+        state of its entity read now, rounded; None, with a warning, when the
+        entity is missing or does not read as a number from 0 to 100."""
+        if not isinstance(position, dict):
+            return int(position)
+        source = position.get("value")
+        value, state = read_position_entity(self.hass, source)
+        if value is None or not 0 <= value <= 100:
+            _LOGGER.warning(
+                "schedule %s: %s not moved, its position entity %s %s (expected a number from 0 to 100)",
+                kind, entity_id, source, "does not exist" if state is None else f"reads {state!r}",
+            )
+            return None
+        return value
 
     def schedule_preview(self, kind: str, cfg: dict[str, Any]) -> dict[str, Any]:
         """The curve the panel draws: the year's points, the sun, and what was

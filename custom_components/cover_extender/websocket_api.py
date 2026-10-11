@@ -55,6 +55,7 @@ from .helpers import resolve_helper_entity
 from .schedule import (
     DEFAULTS as SCHEDULE_DEFAULTS,
     KINDS as SCHEDULE_KINDS,
+    PositionEntityMissing,
     parse_action as parse_schedule_action,
     sun_ref,
     validate_settings as validate_schedule,
@@ -821,8 +822,8 @@ def _timed_mode_names(hass: HomeAssistant, items: list[dict[str, Any]] | None = 
 
 
 def _validate_cover_schedule(hass: HomeAssistant, item: dict[str, Any], entity_id: str) -> str | None:
-    """A cover's morning / evening action: a position from 0 to 100, or a
-    mode linked to it and without a duration.
+    """A cover's morning / evening action: a position from 0 to 100 or read
+    from an entity, or a mode linked to it and without a duration.
 
     A mode unlinked from the cover in the matrix is dropped from its schedule
     rather than refused: the unlink is what the user asked for, and a schedule
@@ -835,6 +836,8 @@ def _validate_cover_schedule(hass: HomeAssistant, item: dict[str, Any], entity_i
     for kind in SCHEDULE_KINDS:
         try:
             mode = parse_schedule_action(sched.get(kind))
+        except PositionEntityMissing:
+            return f"schedule_entity_required:{entity_id}"
         except ValueError:
             return f"schedule_position_invalid:{entity_id}"
         if isinstance(mode, dict):

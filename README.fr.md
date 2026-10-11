@@ -233,7 +233,7 @@ Un mode ne s'applique qu'aux volets auxquels il est lié (une cellule de la matr
 | Choix | Effet |
 |---|---|
 | **Fixe** | Le volet va à cette position (0-100). |
-| **Entité** | Le volet suit la valeur d'une entité `input_number` ou `number`, en direct, tant que le mode est actif. |
+| **Entité** | Le volet suit la valeur d'une entité `input_number` ou `number`, en direct, tant que le mode est actif, arrondie au pourcent le plus proche. |
 | **Aucune** | Le volet ne bouge pas. Si le mode précédent était verrouillé et pas celui-ci, la position mémorisée est restaurée. |
 | **Auto** (modes à comportement) | La position est calculée. Choisir Fixe ou Entité à la place surcharge le calcul pour ce volet seulement. |
 
@@ -257,7 +257,7 @@ Un mode *Ombrage* ou *Héliotropie* verrouille toujours le volet, pour que ses m
 
 ### Horaires
 
-L'onglet **Horaires** contient l'**ouverture du matin** et la **fermeture du soir** de la maison, chacune activable. À chacune, chaque volet applique l'action choisie pour lui dans le tableau sous le graphique : un **mode**, une **position fixe**, ou *Aucune* (le volet ne fait rien). Le tableau est groupé par façade ; sa ligne *Tous les volets* règle d'un coup tous les volets qui proposent l'action choisie, et un volet qui fait autre chose que les autres est mis en évidence.
+L'onglet **Horaires** contient l'**ouverture du matin** et la **fermeture du soir** de la maison, chacune activable. À chacune, chaque volet applique l'action choisie pour lui dans le tableau sous le graphique : un **mode**, une **position** (fixe, ou lue sur une entité), ou *Aucune* (le volet ne fait rien). Le tableau est groupé par façade ; sa ligne *Tous les volets* règle d'un coup tous les volets qui proposent l'action choisie, et un volet qui fait autre chose que les autres est mis en évidence.
 
 - Un **mode** est un changement de mode comme un autre : le verrou, les exclusions, les inhibitions, les modes minutés et [qui remplace qui](#qui-remplace-qui) s'appliquent.
 - Une **position** (0 à 100 %) déplace le volet sans changer son mode. Au choix, elle :
@@ -265,6 +265,17 @@ L'onglet **Horaires** contient l'**ouverture du matin** et la **fermeture du soi
   - ou **force** : le volet bouge tout de suite, même verrouillé, et passe outre les inhibitions. Le mode et le verrou restent ; la mémoire prend aussi la position, pour que la sortie du mode verrouillé ne l'annule pas. Sur un volet en mode ombrage ou héliotropie, le calcul suivant peut le rebouger (le panneau le signale) ; pour un état qui dure toute la soirée, un mode reste le bon outil.
 
   Une fenêtre ouverte (exclusion de sécurité) retient les deux : la position est appliquée à sa fermeture.
+
+- Une **position lue sur une entité** fonctionne de la même façon, avec une valeur lue une seule fois, quand l'horaire s'exécute : l'état d'une entité `sensor`, `input_number` ou `number`, arrondi au pourcent le plus proche. Elle n'est pas suivie ensuite (c'est le rôle d'un mode à position *Entité*). Si l'entité est absente, `unknown`, `unavailable`, pas un nombre ou hors de 0 à 100, ce volet ne fait rien cette fois et le journal dit pourquoi ; les autres volets s'exécutent normalement. Un capteur template transforme une condition en position. Par exemple, ouvrir le matin seulement si le jardin est à 15 °C ou plus, et rester fermé sinon :
+
+```yaml
+template:
+  - sensor:
+      - name: Position matin amis
+        unique_id: position_matin_amis
+        unit_of_measurement: "%"
+        state: "{{ 0 if states('sensor.global_jardin_temperature') | float(15) < 15 else 100 }}"
+```
 
 Chaque heure suit le soleil sur l'année, dans des bornes que vous fixez :
 

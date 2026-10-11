@@ -206,6 +206,15 @@ def test_defaults_are_valid_and_build_a_curve(kind):
     (None, None),
     ({"position": 0}, {"position": 0, "force": False}),
     ({"position": 100, "force": True}, {"position": 100, "force": True}),
+    # A position read from an entity when the schedule runs.
+    ({"position": {"type": "entity", "value": "sensor.position_matin_amis"}},
+     {"position": {"type": "entity", "value": "sensor.position_matin_amis"}, "force": False}),
+    ({"position": {"type": "entity", "value": " input_number.pos "}, "force": True},
+     {"position": {"type": "entity", "value": "input_number.pos"}, "force": True}),
+    ({"position": {"type": "entity", "value": "number.velux_level"}},
+     {"position": {"type": "entity", "value": "number.velux_level"}, "force": False}),
+    # A string alone stays a mode name, even one that looks like an entity.
+    ("sensor.position_matin_amis", "sensor.position_matin_amis"),
 ])
 def test_parse_action(value, expected):
     assert sch.parse_action(value) == expected
@@ -215,3 +224,20 @@ def test_parse_action(value, expected):
 def test_parse_action_refuses_a_position_it_cannot_read(position):
     with pytest.raises(ValueError):
         sch.parse_action({"position": position})
+
+
+@pytest.mark.parametrize("position", [
+    {"type": "entity", "value": "light.kitchen"},      # not a number entity
+    {"type": "entity", "value": "sensor"},             # not an entity id
+    {"type": "fixed", "value": 40},                    # only the entity form is an object
+    {"value": "sensor.x"},
+])
+def test_parse_action_refuses_an_entity_position_it_cannot_read(position):
+    with pytest.raises(ValueError):
+        sch.parse_action({"position": position})
+
+
+@pytest.mark.parametrize("value", ["", "  ", None])
+def test_parse_action_wants_the_entity(value):
+    with pytest.raises(sch.PositionEntityMissing):
+        sch.parse_action({"position": {"type": "entity", "value": value}})
