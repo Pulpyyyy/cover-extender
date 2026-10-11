@@ -12,6 +12,8 @@
   edit: cover:N | mode:N | facade:N | template:N opens that editor (facades and templates: tab=maison).
   sun: puts the sun there (sun.sun), for the sketches of the cover editor.
   kind: morning | evening, the schedule the Schedules tab opens on.
+  pop=schedent (tab=horaires): opens the entity picker of a scheduled position.
+  next=morning: the morning opening is the next schedule (default: the evening closing).
   schedsun: horizon | civil | nautical | astronomical, the sun event both schedules follow.
   The title turns to "READY <page height>" once drawn, or "JSERROR: ..." on an error.
 -->
@@ -245,6 +247,8 @@
       shade_enable: true, angle_left: 180, angle_right: 180,
       shade_distance: 0.5, shade_max_height: 1.4,
       modes: { [M.day]: f(100), [M.night]: f(0), [M.shade]: A },
+      // Its morning position entity is unavailable: the panel says so in red.
+      schedule: { morning: { position: ent("sensor.attic_morning_position"), force: false }, evening: M.night },
     }),
   ];
 
@@ -394,7 +398,12 @@
   states["sensor.bathroom_morning_position"] = {
     state: "100", attributes: { friendly_name: FR ? "Position matin SDB" : "Bathroom morning position", unit_of_measurement: "%" },
   };
-  states["binary_sensor.cx_day"] = { state: "on", attributes: { opening: at(8, 40), closing: at(19, 28), next_change: at(19, 28) } };
+  states["sensor.attic_morning_position"] = {
+    state: "unavailable", attributes: { friendly_name: FR ? "Position matin combles" : "Attic morning position" },
+  };
+  // ?next=morning: the opening comes next (the cover cards then tell what it will do).
+  states["binary_sensor.cx_day"] = { state: "on", attributes: {
+    opening: at(8, 40), closing: at(19, 28), next_change: params.get("next") === "morning" ? at(8, 40) : at(19, 28) } };
   if (params.get("sun")) {
     const [azimuth, elevation] = params.get("sun").split(",").map(Number);
     states["sun.sun"] = { state: elevation > 0 ? "above_horizon" : "below_horizon", attributes: { azimuth, elevation } };
@@ -450,6 +459,12 @@
     // ?pop=auto : open it on a computed Shade cell (default "Auto" choice).
     const pop = params.get("pop");
     if (!pop) { ready(); return; }
+    // ?pop=schedent (with tab=horaires): open the picker of the first
+    // scheduled position read from an entity.
+    if (pop === "schedent") {
+      until(() => panel.shadowRoot.querySelector(".schip:not([hidden])"), (chip) => { chip.click(); ready(); });
+      return;
+    }
     const coverIdx = pop === "override" ? 2 : 0;   // office : living_room
     const modeIdx = 2;                             // the Shade column
     until(() => {

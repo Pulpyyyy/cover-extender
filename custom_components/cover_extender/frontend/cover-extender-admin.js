@@ -149,8 +149,15 @@ const WORDS = {
       perCoverSub: "“None”: the cover does not follow this schedule. A mode applies as a grouped mode change; only the modes linked to the cover and without a duration are offered. A position moves the cover without changing its mode.",
       cover: "Cover", noneOpt: "None",
       grpMode: "Mode", grpPos: "Position", posOpt: "Fixed position…", posLabel: "Position in %",
-      posEntOpt: "Position from an entity…", posEntLabel: "Position entity",
-      posEntHint: "Read once, when the schedule runs: a number from 0 to 100 (a template sensor, a helper). If it cannot be read, the cover does not move.",
+      posEntOpt: "Entity…", posEntPick: "Choose an entity",
+      posEntHint: "Read once, at the schedule time, then applied like a fixed position. A number from 0 to 100; otherwise the cover does not move and the log says why.",
+      entField: "Entity (sensor, input_number or number)",
+      entPopTitle: (what) => `Position entity · ${what}`,
+      entNow: "now", entBad: "unreadable now", entMissing: "missing",
+      entChange: (name, state) => `Change the entity, ${name}, ${state}`,
+      entTip: (t) => `Read once ${t ? `at ${t}` : "at the schedule time"}, then applied like a fixed position.`,
+      entBadTip: (raw, t) => `Value read: ${raw}. If it is still so ${t ? `at ${t}` : "at the schedule time"}, this cover will not move; the other covers run as usual.`,
+      effEnt: (name, v) => `${name}, now ${v} %`, effEntBad: (name) => `${name}, unreadable now`,
       lockedLabel: "If the cover is locked",
       keepLock: "Respects the lock", forcePos: "Force",
       keepLockHint: "Free cover: it moves. Locked cover: it does not move; the position goes to memory and the cover takes it when it leaves the locked mode.",
@@ -277,6 +284,9 @@ const WORDS = {
     statusLocked: (p) => (p == null ? "locked" : `locked, ${p} % remembered`),
     schedNext: "next", schedTomorrow: (t) => `tomorrow ${t}`, schedNone: "nothing",
     schedEnt: (name) => `Position read from ${name} when the schedule runs`,
+    schedBad: "unreadable",
+    fcEnt: (name, t, v) => `Read from ${name} ${t ? `at ${t}` : "at the schedule time"}, now ${v} %.`,
+    fcEntBad: (name, raw, t) => `${name} is unreadable (${raw}): the cover will not move if it is still so ${t ? `at ${t}` : "at the schedule time"}.`,
     schedTitle: "Schedules", schedEdit: "Change",
     coverModesTitle: "Modes of this cover", seeMatrix: "See the matrix",
     addPicture: "Add a picture",
@@ -589,8 +599,15 @@ const WORDS = {
       perCoverSub: "« Aucune » : le volet ne suit pas cet horaire. Un mode s'applique comme un changement de mode groupé ; seuls les modes liés au volet et sans durée sont proposés. Une position déplace le volet sans changer son mode.",
       cover: "Volet", noneOpt: "Aucune",
       grpMode: "Mode", grpPos: "Position", posOpt: "Position fixe…", posLabel: "Position en %",
-      posEntOpt: "Position lue sur une entité…", posEntLabel: "Entité de position",
-      posEntHint: "Lue une fois, quand l'horaire s'exécute : un nombre de 0 à 100 (un capteur template, une entrée). Si elle est illisible, le volet ne bouge pas.",
+      posEntOpt: "Entité…", posEntPick: "Choisir une entité",
+      posEntHint: "Lue une seule fois, à l'heure de l'horaire, puis appliquée comme une position fixe. Un nombre de 0 à 100 ; sinon le volet ne bouge pas et le journal le signale.",
+      entField: "Entité (sensor, input_number ou number)",
+      entPopTitle: (what) => `Entité de position · ${what}`,
+      entNow: "actuellement", entBad: "illisible actuellement", entMissing: "absente",
+      entChange: (name, state) => `Changer l'entité, ${name}, ${state}`,
+      entTip: (t) => `Lue une seule fois ${t ? `à ${t}` : "à l'heure de l'horaire"}, puis appliquée comme une position fixe.`,
+      entBadTip: (raw, t) => `Valeur lue : ${raw}. Si c'est encore le cas ${t ? `à ${t}` : "à l'heure de l'horaire"}, ce volet ne bougera pas ; les autres volets s'exécutent normalement.`,
+      effEnt: (name, v) => `${name}, actuellement ${v} %`, effEntBad: (name) => `${name}, illisible actuellement`,
       lockedLabel: "Si le volet est verrouillé",
       keepLock: "Respecte le verrou", forcePos: "Force",
       keepLockHint: "Volet libre : il bouge. Volet verrouillé : il ne bouge pas, la position part en mémoire et il la prend en quittant le mode verrouillé.",
@@ -713,6 +730,9 @@ const WORDS = {
     statusLocked: (p) => (p == null ? "verrouillé" : `verrouillé, ${p} % mémorisé`),
     schedNext: "prochain", schedTomorrow: (t) => `demain ${t}`, schedNone: "rien",
     schedEnt: (name) => `Position lue sur ${name} quand l'horaire s'exécute`,
+    schedBad: "illisible",
+    fcEnt: (name, t, v) => `Lue sur ${name} ${t ? `à ${t}` : "à l'heure de l'horaire"}, actuellement ${v} %.`,
+    fcEntBad: (name, raw, t) => `${name} est illisible (${raw}) : le volet ne bougera pas si c'est encore le cas ${t ? `à ${t}` : "à l'heure de l'horaire"}.`,
     schedTitle: "Horaires", schedEdit: "Modifier",
     coverModesTitle: "Modes de ce volet", seeMatrix: "Voir la matrice",
     addPicture: "Ajouter une image",
@@ -1617,12 +1637,14 @@ const STYLE = `
   .sched-row .next .t { color: var(--primary-color); }
   .sched-row .tag { font-size: var(--f-11); font-weight: 600; color: var(--primary-color); }
   .sched-row .k-mem, .sched-row .k-ent { color: var(--secondary-text-color); }
+  .sched-row .k-bad, .sched-row .lbl.bad { color: var(--fp-bad); }
   .sched-row .k-now { color: var(--primary-color); }
   .sched-hint { display: flex; align-items: flex-start; gap: var(--fp-sh); margin: calc(var(--fp-s2) * -1) 0 var(--fp-s3);
                 font-size: var(--f-12); color: var(--secondary-text-color); }
   .sched-hint ha-icon { --mdc-icon-size: 14px; width: 14px; height: 14px; flex: none; margin-top: 1px; }
   .sched-hint.mem ha-icon { color: var(--primary-color); }
   .sched-hint.warn { color: var(--fp-warn); }
+  .sched-hint.bad { color: var(--fp-bad); }
   .ed-sched .sched-hint { margin-bottom: 0; }
   .chip.safety { color: var(--fp-bad); border-color: color-mix(in srgb, var(--fp-bad) 45%, transparent); }
   .chip.inhib { color: var(--fp-warn); border-color: color-mix(in srgb, var(--fp-warn) 45%, transparent); }
@@ -2192,8 +2214,33 @@ const STYLE = `
          font-variant-numeric: tabular-nums; padding: 0 var(--fp-s2); border-radius: var(--fp-field-r);
          border: 1px solid var(--divider-color); background: var(--secondary-background-color); color: var(--primary-text-color); }
   table.assign .spct { font-size: var(--f-13); color: var(--secondary-text-color); }
-  table.assign .spos-ent { flex: 1 1 220px; min-width: 200px; max-width: 320px; }
-  table.assign .spos-ent[hidden], table.assign .spos-num[hidden] { display: none; }
+  table.assign .spos-num[hidden], table.assign .schip[hidden] { display: none; }
+  /* A position read from an entity: a button that names it, says what it
+     reads now, and opens the picker. Red when it cannot be read. */
+  .schip { display: inline-flex; align-items: center; gap: var(--fp-s2); height: 34px; max-width: 400px; min-width: 0;
+           box-sizing: border-box; padding: 0 var(--fp-s2) 0 var(--fp-s3); border-radius: 17px; font: inherit;
+           font-size: var(--f-13); color: var(--primary-text-color); cursor: pointer;
+           border: 1px solid color-mix(in srgb, var(--primary-color) 45%, transparent);
+           background: color-mix(in srgb, var(--primary-color) 12%, transparent); }
+  .schip ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; flex: none; color: var(--primary-color); }
+  .schip .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .schip .now { color: var(--secondary-text-color); white-space: nowrap; }
+  .schip .now b { color: var(--primary-text-color); font-variant-numeric: tabular-nums; }
+  .schip .ed { display: flex; padding-left: var(--fp-s2); border-left: 1px solid var(--divider-color); }
+  .schip .ed ha-icon { --mdc-icon-size: 14px; width: 14px; height: 14px; color: var(--secondary-text-color); }
+  .schip.bad { border-color: color-mix(in srgb, var(--fp-bad) 55%, transparent);
+               background: color-mix(in srgb, var(--fp-bad) 12%, transparent); }
+  .schip.bad ha-icon, .schip.bad .now { color: var(--fp-bad); }
+  .schip.empty .nm { color: var(--secondary-text-color); font-style: italic; }
+  .schip:focus-visible { outline: var(--fp-focus); outline-offset: var(--fp-focus-off); }
+  .schip:disabled { opacity: .45; cursor: default; }
+  .pop .sent-now { display: flex; justify-content: space-between; gap: var(--fp-s2); flex-wrap: wrap;
+                   font-size: var(--f-12); color: var(--secondary-text-color); margin: var(--fp-s2) 0 var(--fp-s3); }
+  .pop .sent-now b { color: var(--primary-text-color); }
+  .pop .sent-now.bad { color: var(--fp-bad); }
+  .sk-eff .eff-bad { color: var(--fp-bad); }
+  .sk-eff ha-icon { --mdc-icon-size: 14px; width: 14px; height: 14px; color: var(--primary-color); }
+  .sk-eff .eff-bad ha-icon { color: var(--fp-bad); }
   table.assign .spos-num { display: flex; align-items: center; gap: var(--fp-s1); }
   .seg.spos-seg { margin: 0 0 0 var(--fp-s1); flex: none; }
   .seg.spos-seg button { flex: none; display: flex; align-items: center; gap: var(--fp-sh); padding: 0 var(--fp-s3); white-space: nowrap; }
@@ -2417,6 +2464,17 @@ class CoverExtenderPanel extends HTMLElement {
     if (this._tab === "volets" && !this._edit && this._state === "ready") {
       const sig = this._statusSignature();
       if (sig !== this._statusSig) { this._statusSig = sig; this._render(); }
+    }
+    // The Schedules tab shows what each position entity reads now: repaint
+    // its cells when one of those states changed, without a full render
+    // (that would drop a value being typed).
+    if (this._tab === "horaires" && this._schedLive && this._schedDraft) {
+      const ids = new Set();
+      for (const a of Object.values(this._schedDraft.assign)) {
+        for (const v of Object.values(a)) if (v && typeof v.position === "object") ids.add(v.position.value);
+      }
+      const sig = [...ids].map((id) => `${id}=${hass.states[id]?.state}`).join("|");
+      if (sig !== this._schedEntSig) { this._schedEntSig = sig; this._schedLive(); }
     }
   }
   get hass() { return this._hass; }
@@ -2995,10 +3053,16 @@ class CoverExtenderPanel extends HTMLElement {
     actions.append(cancel, save);
     pop.append(actions);
 
+    this._mountPopover(anchor, backdrop, pop);
+  }
+
+  /** Show *pop* by *anchor* (this._pop holds its state): on the shadow root,
+   *  re-anchored on scroll and resize, Tab kept inside, Escape closes. */
+  _mountPopover(anchor, backdrop, pop) {
     // Mounted on the shadow root, NOT in .m-scroll: a fixed-position overlay
     // cannot be clipped by the matrix box nor extend its scrollable area.
-    state.anchorEl = anchor;
-    state.popEl = pop;
+    this._pop.anchorEl = anchor;
+    this._pop.popEl = pop;
     this.shadowRoot.append(backdrop, pop);
     this._anchorPopover();
 
@@ -4697,11 +4761,11 @@ class CoverExtenderPanel extends HTMLElement {
       } else if (typeof a === "object") {
         const g = icon(a.force ? "mdi:flash" : "mdi:lock-outline", a.force ? "k-now" : "k-mem");
         g.title = a.force ? T.sched.forcePos : T.sched.keepLock;
-        const lbl = el("span", "lbl", `${this._schedPosNow(a) ?? "?"} %`);
+        const v = this._schedPosNow(a);
+        const lbl = el("span", `lbl${v == null ? " bad" : ""}`, v == null ? T.schedBad : `${v} %`);
         if (typeof a.position === "object") {
-          const src = a.position.value;
-          lbl.title = T.schedEnt(this._hass.states[src]?.attributes?.friendly_name || src);
-          act.append(icon("mdi:link-variant", "k-ent"));
+          lbl.title = T.schedEnt(this._schedEntNow(a.position.value).name);
+          act.append(icon(v == null ? "mdi:alert-outline" : "mdi:link-variant", v == null ? "k-bad" : "k-ent"));
         }
         act.append(lbl, g);
       } else {
@@ -4710,8 +4774,70 @@ class CoverExtenderPanel extends HTMLElement {
         act.append(dot, el("span", "lbl", a));
       }
     }
-    const hint = this._schedForecast(c, nextKind ? action(nextKind) : null);
+    const hint = this._schedForecast(c, nextKind ? action(nextKind) : null, next ? hm(next) : null);
     return hint ? [row, hint] : [row];
+  }
+
+  /** The entity a scheduled position reads, as it reads now: its name, the
+   *  value it would give (0 to 100, or null) and its raw state (undefined
+   *  when the entity does not exist). */
+  _schedEntNow(id) {
+    const st = this._hass.states[id];
+    return {
+      name: st?.attributes?.friendly_name || id,
+      raw: st?.state,
+      value: id ? this._schedPosNow({ position: { type: "entity", value: id } }) : null,
+    };
+  }
+
+  /** The picker of a scheduled position's entity, in a popover by *anchor*.
+   *  *onApply* gets the entity id chosen. */
+  async _openSchedEntity(anchor, what, current, onApply) {
+    this._closePopover();
+    const W = T.sched;
+    const state = { entity: current || null, anchorEl: null, popEl: null };
+    this._pop = state;
+    const backdrop = el("div", "backdrop");
+    backdrop.addEventListener("click", () => this._closePopover());
+    const pop = el("div", "pop");
+    pop.setAttribute("role", "dialog");
+    pop.setAttribute("aria-modal", "true");
+    pop.setAttribute("aria-label", W.entPopTitle(what));
+    pop.append(el("h4", "", W.entPopTitle(what)), el("p", "sub", W.entField));
+    const sel = document.createElement("ha-selector");
+    sel.hass = this._hass;
+    sel.selector = { entity: { domain: ["sensor", "input_number", "number"] } };
+    sel.value = state.entity || undefined;
+    const now = el("div", "sent-now");
+    const apply = el("button", "btn primary", W.editApply);
+    const paint = () => {
+      apply.disabled = !state.entity;
+      if (!state.entity) { now.replaceChildren(); return; }
+      const e = this._schedEntNow(state.entity);
+      const value = el("span");
+      if (e.value == null) value.textContent = `${W.entBad} (${e.raw ?? W.entMissing})`;
+      else value.append(document.createTextNode(`${W.entNow} `), el("b", "", `${e.value} %`));
+      now.className = `sent-now${e.value == null ? " bad" : ""}`;
+      now.replaceChildren(el("span", "", state.entity), value);
+    };
+    sel.addEventListener("value-changed", (e) => {
+      state.entity = e.detail.value || null;
+      paint();
+      this._anchorPopover();
+    });
+    paint();
+    const actions = el("div", "actions");
+    const cancel = el("button", "btn ghost", T.cancel);
+    cancel.addEventListener("click", () => this._closePopover());
+    apply.addEventListener("click", () => {
+      if (!state.entity) return;
+      this._closePopover();
+      onApply(state.entity);
+    });
+    actions.append(el("span", "spacer"), cancel, apply);
+    pop.append(sel, now, el("p", "hint", W.posEntHint), actions);
+    await loadHaForm();
+    this._mountPopover(anchor, backdrop, pop);
   }
 
   /** A schedule position as it would be applied now: the fixed value, or
@@ -4730,8 +4856,20 @@ class CoverExtenderPanel extends HTMLElement {
   /** What the cover's state now changes at its next schedule, or null:
    *  the same rules as the server (see async_request_mode and
    *  _set_cover_position_impl), read from the live states. */
-  _schedForecast(c, a) {
+  _schedForecast(c, a, at = null) {
     if (a == null) return null;
+    const hint = (kind, ico, text) => {
+      const p = el("p", `sched-hint ${kind}`);
+      p.append(icon(ico), el("span", "", text));
+      return p;
+    };
+    // A position read from an entity: an entity that cannot be read comes
+    // first (the cover will not move), what it reads now comes last.
+    const ent = a && typeof a === "object" && typeof a.position === "object"
+      ? this._schedEntNow(a.position.value) : null;
+    if (ent && ent.value == null) {
+      return hint("bad", "mdi:alert-outline", T.fcEntBad(ent.name, ent.raw ?? T.sched.entMissing, at));
+    }
     const st = this._hass.states;
     const ids = this._cfg.helpers?.[c.entity_id] || {};
     const cur = st[ids.select]?.state;
@@ -4753,6 +4891,8 @@ class CoverExtenderPanel extends HTMLElement {
       [kind, ico, text] = ["wait", "mdi:pause-circle-outline", T.fcInhib(name(inhib))];
     } else if (isPos && a.force && curMode?.behavior) {
       [kind, ico, text] = ["warn", "mdi:alert-outline", T.fcRecompute];
+    } else if (ent) {
+      [kind, ico, text] = ["read", "mdi:clock-outline", T.fcEnt(ent.name, at, ent.value)];
     } else {
       return null;
     }
@@ -5228,7 +5368,8 @@ class CoverExtenderPanel extends HTMLElement {
       : typeof v === "object" ? `p:${v.position}:${v.force ? 1 : 0}` : `m:${v}`);
     // A cover with a shading or solar gain mode: a forced position may be
     // moved again by the next computation.
-    const entName = (id) => this._hass.states[id]?.attributes?.friendly_name || id || W.posEntLabel;
+    // Today's time of schedule *k*, for the entity hints; null before the preview.
+    const timeOf = (k) => { const p2 = this._schedPv?.[k]; return p2?.points ? hmFmt(p2.points[p2.today - 1]) : null; };
     const computes = (c) => Object.keys(c.modes || {})
       .some((n) => this._cfg.modes.find((m) => m.name === n)?.behavior);
     const cells = { morning: [], evening: [] };
@@ -5272,18 +5413,25 @@ class CoverExtenderPanel extends HTMLElement {
       num.setAttribute("aria-label", `${W.posLabel}, ${label}`);
       const numBox = el("span", "spos-num");
       numBox.append(num, el("span", "spct", "%"));
-      // The entity picker of the mode positions, open to sensors too: a
-      // template sensor is the usual way to compute a position.
-      const ent = document.createElement("ha-selector");
-      ent.className = "spos-ent";
-      ent.hass = this._hass;
-      ent.selector = { entity: { domain: ["sensor", "input_number", "number"] } };
-      ent.label = W.posEntLabel;
-      ent.title = W.posEntHint;
-      ent.addEventListener("value-changed", (e) => {
-        set({ ...get(), position: { type: "entity", value: e.detail.value || "" } });
-        refreshKind(k);
-        touch();
+      // A position read from an entity: a button that names the entity and
+      // what it reads now, and opens its picker (sensors too: a template
+      // sensor is the usual way to compute a position).
+      const ent = el("button", "schip");
+      ent.type = "button";
+      ent.hidden = true;
+      const entIco = icon("mdi:link-variant");
+      const entName = el("span", "nm");
+      const entNow = el("span", "now");
+      const entEd = el("span", "ed");
+      entEd.append(icon("mdi:pencil"));
+      ent.append(entIco, entName, entNow, entEd);
+      ent.addEventListener("click", () => {
+        const cur = get();
+        this._openSchedEntity(ent, label, isEnt(cur) ? cur.position.value : null, (id) => {
+          set({ ...get(), position: { type: "entity", value: id } });
+          refreshKind(k);
+          touch();
+        });
       });
       const seg = el("div", "seg spos-seg");
       seg.setAttribute("role", "group");
@@ -5320,8 +5468,21 @@ class CoverExtenderPanel extends HTMLElement {
         if (!p) return;
         numBox.hidden = isEnt(p);
         ent.hidden = !isEnt(p);
-        if (isEnt(p)) ent.value = p.position.value || undefined;
-        else if (document.activeElement !== num) num.value = String(p.position);
+        if (isEnt(p)) {
+          const id = p.position.value;
+          const e = this._schedEntNow(id);
+          const bad = !!id && e.value == null;
+          ent.classList.toggle("bad", bad);
+          ent.classList.toggle("empty", !id);
+          entIco.setAttribute("icon", bad ? "mdi:alert-outline" : "mdi:link-variant");
+          entName.textContent = id ? e.name : W.posEntPick;
+          if (!id) entNow.replaceChildren();
+          else if (bad) entNow.replaceChildren(document.createTextNode(W.entBad));
+          else entNow.replaceChildren(document.createTextNode(`${W.entNow} `), el("b", "", `${e.value} %`));
+          ent.title = !id ? W.posEntHint : bad ? W.entBadTip(e.raw ?? W.entMissing, timeOf(k)) : W.entTip(timeOf(k));
+          ent.setAttribute("aria-label", W.entChange(id ? e.name : W.posEntPick,
+            !id ? "" : bad ? W.entBad : `${W.entNow} ${e.value} %`));
+        } else if (document.activeElement !== num) num.value = String(p.position);
         for (const [b, on] of [[bKeep, !p.force], [bForce, p.force]]) {
           b.classList.toggle("on", on);
           b.setAttribute("aria-pressed", String(on));
@@ -5360,12 +5521,19 @@ class CoverExtenderPanel extends HTMLElement {
       const by = new Map();
       for (const c of this._cfg.covers) {
         const v = draft.assign[c.entity_id][k] ?? null;
-        const label = v == null ? W.effNone : isEnt(v) ? entName(v.position.value)
-          : typeof v === "object" ? `${v.position} %` : v;
-        by.set(label, (by.get(label) || 0) + 1);
+        let label = v == null ? W.effNone : typeof v === "object" ? `${v.position} %` : v, sort = "";
+        if (isEnt(v)) {
+          const e = this._schedEntNow(v.position.value);
+          sort = e.value == null ? "bad" : "ent";
+          label = !v.position.value ? W.posEntPick : e.value == null ? W.effEntBad(e.name) : W.effEnt(e.name, e.value);
+        }
+        const cur = by.get(label) || { n: 0, sort };
+        cur.n++;
+        by.set(label, cur);
       }
-      kEffects[k].replaceChildren(...[...by].sort((x, y) => y[1] - x[1]).map(([label, n]) => {
-        const part = el("span");
+      kEffects[k].replaceChildren(...[...by].sort((x, y) => y[1].n - x[1].n).map(([label, { n, sort }]) => {
+        const part = el("span", sort ? `eff-${sort}` : "");
+        if (sort) part.append(icon(sort === "bad" ? "mdi:alert-outline" : "mdi:link-variant"));
         const color = colorOf(label);
         if (color) {
           const dot = el("span", "mdot");
@@ -5378,6 +5546,7 @@ class CoverExtenderPanel extends HTMLElement {
     };
 
     // What most covers do is the norm; a cover that does something else is marked.
+    this._schedLive = () => { for (const k of SCHED_KINDS) refreshKind(k); };
     const refreshKind = (k) => {
       const count = new Map();
       for (const c of this._cfg.covers) {
